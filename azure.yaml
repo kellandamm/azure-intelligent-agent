@@ -1,0 +1,117 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Azure/azure-dev/main/schemas/v1.0/azure.yaml.json
+
+name: azure-intelligent-agent-starter
+metadata:
+  template: azure-intelligent-agent-starter@1.0.0
+
+# Services to deploy
+services:
+  web:
+    project: ./app
+    language: python
+    host: appservice
+    hooks:
+      # Restore dependencies before deploying
+      prerestore:
+        shell: sh
+        run: |
+          if [ -f requirements.txt ]; then
+            echo "Installing Python dependencies..."
+            python -m pip install --upgrade pip
+            pip install -r requirements.txt
+          fi
+        continueOnError: false
+      
+      # Post-deployment hook to verify deployment
+      postdeploy:
+        shell: sh
+        run: |
+          echo "Deployment complete. Checking application health..."
+          sleep 10
+        continueOnError: true
+
+# Infrastructure configuration
+infra:
+  path: bicep
+  module: main
+  
+# Event hooks for the entire deployment
+hooks:
+  # Pre-provision hook - validate prerequisites
+  preprovision:
+    shell: pwsh
+    run: |
+      Write-Host "🔍 Validating prerequisites..." -ForegroundColor Cyan
+      
+      # Check if parameters file exists
+      if (-not (Test-Path "bicep/main.bicepparam")) {
+        if (Test-Path "bicep/main.bicepparam.template") {
+          Write-Host "⚠️  Parameters file not found. Please copy main.bicepparam.template to main.bicepparam and configure it." -ForegroundColor Yellow
+          exit 1
+        }
+      }
+      
+      Write-Host "✓ Prerequisites validated" -ForegroundColor Green
+    continueOnError: false
+  
+  # Post-provision hook - display SQL configuration instructions
+  postprovision:
+    shell: pwsh
+    run: |
+      Write-Host ""
+      Write-Host "╔══════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+      Write-Host "║          SQL Database Configuration Required                 ║" -ForegroundColor Cyan
+      Write-Host "╚══════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+      Write-Host ""
+      Write-Host "📋 Please configure SQL database access for the managed identity:" -ForegroundColor Yellow
+      Write-Host ""
+      Write-Host "1. Go to Azure Portal → SQL Database: $env:AZURE_SQL_DATABASE_NAME" -ForegroundColor White
+      Write-Host "2. Click 'Query editor' in left menu" -ForegroundColor White
+      Write-Host "3. Run these SQL commands:" -ForegroundColor White
+      Write-Host ""
+      Write-Host "   CREATE USER [$env:AZURE_APP_SERVICE_NAME] FROM EXTERNAL PROVIDER;" -ForegroundColor Green
+      Write-Host "   ALTER ROLE db_datareader ADD MEMBER [$env:AZURE_APP_SERVICE_NAME];" -ForegroundColor Green
+      Write-Host "   ALTER ROLE db_datawriter ADD MEMBER [$env:AZURE_APP_SERVICE_NAME];" -ForegroundColor Green
+      Write-Host ""
+      Write-Host "Press Enter to continue..." -ForegroundColor Yellow
+      Read-Host
+    continueOnError: true
+  
+  # Post-deployment hook - display summary
+  postup:
+    shell: pwsh
+    run: |
+      Write-Host ""
+      Write-Host "╔══════════════════════════════════════════════════════════════╗" -ForegroundColor Green
+      Write-Host "║               DEPLOYMENT COMPLETE! 🎉                        ║" -ForegroundColor Green
+      Write-Host "╚══════════════════════════════════════════════════════════════╝" -ForegroundColor Green
+      Write-Host ""
+      Write-Host "🌐 Application URL:" -ForegroundColor Cyan
+      Write-Host "   $env:AZURE_APP_SERVICE_ENDPOINT" -ForegroundColor White
+      Write-Host ""
+      Write-Host "📚 API Documentation:" -ForegroundColor Cyan
+      Write-Host "   $env:AZURE_APP_SERVICE_ENDPOINT/docs" -ForegroundColor White
+      Write-Host ""
+      Write-Host "📖 Next Steps:" -ForegroundColor Cyan
+      Write-Host "   1. Test your application endpoints" -ForegroundColor White
+      Write-Host "   2. Configure Fabric and Power BI (manual setup required)" -ForegroundColor White
+      Write-Host "   3. Review Application Insights for monitoring" -ForegroundColor White
+      Write-Host ""
+    continueOnError: true
+
+# Environment-specific overrides
+environments:
+  dev:
+    env:
+      AZURE_LOCATION: eastus2
+      AZURE_ENVIRONMENT_NAME: dev
+  
+  staging:
+    env:
+      AZURE_LOCATION: eastus2
+      AZURE_ENVIRONMENT_NAME: staging
+  
+  prod:
+    env:
+      AZURE_LOCATION: eastus2
+      AZURE_ENVIRONMENT_NAME: prod

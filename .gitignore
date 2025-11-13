@@ -1,0 +1,84 @@
+# Azure Developer CLI
+.azure/
+!.azure/.env.template
+!.azure/.gitignore
+
+# Bicep parameters (may contain secrets)
+bicep/main.bicepparam
+bicep/*.bicepparam
+!bicep/main.bicepparam.template
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+venv/
+.venv/
+ENV/
+env/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Application
+.env
+*.log
+*.sqlite
+*.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Deployment artifacts
+app_*.zip
+deployment/
+azure-deployment/
+
+# Secrets and credentials
+*.pem
+*.key
+*.pfx
+*.p12
+secrets.json
+appsettings.Development.json
+
+# Azure Functions
+local.settings.json
+.func/
+__blobstorage__/
+__queuestorage__/
+__azurite_db*__.json
+
+# Test artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+*.cover
+.hypothesis/
+
+# Temporary files
+*.tmp
+*.temp
+~$*

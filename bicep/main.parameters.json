@@ -1,0 +1,69 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "appName": {
+      "value": "${AZURE_APP_NAME}"
+    },
+    "location": {
+      "value": "${AZURE_LOCATION=eastus2}"
+    },
+    "environment": {
+      "value": "${AZURE_ENVIRONMENT_NAME=dev}"
+    },
+    "deployAzureOpenAI": {
+      "value": "${AZURE_OPENAI_DEPLOY=false}"
+    },
+    "azureOpenAIModelName": {
+      "value": "${AZURE_OPENAI_MODEL_NAME=gpt-4o}"
+    },
+    "azureOpenAIModelVersion": {
+      "value": "${AZURE_OPENAI_MODEL_VERSION=2024-05-13}"
+    },
+    "azureOpenAISku": {
+      "value": "${AZURE_OPENAI_SKU=S0}"
+    },
+    "azureOpenAIEndpoint": {
+      "value": "${AZURE_OPENAI_ENDPOINT=}"
+    },
+    "azureOpenAIDeployment": {
+      "value": "${AZURE_OPENAI_DEPLOYMENT_NAME=gpt-4o}"
+    },
+    "azureOpenAIApiKey": {
+      "value": "${AZURE_OPENAI_API_KEY=}"
+    },
+    "projectEndpoint": {
+      "value": "${AZURE_AI_FOUNDRY_ENDPOINT=}"
+    },
+    "projectName": {
+      "value": "${AZURE_AI_PROJECT_NAME=}"
+    },
+    "projectConnectionName": {
+      "value": "${AZURE_AI_CONNECTION_NAME=}"
+    },
+    "fabricCapacityId": {
+      "value": "${AZURE_FABRIC_CAPACITY_ID=}"
+    },
+    "powerBIWorkspaceId": {
+      "value": "${AZURE_POWERBI_WORKSPACE_ID=}"
+    },
+    "powerBITenantId": {
+      "value": "${AZURE_POWERBI_TENANT_ID=}"
+    },
+    "sqlAdministratorLogin": {
+      "value": "${AZURE_SQL_ADMINISTRATOR_LOGIN}"
+    },
+    "sqlAdministratorPassword": {
+      "value": "${AZURE_SQL_ADMINISTRATOR_PASSWORD}"
+    },
+    "deployKeyVault": {
+      "value": "${AZURE_DEPLOY_KEY_VAULT=true}"
+    },
+    "deployApplicationInsights": {
+      "value": "${AZURE_DEPLOY_APP_INSIGHTS=true}"
+    },
+    "deployContainerRegistry": {
+      "value": "${AZURE_DEPLOY_CONTAINER_REGISTRY=false}"
+    }
+  }
+}

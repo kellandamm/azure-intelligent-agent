@@ -1,0 +1,4 @@
+azure-functions
+pyodbc
+azure-identity
+Faker

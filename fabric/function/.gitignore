@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.python_version
+.venv/
+local.settings.json
+.funcignore
+.vscode/
