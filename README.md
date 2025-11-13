@@ -34,7 +34,10 @@ Choose your preferred deployment method:
 **The simplest way to deploy** - perfect for developers:
 
 ```bash
-# One command deploys everything!
+# 1. Configure parameters (one-time setup)
+bicep\main.bicepparam
+
+# 2.Then one command deploys everything!
 azd up
 ```
 
@@ -55,7 +58,7 @@ azd up
 
 ```powershell
 # 1. Configure parameters (one-time setup)
-Copy-Item bicep\main.bicepparam.template bicep\main.bicepparam
+bicep\main.bicepparam
 code bicep\main.bicepparam  # Update <REPLACE_WITH_*> values
 
 # 2. Run complete deployment (10-15 minutes)
