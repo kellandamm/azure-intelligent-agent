@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Power BI Reports - Contoso Sales</title>
+    <style>
+        * { 
+            margin: 0; 
+            padding: 0; 
+            box-sizing: border-box; 
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f5f5f5;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .header {
+            background: linear-gradient(135deg, #0078d4 0%, #005a9e 100%);
+            color: white;
+            padding: 20px 40px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .header h1 {
+            font-size: 1.8em;
+            margin-bottom: 5px;
+        }
+        .header p {
+            opacity: 0.9;
+            font-size: 0.95em;
+        }
+        .back-link {
+            display: inline-block;
+            margin-top: 10px;
+            color: white;
+            text-decoration: none;
+            padding: 8px 16px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 6px;
+            transition: all 0.3s;
+        }
+        .back-link:hover {
+            background: rgba(255,255,255,0.3);
+        }
+        .container {
+            flex: 1;
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 30px;
+            width: 100%;
+        }
+        .controls {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .controls label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+        }
+        .controls select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 1em;
+            background: white;
+            cursor: pointer;
+        }
+        .controls select:focus {
+            outline: none;
+            border-color: #0078d4;
+        }
+        #powerbi-container {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            height: calc(100vh - 280px);
+            min-height: 600px;
+            position: relative;
+        }
+        .loading-message {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #666;
+            font-size: 1.2em;
+        }
+        .error-message {
+            padding: 30px;
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            border-radius: 8px;
+            color: #856404;
+            margin: 20px;
+        }
+        .error-message h3 {
+            margin-bottom: 15px;
+            color: #d39e00;
+        }
+        .error-message ul {
+            margin-top: 15px;
+            margin-left: 20px;
+        }
+        .error-message li {
+            margin-bottom: 8px;
+        }
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #0078d4;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📊 Power BI Reports</h1>
+        <p>Interactive business intelligence and analytics dashboards</p>
+        <a href="/" class="back-link">← Back to Chat</a>
+    </div>
+    
+    <div class="container">
+        <div class="controls">
+            <label for="report-select">Select Report:</label>
+            <select id="report-select" onchange="loadSelectedReport()">
+                <option value="">Loading reports...</option>
+            </select>
+        </div>
+        
+        <div id="powerbi-container">
+            <div class="loading-message">
+                <div>
+                    <div class="spinner"></div>
+                    <p style="margin-top: 20px;">Loading Power BI reports...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/powerbi-client@2.23.1/dist/powerbi.min.js"></script>
+    <script>
+        let currentReport = null;
+        let availableReports = [];
+
+        // Load available reports on page load
+        window.addEventListener('DOMContentLoaded', async () => {
+            await loadAvailableReports();
+        });
+
+        async function loadAvailableReports() {
+            try {
+                const response = await fetch('/api/powerbi/reports');
+                const data = await response.json();
+                
+                if (data.error) {
+                    showError('Configuration Error', data.error, [
+                        'Check POWERBI_WORKSPACE_ID in .env file',
+                        'Verify POWERBI_TENANT_ID is set correctly',
+                        'Ensure you have access to the Power BI workspace',
+                        'Check Azure AD authentication (run: az login)'
+                    ]);
+                    return;
+                }
+                
+                availableReports = data.value || [];
+                const select = document.getElementById('report-select');
+                
+                if (availableReports.length === 0) {
+                    select.innerHTML = '<option value="">No reports available</option>';
+                    document.getElementById('powerbi-container').innerHTML = 
+                        '<div class="loading-message">No reports found in the configured workspace</div>';
+                    return;
+                }
+                
+                // Populate dropdown
+                select.innerHTML = '<option value="">-- Select a report --</option>';
+                availableReports.forEach((report, index) => {
+                    const option = document.createElement('option');
+                    option.value = report.id;
+                    option.textContent = report.name;
+                    select.appendChild(option);
+                });
+                
+                // Auto-load first report if available
+                if (availableReports.length > 0) {
+                    select.selectedIndex = 1;
+                    await loadSelectedReport();
+                }
+                
+            } catch (error) {
+                console.error('Failed to load reports:', error);
+                showError('Connection Error', 'Failed to connect to Power BI service', [
+                    'Check your internet connection',
+                    'Verify the API endpoint is accessible',
+                    'Check browser console for detailed errors'
+                ]);
+            }
+        }
+
+        async function loadSelectedReport() {
+            const select = document.getElementById('report-select');
+            const reportId = select.value;
+            
+            if (!reportId) {
+                document.getElementById('powerbi-container').innerHTML = 
+                    '<div class="loading-message">Select a report to view</div>';
+                return;
+            }
+            
+            // Show loading spinner
+            document.getElementById('powerbi-container').innerHTML = 
+                '<div class="loading-message"><div><div class="spinner"></div><p style="margin-top: 20px;">Loading report...</p></div></div>';
+            
+            try {
+                const response = await fetch(`/api/powerbi/embed/${reportId}`);
+                const embedConfig = await response.json();
+                
+                if (embedConfig.error) {
+                    showError(
+                        embedConfig.error, 
+                        embedConfig.message || 'Failed to load embed configuration',
+                        embedConfig.troubleshooting?.steps || [
+                            'Verify report ID is correct',
+                            'Check your permissions in Power BI service',
+                            'Ensure workspace ID is correct'
+                        ]
+                    );
+                    return;
+                }
+                
+                // Embed the report
+                await embedReport(embedConfig);
+                
+            } catch (error) {
+                console.error('Failed to load report:', error);
+                showError('Embedding Error', error.message, [
+                    'Check browser console for details',
+                    'Verify Power BI JavaScript library loaded',
+                    'Try refreshing the page'
+                ]);
+            }
+        }
+
+        async function embedReport(embedConfig) {
+            const container = document.getElementById('powerbi-container');
+            container.innerHTML = ''; // Clear previous content
+            
+            const models = window['powerbi-client'].models;
+            
+            const config = {
+                type: 'report',
+                id: embedConfig.id,
+                embedUrl: embedConfig.embedUrl,
+                accessToken: embedConfig.accessToken,
+                tokenType: models.TokenType.Embed,
+                permissions: models.Permissions.All,
+                settings: {
+                    panes: {
+                        filters: {
+                            expanded: false,
+                            visible: true
+                        },
+                        pageNavigation: {
+                            visible: true,
+                            position: models.PageNavigationPosition.Left
+                        }
+                    },
+                    background: models.BackgroundType.Transparent,
+                    layoutType: models.LayoutType.Custom,
+                    customLayout: {
+                        displayOption: models.DisplayOption.FitToWidth
+                    },
+                    bars: {
+                        actionBar: {
+                            visible: true
+                        }
+                    }
+                }
+            };
+            
+            // Destroy previous report if exists
+            if (currentReport) {
+                try {
+                    powerbi.reset(container);
+                } catch (e) {
+                    console.warn('Failed to reset previous report:', e);
+                }
+            }
+            
+            // Embed new report
+            currentReport = powerbi.embed(container, config);
+            
+            // Event handlers
+            currentReport.on('loaded', function() {
+                console.log('✅ Report loaded successfully');
+            });
+            
+            currentReport.on('rendered', function() {
+                console.log('✅ Report rendered successfully');
+            });
+            
+            currentReport.on('error', function(event) {
+                console.error('❌ Report error:', event.detail);
+                const errorDetails = event.detail;
+                showError(
+                    'Report Error',
+                    errorDetails.message || 'An error occurred while loading the report',
+                    [
+                        `Error type: ${errorDetails.detailedMessage || 'Unknown'}`,
+                        'Check if the report still exists in Power BI',
+                        'Verify your access permissions',
+                        'Try selecting a different report'
+                    ]
+                );
+            });
+            
+            currentReport.on('pageChanged', function(event) {
+                console.log('Page changed:', event.detail.newPage.displayName);
+            });
+        }
+
+        function showError(title, message, steps = []) {
+            const container = document.getElementById('powerbi-container');
+            container.innerHTML = `
+                <div class="error-message">
+                    <h3>⚠️ ${title}</h3>
+                    <p><strong>${message}</strong></p>
+                    ${steps.length > 0 ? `
+                        <p style="margin-top: 15px;">Troubleshooting steps:</p>
+                        <ul>
+                            ${steps.map(step => `<li>${step}</li>`).join('')}
+                        </ul>
+                    ` : ''}
+                    <p style="margin-top: 15px; font-size: 0.9em; color: #666;">
+                        Need help? Check the application logs or contact your administrator.
+                    </p>
+                </div>
+            `;
+        }
+    </script>
+</body>
+</html>

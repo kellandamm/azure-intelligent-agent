@@ -1,0 +1,1560 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - Contoso Sales</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f5f5f5;
+            min-height: 100vh;
+        }
+
+        .header {
+            background: white;
+            padding: 20px 30px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .header h1 {
+            color: #0078d4;
+            font-size: 28px;
+            margin: 0;
+        }
+
+        .nav-dropdown {
+            position: relative;
+        }
+
+        .nav-dropdown-btn {
+            padding: 10px 20px;
+            background: #0078d4;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.3s;
+            font-weight: 600;
+        }
+
+        .nav-dropdown-btn:hover {
+            background: #005a9e;
+        }
+
+        .nav-dropdown-content {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            margin-top: 5px;
+            background: white;
+            min-width: 200px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            border-radius: 5px;
+            z-index: 1000;
+            overflow: hidden;
+        }
+
+        .nav-dropdown-content.show {
+            display: block;
+        }
+
+        .nav-dropdown-content a {
+            display: block;
+            padding: 12px 20px;
+            color: #333;
+            text-decoration: none;
+            transition: background 0.2s;
+        }
+
+        .nav-dropdown-content a:hover {
+            background: #f5f5f5;
+        }
+
+        .nav-dropdown-content a.active {
+            background: #e6f2ff;
+            color: #0078d4;
+            font-weight: 600;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+
+        .user-info {
+            color: #666;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .user-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #0078d4 0%, #005a9e 100%);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.95em;
+            font-weight: 600;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: #0078d4;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #005a9e;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+
+        .btn-secondary {
+            background: #f0f0f0;
+            color: #333;
+        }
+
+        .btn-secondary:hover {
+            background: #e0e0e0;
+        }
+
+        .btn-success {
+            background: #27ae60;
+            color: white;
+        }
+
+        .btn-danger {
+            background: #e74c3c;
+            color: white;
+        }
+
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 0.85em;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 30px 40px;
+        }
+
+        .dashboard-header {
+            margin-bottom: 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .dashboard-header h2 {
+            color: #333;
+            font-size: 1.8em;
+        }
+
+        .search-bar {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .search-bar input {
+            flex: 1;
+            padding: 12px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 1em;
+        }
+
+        .search-bar input:focus {
+            outline: none;
+            border-color: #0078d4;
+        }
+
+        .table-container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        thead {
+            background: #f8f9fa;
+        }
+
+        th {
+            padding: 16px;
+            text-align: left;
+            font-weight: 600;
+            color: #555;
+            border-bottom: 2px solid #e0e0e0;
+        }
+
+        td {
+            padding: 16px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        tr:hover {
+            background: #f8f9fa;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.8em;
+            font-weight: 600;
+            margin: 2px;
+        }
+
+        .badge-success {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .badge-warning {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .badge-danger {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .badge-info {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+
+        .status-active {
+            color: #27ae60;
+            font-weight: 600;
+        }
+
+        .status-inactive {
+            color: #e74c3c;
+            font-weight: 600;
+        }
+
+        .actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.show {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            animation: slideDown 0.3s ease-out;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 25px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+
+        .modal-header h3 {
+            color: #333;
+            font-size: 1.5em;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            font-size: 1.5em;
+            cursor: pointer;
+            color: #999;
+            transition: color 0.3s;
+        }
+
+        .close-btn:hover {
+            color: #333;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 600;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 1em;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #0078d4;
+        }
+
+        .checkbox-group {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .checkbox-label {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .checkbox-label:hover {
+            background: #f8f9fa;
+        }
+
+        .checkbox-label input {
+            width: auto;
+            cursor: pointer;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+        }
+
+        .loading-spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #0078d4;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #999;
+        }
+
+        .empty-state-icon {
+            font-size: 4em;
+            margin-bottom: 20px;
+        }
+
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 16px 24px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            z-index: 2000;
+            display: none;
+            animation: slideInRight 0.3s ease-out;
+        }
+
+        @keyframes slideInRight {
+            from {
+                opacity: 0;
+                transform: translateX(100px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .notification.show {
+            display: block;
+        }
+
+        .notification.success {
+            background: #27ae60;
+            color: white;
+        }
+
+        .notification.error {
+            background: #e74c3c;
+            color: white;
+        }
+
+        .nav-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 30px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+
+        .nav-tab {
+            padding: 12px 24px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: 600;
+            color: #666;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s;
+        }
+
+        .nav-tab:hover {
+            color: #0078d4;
+        }
+
+        .nav-tab.active {
+            color: #0078d4;
+            border-bottom-color: #0078d4;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        #agentManagementFrame {
+            width: 100%;
+            min-height: 800px;
+            border: none;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            background: white;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 30px;
+            height: 30px;
+            border: 3px solid rgba(0, 120, 212, 0.3);
+            border-radius: 50%;
+            border-top-color: #0078d4;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-left">
+            <h1>Contoso Sales</h1>
+            <div class="nav-dropdown">
+                <button class="nav-dropdown-btn" onclick="toggleNavDropdown()">
+                    <span>Navigate</span>
+                    <span>▼</span>
+                </button>
+                <div class="nav-dropdown-content" id="navDropdown">
+                    <a href="/">AI Chat Assistant</a>
+                    <a href="/static/analyst-dashboard.html">Analytics Dashboard</a>
+                    <a href="/static/sales-dashboard.html">Sales Dashboard</a>
+                    <a href="/static/shop.html">Shop</a>
+                    <a href="/admin" class="active">Admin Portal</a>
+                </div>
+            </div>
+        </div>
+        <div class="header-actions">
+            <div class="user-info">
+                <div class="user-icon" id="userIcon">A</div>
+                <span id="currentUsername">Admin</span>
+            </div>
+            <button class="btn btn-secondary" onclick="logout()">Logout</button>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Navigation Tabs -->
+        <div class="nav-tabs">
+            <button class="nav-tab active" onclick="switchMainTab('users')">
+                👥 User Management
+            </button>
+            <button class="nav-tab" onclick="switchMainTab('agents')" id="agentManagementTab">
+                🤖 Agent Management
+            </button>
+            <button class="nav-tab" onclick="switchMainTab('testing')">
+                🧪 Testing Tools
+            </button>
+        </div>
+
+        <!-- User Management Tab -->
+        <div id="usersTab" class="tab-content active">
+            <div class="dashboard-header">
+                <h2>User Management</h2>
+                <button class="btn btn-primary" onclick="showCreateUserModal()">
+                    <span>➕</span>
+                    Create New User
+                </button>
+            </div>
+
+        <div class="search-bar">
+            <input 
+                type="text" 
+                id="searchInput" 
+                placeholder="Search users by name, email, or username..."
+                oninput="filterUsers()"
+            >
+        </div>
+
+        <div id="loadingContainer" class="loading">
+            <div class="loading-spinner"></div>
+            <p>Loading users...</p>
+        </div>
+
+        <div id="usersTableContainer" class="table-container" style="display: none;">
+            <table>
+                <thead>
+                    <tr>
+                        <th>User ID</th>
+                        <th>Username</th>
+                        <th>Email</th>
+                        <th>Name</th>
+                        <th>Roles</th>
+                        <th>Status</th>
+                        <th>Last Login</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="usersTableBody">
+                </tbody>
+            </table>
+        </div>
+
+        <div id="emptyState" class="empty-state" style="display: none;">
+            <div class="empty-state-icon">👥</div>
+            <h3>No users found</h3>
+            <p>Start by creating your first user</p>
+        </div>
+        </div>
+        <!-- End User Management Tab -->
+
+        <!-- Agent Management Tab -->
+        <div id="agentsTab" class="tab-content">
+            <iframe id="agentManagementFrame" src="/static/admin-dashboard.html"></iframe>
+        </div>
+        <!-- End Agent Management Tab -->
+
+        <!-- Testing Tools Tab -->
+        <div id="testingTab" class="tab-content">
+            <div class="dashboard-header">
+                <h2>🧪 Testing & Deployment Tools</h2>
+                <p style="color: #666; margin-top: 10px;">Admin-only tools for testing authentication, deployment validation, and system diagnostics</p>
+            </div>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 20px; padding: 20px;">
+                
+                <!-- Authentication Test Tool -->
+                <div class="card" style="padding: 25px;">
+                    <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 15px;">
+                        <div style="font-size: 48px;">🔐</div>
+                        <div>
+                            <h3 style="margin: 0; color: #0078d4;">Authentication Tester</h3>
+                            <p style="color: #666; margin: 5px 0 0 0; font-size: 0.9em;">Test user login & JWT validation</p>
+                        </div>
+                    </div>
+                    <p style="color: #666; margin-bottom: 20px; line-height: 1.6;">
+                        Interactive tool to test authentication for all user accounts. Validates login credentials, 
+                        JWT token generation, and protected endpoint access.
+                    </p>
+                    <div style="display: flex; gap: 10px;">
+                        <button class="btn btn-primary" onclick="openTestTool('test-auth')" style="flex: 1;">
+                            Open Tool
+                        </button>
+                        <button class="btn btn-secondary" onclick="openInNewTab('/admin/test-auth')" style="padding: 10px 15px;">
+                            ↗️
+                        </button>
+                    </div>
+                    <div style="margin-top: 15px; padding: 12px; background: #f8f9fa; border-radius: 6px; font-size: 0.85em;">
+                        <strong>Features:</strong>
+                        <ul style="margin: 8px 0 0 20px; color: #666;">
+                            <li>Test all 5 user accounts at once</li>
+                            <li>Individual user quick tests</li>
+                            <li>Protected endpoint validation</li>
+                            <li>Visual pass/fail indicators</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Database Status -->
+                <div class="card" style="padding: 25px;">
+                    <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 15px;">
+                        <div style="font-size: 48px;">🗄️</div>
+                        <div>
+                            <h3 style="margin: 0; color: #0078d4;">Database Status</h3>
+                            <p style="color: #666; margin: 5px 0 0 0; font-size: 0.9em;">Connection & user validation</p>
+                        </div>
+                    </div>
+                    <p style="color: #666; margin-bottom: 20px; line-height: 1.6;">
+                        Check database connectivity, verify test user creation, and validate RLS schema deployment. 
+                        Essential for deployment validation.
+                    </p>
+                    <button class="btn btn-primary" onclick="checkDatabaseStatus()" style="width: 100%;">
+                        Check Status
+                    </button>
+                    <div id="dbStatusResult" style="margin-top: 15px; display: none;"></div>
+                </div>
+
+                <!-- Deployment Guide -->
+                <div class="card" style="padding: 25px;">
+                    <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 15px;">
+                        <div style="font-size: 48px;">📚</div>
+                        <div>
+                            <h3 style="margin: 0; color: #0078d4;">Setup Documentation</h3>
+                            <p style="color: #666; margin: 5px 0 0 0; font-size: 0.9em;">Deployment guides & scripts</p>
+                        </div>
+                    </div>
+                    <p style="color: #666; margin-bottom: 20px; line-height: 1.6;">
+                        Complete documentation for setting up test users, configuring RLS, 
+                        and deploying to Azure. Includes PowerShell scripts and SQL commands.
+                    </p>
+                    <div style="display: flex; flex-direction: column; gap: 10px;">
+                        <button class="btn btn-secondary" onclick="downloadSetupGuide()" style="width: 100%;">
+                            📄 Download Setup Guide
+                        </button>
+                        <button class="btn btn-secondary" onclick="viewDeploymentScripts()" style="width: 100%;">
+                            📜 View PowerShell Scripts
+                        </button>
+                    </div>
+                </div>
+
+                <!-- System Health -->
+                <div class="card" style="padding: 25px;">
+                    <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 15px;">
+                        <div style="font-size: 48px;">❤️</div>
+                        <div>
+                            <h3 style="margin: 0; color: #0078d4;">System Health</h3>
+                            <p style="color: #666; margin: 5px 0 0 0; font-size: 0.9em;">App & service monitoring</p>
+                        </div>
+                    </div>
+                    <p style="color: #666; margin-bottom: 20px; line-height: 1.6;">
+                        Monitor application health, check service availability, and view system configuration. 
+                        Real-time status of authentication, database, and API endpoints.
+                    </p>
+                    <button class="btn btn-primary" onclick="checkSystemHealth()" style="width: 100%;">
+                        Check Health
+                    </button>
+                    <div id="healthStatusResult" style="margin-top: 15px; display: none;"></div>
+                </div>
+
+                <!-- Test Credentials Reference -->
+                <div class="card" style="padding: 25px; grid-column: span 2;">
+                    <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 15px;">
+                        <div style="font-size: 48px;">🔑</div>
+                        <div>
+                            <h3 style="margin: 0; color: #0078d4;">Test User Credentials</h3>
+                            <p style="color: #666; margin: 5px 0 0 0; font-size: 0.9em;">Quick reference for demo accounts</p>
+                        </div>
+                    </div>
+                    
+                    <div style="overflow-x: auto;">
+                        <table style="width: 100%; border-collapse: collapse; margin-top: 15px;">
+                            <thead>
+                                <tr style="background: #f8f9fa;">
+                                    <th style="padding: 12px; text-align: left; border-bottom: 2px solid #dee2e6;">Username</th>
+                                    <th style="padding: 12px; text-align: left; border-bottom: 2px solid #dee2e6;">Password</th>
+                                    <th style="padding: 12px; text-align: left; border-bottom: 2px solid #dee2e6;">Role</th>
+                                    <th style="padding: 12px; text-align: left; border-bottom: 2px solid #dee2e6;">Data Access</th>
+                                    <th style="padding: 12px; text-align: center; border-bottom: 2px solid #dee2e6;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr style="border-bottom: 1px solid #dee2e6;">
+                                    <td style="padding: 12px; font-family: 'Courier New', monospace;">admin</td>
+                                    <td style="padding: 12px; font-family: 'Courier New', monospace;">Admin123!</td>
+                                    <td style="padding: 12px;"><span style="background: #e74c3c; color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.85em;">SuperAdmin</span></td>
+                                    <td style="padding: 12px; color: #666;">All data, all territories</td>
+                                    <td style="padding: 12px; text-align: center;">
+                                        <button class="btn btn-sm" onclick="copyCredentials('admin', 'Admin123!')" style="padding: 5px 10px;">📋 Copy</button>
+                                    </td>
+                                </tr>
+                                <tr style="border-bottom: 1px solid #dee2e6;">
+                                    <td style="padding: 12px; font-family: 'Courier New', monospace;">manager.west</td>
+                                    <td style="padding: 12px; font-family: 'Courier New', monospace;">Manager123!</td>
+                                    <td style="padding: 12px;"><span style="background: #f39c12; color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.85em;">Manager</span></td>
+                                    <td style="padding: 12px; color: #666;">West + team member data</td>
+                                    <td style="padding: 12px; text-align: center;">
+                                        <button class="btn btn-sm" onclick="copyCredentials('manager.west', 'Manager123!')" style="padding: 5px 10px;">📋 Copy</button>
+                                    </td>
+                                </tr>
+                                <tr style="border-bottom: 1px solid #dee2e6;">
+                                    <td style="padding: 12px; font-family: 'Courier New', monospace;">salesrep.west</td>
+                                    <td style="padding: 12px; font-family: 'Courier New', monospace;">Sales123!</td>
+                                    <td style="padding: 12px;"><span style="background: #3498db; color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.85em;">User</span></td>
+                                    <td style="padding: 12px; color: #666;">West territory only</td>
+                                    <td style="padding: 12px; text-align: center;">
+                                        <button class="btn btn-sm" onclick="copyCredentials('salesrep.west', 'Sales123!')" style="padding: 5px 10px;">📋 Copy</button>
+                                    </td>
+                                </tr>
+                                <tr style="border-bottom: 1px solid #dee2e6;">
+                                    <td style="padding: 12px; font-family: 'Courier New', monospace;">salesrep.east</td>
+                                    <td style="padding: 12px; font-family: 'Courier New', monospace;">Sales123!</td>
+                                    <td style="padding: 12px;"><span style="background: #3498db; color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.85em;">User</span></td>
+                                    <td style="padding: 12px; color: #666;">East territory only</td>
+                                    <td style="padding: 12px; text-align: center;">
+                                        <button class="btn btn-sm" onclick="copyCredentials('salesrep.east', 'Sales123!')" style="padding: 5px 10px;">📋 Copy</button>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 12px; font-family: 'Courier New', monospace;">analyst</td>
+                                    <td style="padding: 12px; font-family: 'Courier New', monospace;">Analyst123!</td>
+                                    <td style="padding: 12px;"><span style="background: #9b59b6; color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.85em;">PowerUser</span></td>
+                                    <td style="padding: 12px; color: #666;">All territories (read-only)</td>
+                                    <td style="padding: 12px; text-align: center;">
+                                        <button class="btn btn-sm" onclick="copyCredentials('analyst', 'Analyst123!')" style="padding: 5px 10px;">📋 Copy</button>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+        <!-- End Testing Tools Tab -->
+
+    </div>
+
+    <!-- Create/Edit User Modal -->
+    <div id="userModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modalTitle">Create New User</h3>
+                <button class="close-btn" onclick="closeUserModal()">&times;</button>
+            </div>
+            <form id="userForm">
+                <input type="hidden" id="userId">
+                
+                <div class="form-group">
+                    <label for="username">Username *</label>
+                    <input type="text" id="username" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="email">Email *</label>
+                    <input type="email" id="email" required>
+                </div>
+
+                <div class="form-group" id="passwordGroup">
+                    <label for="password">Password *</label>
+                    <input type="password" id="password" minlength="6">
+                </div>
+
+                <div class="form-group">
+                    <label for="firstName">First Name</label>
+                    <input type="text" id="firstName">
+                </div>
+
+                <div class="form-group">
+                    <label for="lastName">Last Name</label>
+                    <input type="text" id="lastName">
+                </div>
+
+                <div class="form-group">
+                    <label>Roles *</label>
+                    <div id="rolesCheckboxes" class="checkbox-group">
+                    </div>
+                </div>
+
+                <div class="form-group" style="display: none;" id="isActiveGroup">
+                    <label>
+                        <input type="checkbox" id="isActive" checked>
+                        Active User
+                    </label>
+                </div>
+
+                <div style="display: flex; gap: 10px; margin-top: 30px;">
+                    <button type="submit" class="btn btn-success" style="flex: 1;">
+                        Save User
+                    </button>
+                    <button type="button" class="btn btn-secondary" onclick="closeUserModal()" style="flex: 1;">
+                        Cancel
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Change Password Modal -->
+    <div id="changePasswordModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Change Password</h3>
+                <button class="close-btn" onclick="closeChangePasswordModal()">&times;</button>
+            </div>
+            <form id="changePasswordForm">
+                <input type="hidden" id="changePasswordUserId">
+                
+                <div class="form-group">
+                    <label for="changePasswordUsername">Username</label>
+                    <input type="text" id="changePasswordUsername" readonly disabled style="background: #f5f5f5;">
+                </div>
+
+                <div class="form-group">
+                    <label for="newPassword">New Password *</label>
+                    <input type="password" id="newPassword" required minlength="6" placeholder="Enter new password (min 6 characters)">
+                </div>
+
+                <div class="form-group">
+                    <label for="confirmPassword">Confirm Password *</label>
+                    <input type="password" id="confirmPassword" required minlength="6" placeholder="Re-enter new password">
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">Change Password</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeChangePasswordModal()">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Notification -->
+    <div id="notification" class="notification"></div>
+
+    <script>
+        let allUsers = [];
+        let allRoles = [];
+        let authToken = null;
+        let isEditMode = false;
+
+        // Switch between main tabs
+        function switchMainTab(tabName) {
+            // Hide all tab contents
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Remove active class from all tabs
+            document.querySelectorAll('.nav-tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Show selected tab
+            if (tabName === 'users') {
+                document.getElementById('usersTab').classList.add('active');
+                document.querySelector('.nav-tab').classList.add('active');
+            } else if (tabName === 'agents') {
+                document.getElementById('agentsTab').classList.add('active');
+                document.getElementById('agentManagementTab').classList.add('active');
+                
+                // Pass auth token to iframe
+                const iframe = document.getElementById('agentManagementFrame');
+                
+                // Set onload handler for future loads
+                iframe.onload = function() {
+                    console.log('Iframe loaded, sending token...');
+                    iframe.contentWindow.postMessage({
+                        type: 'AUTH_TOKEN',
+                        token: authToken
+                    }, '*');
+                };
+                
+                // Also send immediately if iframe is already loaded
+                try {
+                    if (iframe.contentWindow) {
+                        console.log('Sending token to already-loaded iframe...');
+                        iframe.contentWindow.postMessage({
+                            type: 'AUTH_TOKEN',
+                            token: authToken
+                        }, '*');
+                    }
+                } catch (e) {
+                    console.log('Iframe not ready yet, will wait for onload');
+                }
+            } else if (tabName === 'testing') {
+                document.getElementById('testingTab').classList.add('active');
+                document.querySelectorAll('.nav-tab')[2].classList.add('active');
+            }
+        }
+
+        // Get auth token
+        function getAuthToken() {
+            return localStorage.getItem('auth_token') || sessionStorage.getItem('auth_token');
+        }
+
+        // Show notification
+        function showNotification(message, type = 'success') {
+            const notification = document.getElementById('notification');
+            notification.textContent = message;
+            notification.className = `notification ${type} show`;
+            setTimeout(() => {
+                notification.classList.remove('show');
+            }, 3000);
+        }
+
+        // Check authentication
+        async function checkAuth() {
+            authToken = getAuthToken();
+            if (!authToken) {
+                window.location.href = '/login';
+                return false;
+            }
+
+            try {
+                const response = await fetch('/api/auth/me', {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                if (!response.ok) {
+                    window.location.href = '/login';
+                    return false;
+                }
+
+                const userData = await response.json();
+                document.getElementById('currentUsername').textContent = userData.username;
+
+                // Check if user has admin role
+                const roles = userData.roles || [];
+                const hasAdminAccess = roles.some(role => {
+                    const r = role.trim().toLowerCase();
+                    return r === 'admin' || r === 'superadmin' || r === 'administrator';
+                });
+                
+                if (!hasAdminAccess) {
+                    alert('Access denied. Admin privileges required.');
+                    window.location.href = '/';
+                    return false;
+                }
+
+                // Show Agent Management tab only for SuperAdmin
+                const agentManagementTab = document.getElementById('agentManagementTab');
+                const isSuperAdmin = roles.some(role => 
+                    role.trim().toLowerCase() === 'superadmin'
+                );
+                
+                if (isSuperAdmin) {
+                    agentManagementTab.style.display = 'block';
+                } else {
+                    agentManagementTab.style.display = 'none';
+                }
+
+                return true;
+            } catch (error) {
+                console.error('Auth check error:', error);
+                window.location.href = '/login';
+                return false;
+            }
+        }
+
+        // Load users
+        async function loadUsers() {
+            document.getElementById('loadingContainer').style.display = 'block';
+            document.getElementById('usersTableContainer').style.display = 'none';
+            document.getElementById('emptyState').style.display = 'none';
+
+            try {
+                const response = await fetch('/api/admin/users', {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Failed to load users: ${response.status}`);
+                }
+
+                const data = await response.json();
+                console.log('Loaded users:', data);
+                allUsers = data.users || [];
+                console.log('Total users loaded:', allUsers.length);
+
+                if (allUsers.length === 0) {
+                    document.getElementById('emptyState').style.display = 'block';
+                } else {
+                    renderUsers(allUsers);
+                    document.getElementById('usersTableContainer').style.display = 'block';
+                }
+            } catch (error) {
+                console.error('Load users error:', error);
+                showNotification('Failed to load users', 'error');
+            } finally {
+                document.getElementById('loadingContainer').style.display = 'none';
+            }
+        }
+
+        // Render users table
+        function renderUsers(users) {
+            const tbody = document.getElementById('usersTableBody');
+            tbody.innerHTML = '';
+
+            users.forEach(user => {
+                const tr = document.createElement('tr');
+                
+                const roles = user.roles || [];
+                const rolesBadges = roles.map(role => 
+                    `<span class="badge badge-info">${role}</span>`
+                ).join(' ');
+
+                const lastLogin = user.last_login 
+                    ? new Date(user.last_login).toLocaleString()
+                    : 'Never';
+
+                tr.innerHTML = `
+                    <td>${user.user_id}</td>
+                    <td><strong>${user.username}</strong></td>
+                    <td>${user.email}</td>
+                    <td>${user.first_name || ''} ${user.last_name || ''}</td>
+                    <td>${rolesBadges || '<span class="badge badge-warning">No roles</span>'}</td>
+                    <td class="${user.is_active ? 'status-active' : 'status-inactive'}">
+                        ${user.is_active ? '✓ Active' : '✗ Inactive'}
+                    </td>
+                    <td>${lastLogin}</td>
+                    <td class="actions">
+                        <button class="btn btn-primary btn-sm" onclick="editUser(${user.user_id})">
+                            Edit
+                        </button>
+                        <button class="btn btn-secondary btn-sm" onclick="showChangePasswordModal(${user.user_id}, '${user.username}')">
+                            Change Password
+                        </button>
+                        <button class="btn btn-danger btn-sm" onclick="deleteUser(${user.user_id}, '${user.username}')">
+                            Delete
+                        </button>
+                    </td>
+                `;
+                
+                tbody.appendChild(tr);
+            });
+        }
+
+        // Filter users
+        function filterUsers() {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            const filteredUsers = allUsers.filter(user => 
+                user.username.toLowerCase().includes(searchTerm) ||
+                user.email.toLowerCase().includes(searchTerm) ||
+                (user.first_name && user.first_name.toLowerCase().includes(searchTerm)) ||
+                (user.last_name && user.last_name.toLowerCase().includes(searchTerm))
+            );
+            renderUsers(filteredUsers);
+        }
+
+        // Load roles
+        async function loadRoles() {
+            try {
+                const response = await fetch('/api/admin/roles', {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                const data = await response.json();
+                allRoles = data.roles || [];
+                renderRolesCheckboxes();
+            } catch (error) {
+                console.error('Load roles error:', error);
+            }
+        }
+
+        // Render roles checkboxes
+        function renderRolesCheckboxes() {
+            const container = document.getElementById('rolesCheckboxes');
+            container.innerHTML = '';
+
+            allRoles.forEach(role => {
+                const label = document.createElement('label');
+                label.className = 'checkbox-label';
+                label.innerHTML = `
+                    <input type="checkbox" name="roles" value="${role.RoleID}">
+                    <span><strong>${role.RoleName}</strong> - ${role.Description || ''}</span>
+                `;
+                container.appendChild(label);
+            });
+        }
+
+        // Show create user modal
+        function showCreateUserModal() {
+            isEditMode = false;
+            document.getElementById('modalTitle').textContent = 'Create New User';
+            document.getElementById('userForm').reset();
+            document.getElementById('userId').value = '';
+            document.getElementById('passwordGroup').style.display = 'block';
+            document.getElementById('password').required = true;
+            document.getElementById('isActiveGroup').style.display = 'none';
+            
+            // Uncheck all roles
+            document.querySelectorAll('input[name="roles"]').forEach(cb => cb.checked = false);
+            
+            document.getElementById('userModal').classList.add('show');
+        }
+
+        // Edit user
+        async function editUser(userId) {
+            isEditMode = true;
+            document.getElementById('modalTitle').textContent = 'Edit User';
+            
+            try {
+                const response = await fetch(`/api/admin/users/${userId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                const user = await response.json();
+
+                document.getElementById('userId').value = user.user_id;
+                document.getElementById('username').value = user.username;
+                document.getElementById('username').disabled = true;
+                document.getElementById('email').value = user.email;
+                document.getElementById('firstName').value = user.first_name || '';
+                document.getElementById('lastName').value = user.last_name || '';
+                document.getElementById('isActive').checked = user.is_active;
+                document.getElementById('passwordGroup').style.display = 'none';
+                document.getElementById('password').required = false;
+                document.getElementById('isActiveGroup').style.display = 'block';
+
+                // Check user roles
+                const userRoles = user.roles || [];
+                document.querySelectorAll('input[name="roles"]').forEach(cb => {
+                    const roleName = allRoles.find(r => r.RoleID == cb.value)?.RoleName;
+                    cb.checked = userRoles.includes(roleName);
+                });
+
+                document.getElementById('userModal').classList.add('show');
+            } catch (error) {
+                console.error('Edit user error:', error);
+                showNotification('Failed to load user details', 'error');
+            }
+        }
+
+        // Close user modal
+        function closeUserModal() {
+            document.getElementById('userModal').classList.remove('show');
+            document.getElementById('username').disabled = false;
+        }
+
+        // Handle form submission
+        document.getElementById('userForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const userId = document.getElementById('userId').value;
+            const username = document.getElementById('username').value;
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const firstName = document.getElementById('firstName').value;
+            const lastName = document.getElementById('lastName').value;
+            const isActive = document.getElementById('isActive').checked;
+
+            const roleIds = Array.from(document.querySelectorAll('input[name="roles"]:checked'))
+                .map(cb => parseInt(cb.value));
+
+            if (roleIds.length === 0) {
+                alert('Please select at least one role');
+                return;
+            }
+
+            try {
+                if (isEditMode) {
+                    // Update user
+                    const response = await fetch(`/api/admin/users/${userId}`, {
+                        method: 'PUT',
+                        headers: {
+                            'Authorization': `Bearer ${authToken}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            email,
+                            first_name: firstName,
+                            last_name: lastName,
+                            is_active: isActive
+                        })
+                    });
+
+                    if (!response.ok) {
+                        const error = await response.json();
+                        throw new Error(error.detail || 'Failed to update user');
+                    }
+
+                    // Update roles (remove all and add selected)
+                    // This is simplified - in production, you'd compare and only change what's needed
+                    // For now, you may need to implement this logic
+
+                    showNotification('User updated successfully');
+                } else {
+                    // Create user
+                    const response = await fetch('/api/admin/users', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${authToken}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            username,
+                            email,
+                            password,
+                            first_name: firstName,
+                            last_name: lastName,
+                            role_ids: roleIds
+                        })
+                    });
+
+                    if (!response.ok) {
+                        const error = await response.json();
+                        throw new Error(error.detail || 'Failed to create user');
+                    }
+
+                    const result = await response.json();
+                    console.log('User created:', result);
+                    showNotification('User created successfully');
+                }
+
+                closeUserModal();
+                await loadUsers();  // Ensure loadUsers completes
+                console.log('Users reloaded, total users:', allUsers.length);
+            } catch (error) {
+                console.error('Save user error:', error);
+                showNotification(error.message || 'Failed to save user', 'error');
+            }
+        });
+
+        // Delete user
+        async function deleteUser(userId, username) {
+            if (!confirm(`Are you sure you want to delete user "${username}"?`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/admin/users/${userId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                if (response.ok) {
+                    showNotification('User deleted successfully');
+                    loadUsers();
+                } else {
+                    throw new Error('Failed to delete user');
+                }
+            } catch (error) {
+                console.error('Delete user error:', error);
+                showNotification('Failed to delete user', 'error');
+            }
+        }
+
+        // Show change password modal
+        function showChangePasswordModal(userId, username) {
+            const modal = document.getElementById('changePasswordModal');
+            document.getElementById('changePasswordUserId').value = userId;
+            document.getElementById('changePasswordUsername').value = username;
+            document.getElementById('newPassword').value = '';
+            document.getElementById('confirmPassword').value = '';
+            modal.style.display = 'block';
+        }
+
+        // Close change password modal
+        function closeChangePasswordModal() {
+            const modal = document.getElementById('changePasswordModal');
+            modal.style.display = 'none';
+            document.getElementById('changePasswordForm').reset();
+        }
+
+        // Handle change password form submission
+        document.getElementById('changePasswordForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const userId = document.getElementById('changePasswordUserId').value;
+            const username = document.getElementById('changePasswordUsername').value;
+            const newPassword = document.getElementById('newPassword').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+
+            // Validate passwords match
+            if (newPassword !== confirmPassword) {
+                showNotification('Passwords do not match', 'error');
+                return;
+            }
+
+            // Validate password length
+            if (newPassword.length < 6) {
+                showNotification('Password must be at least 6 characters', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/admin/users/${userId}/change-password`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ new_password: newPassword })
+                });
+
+                if (response.ok) {
+                    showNotification(`Password changed successfully for user "${username}"`);
+                    closeChangePasswordModal();
+                } else {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Failed to change password');
+                }
+            } catch (error) {
+                console.error('Change password error:', error);
+                showNotification(error.message || 'Failed to change password', 'error');
+            }
+        });
+
+        // Toggle navigation dropdown
+        function toggleNavDropdown() {
+            const dropdown = document.getElementById('navDropdown');
+            dropdown.classList.toggle('show');
+        }
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', function(event) {
+            const dropdown = document.getElementById('navDropdown');
+            const button = event.target.closest('.nav-dropdown-btn');
+            
+            if (!button && dropdown && !dropdown.contains(event.target)) {
+                dropdown.classList.remove('show');
+            }
+        });
+
+        // Load user info with initials
+        function loadUserInfo() {
+            const userData = localStorage.getItem('user_data') || sessionStorage.getItem('user_data');
+            if (userData) {
+                try {
+                    const user = JSON.parse(userData);
+                    const userName = user.full_name || user.username || user.email || 'Admin';
+                    document.getElementById('currentUsername').textContent = userName;
+                    
+                    // Generate initials
+                    const initials = userName.split(' ')
+                        .map(n => n[0])
+                        .join('')
+                        .substring(0, 2)
+                        .toUpperCase();
+                    document.getElementById('userIcon').textContent = initials;
+                } catch (e) {
+                    console.error('Error parsing user data:', e);
+                }
+            }
+        }
+
+        // Logout
+        function logout() {
+            localStorage.removeItem('auth_token');
+            sessionStorage.removeItem('auth_token');
+            localStorage.removeItem('user_data');
+            sessionStorage.removeItem('user_data');
+            window.location.href = '/login';
+        }
+
+        // Testing Tools Functions
+        function openTestTool(toolName) {
+            if (toolName === 'test-auth') {
+                window.open('/admin/test-auth', '_blank', 'width=1200,height=800');
+            }
+        }
+
+        function openInNewTab(url) {
+            window.open(url, '_blank');
+        }
+
+        function copyCredentials(username, password) {
+            const text = `Username: ${username}\nPassword: ${password}`;
+            navigator.clipboard.writeText(text).then(() => {
+                showNotification(`Credentials copied: ${username}`, 'success');
+            }).catch(err => {
+                console.error('Failed to copy:', err);
+                showNotification('Failed to copy credentials', 'error');
+            });
+        }
+
+        async function checkDatabaseStatus() {
+            const resultDiv = document.getElementById('dbStatusResult');
+            resultDiv.style.display = 'block';
+            resultDiv.innerHTML = '<div style="text-align: center; padding: 15px;"><div class="spinner"></div><p style="margin-top: 10px;">Checking database...</p></div>';
+
+            try {
+                const response = await fetch('/api/admin/database/status', {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    resultDiv.innerHTML = `
+                        <div style="padding: 15px; background: #d4edda; border-radius: 6px; border-left: 4px solid #28a745;">
+                            <h4 style="margin: 0 0 10px 0; color: #155724;">✅ Database Connected</h4>
+                            <p style="margin: 5px 0; color: #155724;"><strong>Server:</strong> ${data.server || 'N/A'}</p>
+                            <p style="margin: 5px 0; color: #155724;"><strong>Database:</strong> ${data.database || 'N/A'}</p>
+                            <p style="margin: 5px 0; color: #155724;"><strong>Test Users:</strong> ${data.test_users_count || 0} found</p>
+                        </div>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `
+                        <div style="padding: 15px; background: #f8d7da; border-radius: 6px; border-left: 4px solid #dc3545;">
+                            <h4 style="margin: 0 0 10px 0; color: #721c24;">❌ Database Check Failed</h4>
+                            <p style="margin: 0; color: #721c24;">Unable to verify database status</p>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div style="padding: 15px; background: #f8d7da; border-radius: 6px; border-left: 4px solid #dc3545;">
+                        <h4 style="margin: 0 0 10px 0; color: #721c24;">❌ Error</h4>
+                        <p style="margin: 0; color: #721c24;">${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+
+        async function checkSystemHealth() {
+            const resultDiv = document.getElementById('healthStatusResult');
+            resultDiv.style.display = 'block';
+            resultDiv.innerHTML = '<div style="text-align: center; padding: 15px;"><div class="spinner"></div><p style="margin-top: 10px;">Checking system health...</p></div>';
+
+            try {
+                const response = await fetch('/health');
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    resultDiv.innerHTML = `
+                        <div style="padding: 15px; background: #d4edda; border-radius: 6px; border-left: 4px solid #28a745;">
+                            <h4 style="margin: 0 0 10px 0; color: #155724;">✅ System Healthy</h4>
+                            <p style="margin: 5px 0; color: #155724;"><strong>Status:</strong> ${data.status}</p>
+                            <p style="margin: 5px 0; color: #155724;"><strong>Version:</strong> ${data.version || '1.0.0'}</p>
+                            <p style="margin: 5px 0; color: #155724;"><strong>Authentication:</strong> ${data.authentication_enabled ? 'Enabled ✅' : 'Disabled ⚠️'}</p>
+                            <p style="margin: 5px 0; color: #155724;"><strong>Fabric Workspace:</strong> ${data.fabric_workspace || 'Not configured'}</p>
+                        </div>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `
+                        <div style="padding: 15px; background: #fff3cd; border-radius: 6px; border-left: 4px solid #ffc107;">
+                            <h4 style="margin: 0 0 10px 0; color: #856404;">⚠️ Health Check Warning</h4>
+                            <p style="margin: 0; color: #856404;">Status code: ${response.status}</p>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div style="padding: 15px; background: #f8d7da; border-radius: 6px; border-left: 4px solid #dc3545;">
+                        <h4 style="margin: 0 0 10px 0; color: #721c24;">❌ System Unreachable</h4>
+                        <p style="margin: 0; color: #721c24;">${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+
+        function downloadSetupGuide() {
+            showNotification('Setup guide documentation is available in the deployment folder', 'info');
+            window.open('https://github.com/microsoft/agent-framework', '_blank');
+        }
+
+        function viewDeploymentScripts() {
+            showNotification('PowerShell scripts are available in the deployment folder', 'info');
+        }
+
+        // Initialize
+        window.addEventListener('load', async () => {
+            const authenticated = await checkAuth();
+            if (authenticated) {
+                loadUserInfo();
+                await loadRoles();
+                await loadUsers();
+            }
+        });
+    </script>
+</body>
+</html>

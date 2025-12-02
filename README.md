@@ -48,6 +48,23 @@ azd up
 
 📖 **[Full azd Guide](docs/AZD_DEPLOYMENT_GUIDE.md)**
 
+### Option 4: Azure AI Foundry + MCP Server 🆕
+
+**Advanced architecture** with Azure AI Foundry native agents and centralized function calling:
+
+```bash
+# Uses Azure AI Foundry agents instead of Agent Framework
+# Includes MCP (Model Context Protocol) server for function calling
+azd up
+```
+
+- ✅ **Native Azure AI Foundry** - Uses Azure's native agent platform
+- ✅ **Centralized function calling** - MCP server for all tools
+- ✅ **Better scalability** - Container Apps architecture
+- ✅ **Existing infrastructure** - Can reuse existing Container Apps environment
+
+📖 **[Azure AI Foundry + MCP Deployment Guide](docs/AZURE_FOUNDRY_MCP_DEPLOYMENT.md)**
+
 ---
 
 ### Option 2: PowerShell Scripts - Maximum Control

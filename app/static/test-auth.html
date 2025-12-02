@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Azure Deployment Test - Quick Auth Tester</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 900px;
+            width: 100%;
+            padding: 40px;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+        
+        .subtitle {
+            color: #666;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .config-section {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .config-section h3 {
+            color: #667eea;
+            margin-bottom: 15px;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            color: #555;
+            margin-bottom: 5px;
+            font-weight: 600;
+        }
+        
+        input[type="text"], input[type="password"] {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+        
+        input[type="text"]:focus, input[type="password"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .test-users {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 10px;
+            margin-bottom: 30px;
+        }
+        
+        .user-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .user-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+        
+        .user-btn:active {
+            transform: translateY(0);
+        }
+        
+        .user-btn .username {
+            font-size: 14px;
+        }
+        
+        .user-btn .role {
+            font-size: 11px;
+            opacity: 0.9;
+        }
+        
+        .test-btn {
+            width: 100%;
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-top: 10px;
+        }
+        
+        .test-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(17, 153, 142, 0.3);
+        }
+        
+        .test-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .results {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            display: none;
+        }
+        
+        .results.show {
+            display: block;
+        }
+        
+        .result-item {
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            border-left: 4px solid #ccc;
+        }
+        
+        .result-item.success {
+            background: #d4edda;
+            border-left-color: #28a745;
+        }
+        
+        .result-item.error {
+            background: #f8d7da;
+            border-left-color: #dc3545;
+        }
+        
+        .result-item h4 {
+            margin-bottom: 8px;
+            color: #333;
+        }
+        
+        .result-item pre {
+            background: white;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+            font-size: 12px;
+            margin-top: 10px;
+        }
+        
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 0.8s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .info-box {
+            background: #e7f3ff;
+            border-left: 4px solid #2196F3;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+        }
+        
+        .info-box strong {
+            color: #1976D2;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Azure Deployment Tester</h1>
+        <p class="subtitle">Test authentication with Azure Web App and Database</p>
+        
+        <div class="info-box">
+            <strong>ℹ️ Instructions:</strong><br>
+            1. Enter your Azure Web App URL below<br>
+            2. Click a user button to test that specific user<br>
+            3. Or click "Test All Users" to test everyone at once
+        </div>
+        
+        <div class="config-section">
+            <h3>⚙️ Configuration</h3>
+            <div class="form-group">
+                <label for="apiUrl">Azure Web App URL (e.g., https://agentframework-demo-prod.azurewebsites.net)</label>
+                <input type="text" id="apiUrl" placeholder="https://your-app.azurewebsites.net" value="">
+            </div>
+        </div>
+        
+        <div class="config-section">
+            <h3>👥 Test Users (Click to test individually)</h3>
+            <div class="test-users">
+                <button class="user-btn" onclick="testSingleUser('admin', 'Admin123!')">
+                    <span class="username">👨‍💼 admin</span>
+                    <span class="role">SuperAdmin</span>
+                </button>
+                <button class="user-btn" onclick="testSingleUser('manager.west', 'Manager123!')">
+                    <span class="username">👔 manager.west</span>
+                    <span class="role">Manager</span>
+                </button>
+                <button class="user-btn" onclick="testSingleUser('salesrep.west', 'Sales123!')">
+                    <span class="username">👤 salesrep.west</span>
+                    <span class="role">User (West)</span>
+                </button>
+                <button class="user-btn" onclick="testSingleUser('salesrep.east', 'Sales123!')">
+                    <span class="username">👤 salesrep.east</span>
+                    <span class="role">User (East)</span>
+                </button>
+                <button class="user-btn" onclick="testSingleUser('analyst', 'Analyst123!')">
+                    <span class="username">📊 analyst</span>
+                    <span class="role">PowerUser</span>
+                </button>
+            </div>
+            
+            <button class="test-btn" onclick="testAllUsers()" id="testAllBtn">
+                🚀 Test All Users
+            </button>
+        </div>
+        
+        <div class="results" id="results">
+            <h3>📋 Test Results</h3>
+            <div id="resultsContent"></div>
+        </div>
+    </div>
+    
+    <script>
+        const testUsers = [
+            { username: 'admin', password: 'Admin123!', role: 'SuperAdmin', icon: '👨‍💼' },
+            { username: 'manager.west', password: 'Manager123!', role: 'Manager', icon: '👔' },
+            { username: 'salesrep.west', password: 'Sales123!', role: 'User', icon: '👤' },
+            { username: 'salesrep.east', password: 'Sales123!', role: 'User', icon: '👤' },
+            { username: 'analyst', password: 'Analyst123!', role: 'PowerUser', icon: '📊' }
+        ];
+        
+        function getApiUrl() {
+            const url = document.getElementById('apiUrl').value.trim();
+            if (!url) {
+                alert('Please enter your Azure Web App URL');
+                return null;
+            }
+            return url.replace(/\/$/, ''); // Remove trailing slash
+        }
+        
+        async function testLogin(username, password) {
+            const baseUrl = getApiUrl();
+            if (!baseUrl) return null;
+            
+            try {
+                const response = await fetch(`${baseUrl}/api/auth/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username, password })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.access_token) {
+                    // Test protected endpoint
+                    const profileResponse = await fetch(`${baseUrl}/api/auth/profile`, {
+                        method: 'GET',
+                        headers: {
+                            'Authorization': `Bearer ${data.access_token}`
+                        }
+                    });
+                    
+                    const profileData = await profileResponse.json();
+                    
+                    return {
+                        success: true,
+                        username: username,
+                        data: data,
+                        profile: profileData,
+                        profileSuccess: profileResponse.ok
+                    };
+                } else {
+                    return {
+                        success: false,
+                        username: username,
+                        error: data.detail || 'Login failed',
+                        status: response.status
+                    };
+                }
+            } catch (error) {
+                return {
+                    success: false,
+                    username: username,
+                    error: error.message,
+                    status: 'Network Error'
+                };
+            }
+        }
+        
+        async function testSingleUser(username, password) {
+            const resultsDiv = document.getElementById('results');
+            const resultsContent = document.getElementById('resultsContent');
+            
+            resultsDiv.classList.add('show');
+            resultsContent.innerHTML = `<div style="text-align: center; padding: 20px;">
+                <div class="spinner"></div>
+                <p style="margin-top: 10px;">Testing ${username}...</p>
+            </div>`;
+            
+            const result = await testLogin(username, password);
+            displaySingleResult(result);
+        }
+        
+        function displaySingleResult(result) {
+            const resultsContent = document.getElementById('resultsContent');
+            
+            if (result.success) {
+                resultsContent.innerHTML = `
+                    <div class="result-item success">
+                        <h4>✅ ${result.username} - Login Successful</h4>
+                        <p><strong>User ID:</strong> ${result.data.user.user_id}</p>
+                        <p><strong>Email:</strong> ${result.data.user.email}</p>
+                        <p><strong>Roles:</strong> ${result.data.user.roles.join(', ')}</p>
+                        <p><strong>Token Length:</strong> ${result.data.access_token.length} chars</p>
+                        <p><strong>Protected Endpoint:</strong> ${result.profileSuccess ? '✅ OK' : '❌ Failed'}</p>
+                        <pre>${JSON.stringify(result.data.user, null, 2)}</pre>
+                    </div>
+                `;
+            } else {
+                resultsContent.innerHTML = `
+                    <div class="result-item error">
+                        <h4>❌ ${result.username} - Login Failed</h4>
+                        <p><strong>Status:</strong> ${result.status}</p>
+                        <p><strong>Error:</strong> ${result.error}</p>
+                    </div>
+                `;
+            }
+        }
+        
+        async function testAllUsers() {
+            const baseUrl = getApiUrl();
+            if (!baseUrl) return;
+            
+            const resultsDiv = document.getElementById('results');
+            const resultsContent = document.getElementById('resultsContent');
+            const testBtn = document.getElementById('testAllBtn');
+            
+            resultsDiv.classList.add('show');
+            testBtn.disabled = true;
+            testBtn.innerHTML = '<div class="spinner"></div> Testing...';
+            
+            resultsContent.innerHTML = '<p style="text-align: center;">Running tests...</p>';
+            
+            const results = [];
+            
+            for (const user of testUsers) {
+                const result = await testLogin(user.username, user.password);
+                results.push(result);
+            }
+            
+            displayAllResults(results);
+            
+            testBtn.disabled = false;
+            testBtn.innerHTML = '🚀 Test All Users';
+        }
+        
+        function displayAllResults(results) {
+            const resultsContent = document.getElementById('resultsContent');
+            
+            const passed = results.filter(r => r.success).length;
+            const failed = results.filter(r => !r.success).length;
+            
+            let html = `
+                <div style="background: white; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                    <h4>📊 Summary</h4>
+                    <p><strong>Passed:</strong> ✅ ${passed}/${results.length}</p>
+                    <p><strong>Failed:</strong> ❌ ${failed}/${results.length}</p>
+                </div>
+            `;
+            
+            results.forEach(result => {
+                if (result.success) {
+                    html += `
+                        <div class="result-item success">
+                            <h4>✅ ${result.username} - Success</h4>
+                            <p><strong>Email:</strong> ${result.data.user.email}</p>
+                            <p><strong>Roles:</strong> ${result.data.user.roles.join(', ')}</p>
+                            <p><strong>Protected Endpoint:</strong> ${result.profileSuccess ? '✅ OK' : '❌ Failed'}</p>
+                        </div>
+                    `;
+                } else {
+                    html += `
+                        <div class="result-item error">
+                            <h4>❌ ${result.username} - Failed</h4>
+                            <p><strong>Status:</strong> ${result.status}</p>
+                            <p><strong>Error:</strong> ${result.error}</p>
+                        </div>
+                    `;
+                }
+            });
+            
+            resultsContent.innerHTML = html;
+        }
+        
+        // Auto-detect Azure Web App URL from current location
+        window.addEventListener('load', () => {
+            const currentUrl = window.location.hostname;
+            if (currentUrl.includes('azurewebsites.net')) {
+                document.getElementById('apiUrl').value = `https://${currentUrl}`;
+            }
+        });
+    </script>
+</body>
+</html>

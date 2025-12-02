@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.pyc
+.python_version
+.vscode/
+local.settings.json
+.env
+.funcignore
+bin/
+obj/

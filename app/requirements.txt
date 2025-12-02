@@ -1,0 +1,66 @@
+# Core Web Framework - Exact versions from working local environment
+fastapi==0.115.14
+uvicorn[standard]==0.31.1
+gunicorn>=21.2.0
+pydantic>=2.12.0
+pydantic-core>=2.41.1
+python-multipart==0.0.20
+websockets>=12.0
+email-validator>=2.0.0
+
+# Azure Functions
+azure-functions>=1.20.0
+
+# Azure AI & Identity - Working versions from local
+azure-identity==1.21.0
+azure-core==1.35.1
+azure-ai-projects==1.1.0b4
+azure-ai-agents==1.2.0b5
+azure-ai-inference==1.0.0b1
+azure-purview-catalog==1.0.0b4
+azure-purview-scanning==1.0.0b2
+
+# Agent Framework - Optional, can be kept for compatibility
+# These are still used by old agent_framework_manager.py
+agent-framework
+agent-framework-core
+agent-framework-a2a
+agent-framework-azure-ai
+agent-framework-copilotstudio
+agent-framework-mem0
+agent-framework-redis
+agent-framework-devui
+
+# OpenAI - Compatible version from local
+openai>=1.99.0,<2
+jiter>=0.11.0
+
+# HTTP Client for MCP Server communication
+httpx>=0.27.0
+
+# Power BI Integration
+requests==2.32.5
+PyJWT==2.10.1
+
+# Database & Authentication
+pyodbc>=5.0.0
+bcrypt>=4.0.0
+python-jose[cryptography]>=3.3.0
+structlog>=24.0.0
+
+# OpenTelemetry for Tracing - Compatible versions with azure-monitor-opentelemetry
+opentelemetry-api>=1.37.0
+opentelemetry-sdk>=1.37.0
+opentelemetry-exporter-otlp-proto-grpc>=1.36.0
+opentelemetry-instrumentation-fastapi>=0.58b0
+azure-monitor-opentelemetry==1.8.1
+azure-monitor-opentelemetry-exporter>=1.0.0b28
+
+# Utilities
+httpx
+aiofiles==24.1.0
+python-dotenv==1.1.1
+pydantic-settings==2.11.0
+plotly==6.3.1
+structlog==24.4.0
+rpds-py==0.27.1

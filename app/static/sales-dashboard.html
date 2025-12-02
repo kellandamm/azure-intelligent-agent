@@ -1,0 +1,1402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sales Dashboard - Contoso Sales</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0078d4 0%, #005a9e 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .dashboard-container {
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            padding: 20px 30px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .header h1 {
+            color: #0078d4;
+            font-size: 28px;
+            margin: 0;
+        }
+
+        .nav-dropdown {
+            position: relative;
+        }
+
+        .nav-dropdown-btn {
+            padding: 10px 20px;
+            background: #0078d4;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.3s;
+            font-weight: 600;
+        }
+
+        .nav-dropdown-btn:hover {
+            background: #005a9e;
+        }
+
+        .nav-dropdown-content {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            margin-top: 5px;
+            background: white;
+            min-width: 200px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            border-radius: 5px;
+            z-index: 1000;
+            overflow: hidden;
+        }
+
+        .nav-dropdown-content.show {
+            display: block;
+        }
+
+        .nav-dropdown-content a {
+            display: block;
+            padding: 12px 20px;
+            color: #333;
+            text-decoration: none;
+            transition: background 0.2s;
+        }
+
+        .nav-dropdown-content a:hover {
+            background: #f5f5f5;
+        }
+
+        .nav-dropdown-content a.active {
+            background: #e6f2ff;
+            color: #0078d4;
+            font-weight: 600;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+
+        .user-info {
+            color: #666;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .user-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #0078d4 0%, #005a9e 100%);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+            font-weight: 600;
+        }
+
+        .btn-secondary {
+            background: #f0f0f0;
+            color: #333;
+        }
+
+        .btn-secondary:hover {
+            background: #e0e0e0;
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .metric-card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .metric-label {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .metric-value {
+            font-size: 32px;
+            font-weight: bold;
+            color: #0078d4;
+            margin-bottom: 10px;
+        }
+
+        .metric-change {
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .metric-change.positive {
+            color: #10b981;
+        }
+
+        .metric-change.negative {
+            color: #ef4444;
+        }
+
+        .chart-section {
+            background: white;
+            padding: 25px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .chart-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .toggle-indicator {
+            color: #0078d4;
+            font-size: 18px;
+            transition: transform 0.3s;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 400px;
+        }
+
+        .chart-container.small {
+            height: 300px;
+        }
+
+        .data-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .tab-navigation {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .tab-btn {
+            padding: 10px 20px;
+            border: none;
+            background: transparent;
+            cursor: pointer;
+            font-size: 16px;
+            color: #666;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s;
+        }
+
+        .tab-btn.active {
+            color: #0078d4;
+            border-bottom-color: #0078d4;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #0078d4;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+
+        .data-table th,
+        .data-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .data-table th {
+            background: #f8f9fa;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .data-table tr:hover {
+            background: #f8f9fa;
+        }
+
+        .status-badge {
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .status-won {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-active {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .status-lost {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .progress-bar-container {
+            background: #e0e0e0;
+            border-radius: 10px;
+            height: 12px;
+            overflow: hidden;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #0078d4 0%, #005a9e 100%);
+            border-radius: 10px;
+            transition: width 0.3s ease;
+        }
+
+        .pipeline-stage {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            border-left: 4px solid #0078d4;
+        }
+
+        .pipeline-stage h4 {
+            color: #333;
+            margin-bottom: 8px;
+        }
+
+        .pipeline-metrics {
+            display: flex;
+            justify-content: space-between;
+            font-size: 14px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- Header -->
+        <div class="header">
+            <div class="header-left">
+                <h1>Contoso Sales</h1>
+                <div class="nav-dropdown">
+                    <button class="nav-dropdown-btn" onclick="toggleNavDropdown()">
+                        <span>Navigate</span>
+                        <span>▼</span>
+                    </button>
+                    <div class="nav-dropdown-content" id="navDropdown">
+                        <a href="/chat">AI Chat Assistant</a>
+                        <a href="/static/analyst-dashboard.html">Analytics Dashboard</a>
+                        <a href="/static/sales-dashboard.html" class="active">Sales Dashboard</a>
+                        <a href="/static/shop.html">Shop</a>
+                        <a href="/admin">Admin Portal</a>
+                    </div>
+                </div>
+            </div>
+            <div class="header-actions">
+                <div class="user-info">
+                    <div class="user-icon" id="userIcon">U</div>
+                    <span id="userInfo">Loading...</span>
+                </div>
+                <button class="btn btn-secondary" onclick="logout()">Logout</button>
+            </div>
+        </div>
+
+        <!-- Tab Navigation -->
+        <div class="tab-navigation">
+            <button class="tab-btn active" onclick="switchTab('overview')">Overview</button>
+            <button class="tab-btn" onclick="switchTab('pipeline')">Sales Pipeline</button>
+            <button class="tab-btn" onclick="switchTab('deals')">My Deals</button>
+            <button class="tab-btn" onclick="switchTab('products')">Top Products</button>
+            <button class="tab-btn" onclick="switchTab('activities')">Activities</button>
+            <button class="tab-btn" onclick="switchTab('goals')">Goals & Targets</button>
+        </div>
+
+        <!-- Overview Tab -->
+        <div id="overview" class="tab-content active">
+            <!-- KPI Metrics -->
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <div class="metric-label">Total Revenue</div>
+                    <div class="metric-value" id="totalRevenue">$0</div>
+                    <div class="metric-change positive" id="revenueChange">▲ 0% vs last period</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Deals Won</div>
+                    <div class="metric-value" id="dealsWon">0</div>
+                    <div class="metric-change positive" id="dealsChange">▲ 0% vs last period</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Win Rate</div>
+                    <div class="metric-value" id="winRate">0%</div>
+                    <div class="metric-change positive" id="winRateChange">▲ 0% vs last period</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Avg Deal Time</div>
+                    <div class="metric-value" id="avgDealTime">0 days</div>
+                    <div class="metric-change positive" id="dealTimeChange">▼ 0% faster</div>
+                </div>
+            </div>
+
+            <!-- Revenue Trend Chart -->
+            <div class="chart-section">
+                <div class="chart-header">
+                    <h2 class="chart-title">Revenue Trend (Last 30 Days)</h2>
+                </div>
+                <div class="chart-container">
+                    <canvas id="revenueTrendChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Recent Deals & Top Products -->
+            <div class="data-grid">
+                <div class="chart-section">
+                    <div class="chart-header" onclick="toggleSection('recentDeals')">
+                        <h2 class="chart-title">Recent Deals</h2>
+                        <span class="toggle-indicator" id="recentDealsToggle">▼</span>
+                    </div>
+                    <div id="recentDealsContent">
+                        <div id="recentDealsTable"></div>
+                    </div>
+                </div>
+
+                <div class="chart-section">
+                    <div class="chart-header" onclick="toggleSection('topProducts')">
+                        <h2 class="chart-title">Top Performing Products</h2>
+                        <span class="toggle-indicator" id="topProductsToggle">▼</span>
+                    </div>
+                    <div id="topProductsContent">
+                        <div class="chart-container small">
+                            <canvas id="topProductsChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sales Pipeline Tab -->
+        <div id="pipeline" class="tab-content">
+            <div class="chart-section">
+                <div class="chart-header">
+                    <h2 class="chart-title">Sales Pipeline Analysis</h2>
+                </div>
+                <div class="chart-container">
+                    <canvas id="pipelineChart"></canvas>
+                </div>
+            </div>
+
+            <div class="chart-section">
+                <div class="chart-header">
+                    <h2 class="chart-title">Pipeline Stages</h2>
+                </div>
+                <div id="pipelineStages"></div>
+            </div>
+        </div>
+
+        <!-- My Deals Tab -->
+        <div id="deals" class="tab-content">
+            <div class="chart-section">
+                <div class="chart-header">
+                    <h2 class="chart-title">My Active Deals</h2>
+                </div>
+                <div id="activeDealsTable"></div>
+            </div>
+        </div>
+
+        <!-- Top Products Tab -->
+        <div id="products" class="tab-content">
+            <div class="data-grid">
+                <div class="chart-section">
+                    <div class="chart-header">
+                        <h2 class="chart-title">Product Performance</h2>
+                    </div>
+                    <div class="chart-container small">
+                        <canvas id="productPerformanceChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="chart-section">
+                    <div class="chart-header">
+                        <h2 class="chart-title">Product Revenue Split</h2>
+                    </div>
+                    <div class="chart-container small">
+                        <canvas id="productRevenueChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="chart-section">
+                <div class="chart-header">
+                    <h2 class="chart-title">Product Details</h2>
+                </div>
+                <div id="productDetailsTable"></div>
+            </div>
+        </div>
+
+        <!-- Activities Tab -->
+        <div id="activities" class="tab-content">
+            <div class="chart-section">
+                <div class="chart-header">
+                    <h2 class="chart-title">Recent Sales Activities</h2>
+                </div>
+                <div id="activitiesTimeline"></div>
+            </div>
+        </div>
+
+        <!-- Goals & Targets Tab -->
+        <div id="goals" class="tab-content">
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <div class="metric-label">Monthly Revenue Target</div>
+                    <div class="metric-value" id="revenueTarget">$0</div>
+                    <div style="margin-top: 15px;">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                            <span style="font-size: 14px; color: #666;">Progress</span>
+                            <span style="font-size: 14px; font-weight: 600; color: #0078d4;" id="revenueProgress">0%</span>
+                        </div>
+                        <div class="progress-bar-container">
+                            <div class="progress-bar" id="revenueProgressBar" style="width: 0%"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="metric-card">
+                    <div class="metric-label">Monthly Deals Target</div>
+                    <div class="metric-value" id="dealsTarget">0</div>
+                    <div style="margin-top: 15px;">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                            <span style="font-size: 14px; color: #666;">Progress</span>
+                            <span style="font-size: 14px; font-weight: 600; color: #0078d4;" id="dealsProgress">0%</span>
+                        </div>
+                        <div class="progress-bar-container">
+                            <div class="progress-bar" id="dealsProgressBar" style="width: 0%"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="metric-card">
+                    <div class="metric-label">Quota Attainment</div>
+                    <div class="metric-value" id="quotaAttainment">0%</div>
+                    <div class="metric-change positive" id="quotaChange">On track</div>
+                </div>
+
+                <div class="metric-card">
+                    <div class="metric-label">Days Remaining</div>
+                    <div class="metric-value" id="daysRemaining">0</div>
+                    <div class="metric-change" id="daysRemainingMsg">in current period</div>
+                </div>
+            </div>
+
+            <div class="chart-section">
+                <div class="chart-header">
+                    <h2 class="chart-title">Goal Progress Over Time</h2>
+                </div>
+                <div class="chart-container">
+                    <canvas id="goalProgressChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let charts = {};
+        
+        // Check authentication - but don't redirect, just return status
+        // Server-side auth via cookies is the primary authentication method
+        function checkAuth() {
+            const token = localStorage.getItem('auth_token') || sessionStorage.getItem('auth_token');
+            if (!token) {
+                console.log('No token in localStorage, but server may have validated via cookie');
+                return false; // Don't redirect - let the page work
+            }
+            return true;
+        }
+
+        // Get auth token - use global AuthManager
+        function getAuthToken() {
+            return window.AuthManager ? window.AuthManager.getToken() : 
+                   (localStorage.getItem('auth_token') || sessionStorage.getItem('auth_token') || '');
+        }
+
+        // Load user info - simple authentication check
+        async function loadUserInfo() {
+            try {
+                const token = getAuthToken();
+                if (!token) {
+                    window.location.href = '/login?redirect=' + encodeURIComponent(window.location.pathname);
+                    return;
+                }
+                
+                const response = await fetch('/api/auth/me', {
+                    headers: {
+                        'Authorization': 'Bearer ' + token
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    const userName = data.full_name || data.username || data.email || 'Sales Rep';
+                    document.getElementById('userInfo').textContent = userName;
+                    
+                    const initials = userName.split(' ')
+                        .map(n => n[0])
+                        .join('')
+                        .substring(0, 2)
+                        .toUpperCase();
+                    document.getElementById('userIcon').textContent = initials;
+                } else {
+                    // Invalid token, redirect to login
+                    window.location.href = '/login?redirect=' + encodeURIComponent(window.location.pathname);
+                }
+            } catch (error) {
+                console.error('Error loading user info:', error);
+                window.location.href = '/login?redirect=' + encodeURIComponent(window.location.pathname);
+            }
+        }
+
+        // Logout - clear auth and redirect
+        function logout() {
+            localStorage.removeItem('auth_token');
+            localStorage.removeItem('user_data');
+            sessionStorage.removeItem('auth_token');
+            sessionStorage.removeItem('user_data');
+            window.location.href = '/login';
+        }
+
+        // Toggle navigation dropdown
+        function toggleNavDropdown() {
+            const dropdown = document.getElementById('navDropdown');
+            dropdown.classList.toggle('show');
+        }
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', function(event) {
+            const dropdown = document.getElementById('navDropdown');
+            const button = event.target.closest('.nav-dropdown-btn');
+            
+            if (!button && dropdown && !dropdown.contains(event.target)) {
+                dropdown.classList.remove('show');
+            }
+        });
+
+        // Tab switching
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            
+            document.getElementById(tabName).classList.add('active');
+            event.target.classList.add('active');
+            
+            // Load data for specific tabs
+            if (tabName === 'pipeline') {
+                loadPipelineData();
+            } else if (tabName === 'deals') {
+                loadActiveDeals();
+            } else if (tabName === 'products') {
+                loadProductsTab();
+            } else if (tabName === 'activities') {
+                loadActivities();
+            } else if (tabName === 'goals') {
+                loadGoalsData();
+            }
+        }
+
+        // Toggle section
+        function toggleSection(sectionName) {
+            const content = document.getElementById(sectionName + 'Content');
+            const toggle = document.getElementById(sectionName + 'Toggle');
+            
+            if (content.style.display === 'none') {
+                content.style.display = 'block';
+                toggle.textContent = '▼';
+            } else {
+                content.style.display = 'none';
+                toggle.textContent = '▶';
+            }
+        }
+
+        // Format currency
+        function formatCurrency(value) {
+            if (value >= 1000000) {
+                return '$' + (value / 1000000).toFixed(1) + 'M';
+            } else if (value >= 1000) {
+                return '$' + (value / 1000).toFixed(1) + 'K';
+            }
+            return '$' + value.toFixed(0);
+        }
+
+        // Load dashboard metrics
+        async function loadDashboardMetrics() {
+            try {
+                const response = await fetch('/api/sales/metrics', {
+                    headers: {
+                        'Authorization': 'Bearer ' + getAuthToken()
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    document.getElementById('totalRevenue').textContent = formatCurrency(data.total_revenue);
+                    document.getElementById('dealsWon').textContent = data.deals_won;
+                    document.getElementById('winRate').textContent = data.win_rate + '%';
+                    document.getElementById('avgDealTime').textContent = data.avg_deal_time + ' days';
+                    
+                    document.getElementById('revenueChange').textContent = '▲ ' + data.revenue_change + '% vs last period';
+                    document.getElementById('dealsChange').textContent = '▲ ' + data.deals_change + '% vs last period';
+                    document.getElementById('winRateChange').textContent = '▲ ' + data.win_rate_change + '% vs last period';
+                    document.getElementById('dealTimeChange').textContent = '▼ ' + data.deal_time_change + '% faster';
+                }
+            } catch (error) {
+                console.error('Error loading metrics:', error);
+            }
+        }
+
+        // Load revenue trend
+        async function loadRevenueTrend() {
+            try {
+                const response = await fetch('/api/sales/metrics', {
+                    headers: {
+                        'Authorization': 'Bearer ' + getAuthToken()
+                    }
+                });
+                
+                if (response.ok) {
+                    // Simulate trend data - in production this would come from API
+                    const labels = [];
+                    const data = [];
+                    const today = new Date();
+                    
+                    for (let i = 29; i >= 0; i--) {
+                        const date = new Date(today);
+                        date.setDate(date.getDate() - i);
+                        labels.push(date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
+                        data.push(Math.random() * 50000 + 10000);
+                    }
+                    
+                    const ctx = document.getElementById('revenueTrendChart').getContext('2d');
+                    
+                    if (charts.revenueTrend) {
+                        charts.revenueTrend.destroy();
+                    }
+                    
+                    charts.revenueTrend = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: labels,
+                            datasets: [{
+                                label: 'Daily Revenue',
+                                data: data,
+                                borderColor: '#0078d4',
+                                backgroundColor: 'rgba(0, 120, 212, 0.1)',
+                                fill: true,
+                                tension: 0.4
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: {
+                                    display: false
+                                }
+                            },
+                            scales: {
+                                y: {
+                                    beginAtZero: true,
+                                    ticks: {
+                                        callback: function(value) {
+                                            return formatCurrency(value);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    });
+                }
+            } catch (error) {
+                console.error('Error loading revenue trend:', error);
+            }
+        }
+
+        // Load recent deals
+        async function loadRecentDeals() {
+            try {
+                const response = await fetch('/api/sales/deals', {
+                    headers: {
+                        'Authorization': 'Bearer ' + getAuthToken()
+                    }
+                });
+                
+                if (response.ok) {
+                    const deals = await response.json();
+                    
+                    const table = '<table class="data-table">' +
+                        '<thead>' +
+                            '<tr>' +
+                                '<th>Customer</th>' +
+                                '<th>Product</th>' +
+                                '<th>Value</th>' +
+                                '<th>Status</th>' +
+                                '<th>Close Date</th>' +
+                            '</tr>' +
+                        '</thead>' +
+                        '<tbody>' +
+                            deals.slice(0, 10).map(deal => 
+                                '<tr>' +
+                                    '<td>' + deal.customer + '</td>' +
+                                    '<td>' + deal.product + '</td>' +
+                                    '<td>' + formatCurrency(deal.value) + '</td>' +
+                                    '<td><span class="status-badge status-' + deal.status.toLowerCase().replace(' ', '-') + '">' + deal.status + '</span></td>' +
+                                    '<td>' + deal.close_date + '</td>' +
+                                '</tr>'
+                            ).join('') +
+                        '</tbody>' +
+                    '</table>';
+                    
+                    document.getElementById('recentDealsTable').innerHTML = table;
+                }
+            } catch (error) {
+                console.error('Error loading recent deals:', error);
+            }
+        }
+
+        // Load active deals for "My Deals" tab
+        async function loadActiveDeals() {
+            try {
+                const response = await fetch('/api/sales/deals?limit=50', {
+                    headers: {
+                        'Authorization': 'Bearer ' + getAuthToken()
+                    }
+                });
+                
+                if (response.ok) {
+                    const deals = await response.json();
+                    
+                    // Calculate summary metrics
+                    const totalValue = deals.reduce((sum, deal) => sum + deal.value, 0);
+                    const wonDeals = deals.filter(d => d.status === 'won');
+                    const negotiatingDeals = deals.filter(d => d.status === 'negotiating');
+                    const prospectingDeals = deals.filter(d => d.status === 'prospecting');
+                    
+                    const summaryHTML = '<div>' +
+                        '<div class="metrics-grid" style="margin-bottom: 20px;">' +
+                            '<div class="metric-card">' +
+                                '<div class="metric-label">Total Pipeline Value</div>' +
+                                '<div class="metric-value">' + formatCurrency(totalValue) + '</div>' +
+                                '<div style="color: #666; font-size: 14px; margin-top: 5px;">' + deals.length + ' deals in pipeline</div>' +
+                            '</div>' +
+                            '<div class="metric-card">' +
+                                '<div class="metric-label">Won Deals</div>' +
+                                '<div class="metric-value">' + wonDeals.length + '</div>' +
+                                '<div style="color: #10b981; font-size: 14px; margin-top: 5px;">' + formatCurrency(wonDeals.reduce((sum, d) => sum + d.value, 0)) + ' value</div>' +
+                            '</div>' +
+                            '<div class="metric-card">' +
+                                '<div class="metric-label">Negotiating</div>' +
+                                '<div class="metric-value">' + negotiatingDeals.length + '</div>' +
+                                '<div style="color: #f59e0b; font-size: 14px; margin-top: 5px;">' + formatCurrency(negotiatingDeals.reduce((sum, d) => sum + d.value, 0)) + ' value</div>' +
+                            '</div>' +
+                            '<div class="metric-card">' +
+                                '<div class="metric-label">Prospecting</div>' +
+                                '<div class="metric-value">' + prospectingDeals.length + '</div>' +
+                                '<div style="color: #6b7280; font-size: 14px; margin-top: 5px;">' + formatCurrency(prospectingDeals.reduce((sum, d) => sum + d.value, 0)) + ' value</div>' +
+                            '</div>' +
+                        '</div>' +
+                        '<div style="margin-bottom: 20px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">' +
+                            '<label style="font-weight: 600; color: #333;">Filter by Status:</label>' +
+                            '<select id="dealStatusFilter" onchange="filterDeals()" style="padding: 8px 12px; border: 1px solid #ddd; border-radius: 5px; font-size: 14px; cursor: pointer;">' +
+                                '<option value="all">All Deals</option>' +
+                                '<option value="won">Won</option>' +
+                                '<option value="negotiating">Negotiating</option>' +
+                                '<option value="prospecting">Prospecting</option>' +
+                            '</select>' +
+                            '<label style="font-weight: 600; color: #333;">Sort by:</label>' +
+                            '<select id="dealSortBy" onchange="filterDeals()" style="padding: 8px 12px; border: 1px solid #ddd; border-radius: 5px; font-size: 14px; cursor: pointer;">' +
+                                '<option value="value-desc">Value (High to Low)</option>' +
+                                '<option value="value-asc">Value (Low to High)</option>' +
+                                '<option value="date-asc">Close Date (Earliest)</option>' +
+                                '<option value="date-desc">Close Date (Latest)</option>' +
+                                '<option value="customer">Customer Name</option>' +
+                            '</select>' +
+                            '<input type="text" id="dealSearchInput" placeholder="Search customer or product..." onkeyup="filterDeals()" ' +
+                                'style="padding: 8px 12px; border: 1px solid #ddd; border-radius: 5px; font-size: 14px; flex: 1; max-width: 300px;" />' +
+                        '</div>' +
+                        '<table class="data-table" id="activeDealsDataTable">' +
+                            '<thead>' +
+                                '<tr>' +
+                                    '<th>Customer</th>' +
+                                    '<th>Product</th>' +
+                                    '<th>Value</th>' +
+                                    '<th>Status</th>' +
+                                    '<th>Expected Close</th>' +
+                                    '<th>Days to Close</th>' +
+                                    '<th>Actions</th>' +
+                                '</tr>' +
+                            '</thead>' +
+                            '<tbody id="activeDealsTableBody">' +
+                                deals.map(deal => {
+                                    const closeDate = new Date(deal.close_date);
+                                    const today = new Date();
+                                    const daysToClose = Math.ceil((closeDate - today) / (1000 * 60 * 60 * 24));
+                                    const daysDisplay = daysToClose > 0 ? (daysToClose + ' days') : daysToClose === 0 ? 'Today' : (Math.abs(daysToClose) + ' days ago');
+                                    const daysColor = daysToClose < 0 ? '#ef4444' : daysToClose < 7 ? '#f59e0b' : '#10b981';
+                                    
+                                    return '<tr data-status="' + deal.status + '" data-customer="' + deal.customer.toLowerCase() + '" data-product="' + deal.product.toLowerCase() + '" data-value="' + deal.value + '" data-date="' + deal.close_date + '">' +
+                                        '<td><strong>' + deal.customer + '</strong></td>' +
+                                        '<td>' + deal.product + '</td>' +
+                                        '<td><strong>' + formatCurrency(deal.value) + '</strong></td>' +
+                                        '<td><span class="status-badge status-' + deal.status.toLowerCase().replace(' ', '-') + '">' + deal.status.charAt(0).toUpperCase() + deal.status.slice(1) + '</span></td>' +
+                                        '<td>' + closeDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + '</td>' +
+                                        '<td style="color: ' + daysColor + '; font-weight: 600;">' + daysDisplay + '</td>' +
+                                        '<td>' +
+                                            '<button onclick="viewDealDetails(\'' + deal.customer.replace(/'/g, "\\'") + '\', \'' + deal.product.replace(/'/g, "\\'") + '\')" style="padding: 5px 10px; background: #0078d4; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 12px;">View</button>' +
+                                        '</td>' +
+                                    '</tr>';
+                                }).join('') +
+                            '</tbody>' +
+                        '</table>' +
+                    '</div>';
+                    
+                    document.getElementById('activeDealsTable').innerHTML = summaryHTML;
+                    
+                    // Store deals globally for filtering
+                    window.allDeals = deals;
+                }
+            } catch (error) {
+                console.error('Error loading active deals:', error);
+                document.getElementById('activeDealsTable').innerHTML = '<div style="text-align: center; padding: 40px; color: #666;">' +
+                    '<p>Unable to load deals. Please try again later.</p>' +
+                '</div>';
+            }
+        }
+
+        // Filter and sort deals
+        function filterDeals() {
+            const statusFilter = document.getElementById('dealStatusFilter').value;
+            const sortBy = document.getElementById('dealSortBy').value;
+            const searchTerm = document.getElementById('dealSearchInput').value.toLowerCase();
+            
+            let filteredDeals = [...window.allDeals];
+            
+            // Apply status filter
+            if (statusFilter !== 'all') {
+                filteredDeals = filteredDeals.filter(deal => deal.status === statusFilter);
+            }
+            
+            // Apply search filter
+            if (searchTerm) {
+                filteredDeals = filteredDeals.filter(deal => 
+                    deal.customer.toLowerCase().includes(searchTerm) || 
+                    deal.product.toLowerCase().includes(searchTerm)
+                );
+            }
+            
+            // Apply sorting
+            switch(sortBy) {
+                case 'value-desc':
+                    filteredDeals.sort((a, b) => b.value - a.value);
+                    break;
+                case 'value-asc':
+                    filteredDeals.sort((a, b) => a.value - b.value);
+                    break;
+                case 'date-asc':
+                    filteredDeals.sort((a, b) => new Date(a.close_date) - new Date(b.close_date));
+                    break;
+                case 'date-desc':
+                    filteredDeals.sort((a, b) => new Date(b.close_date) - new Date(a.close_date));
+                    break;
+                case 'customer':
+                    filteredDeals.sort((a, b) => a.customer.localeCompare(b.customer));
+                    break;
+            }
+            
+            // Update table
+            const tbody = document.getElementById('activeDealsTableBody');
+            tbody.innerHTML = filteredDeals.map(deal => {
+                const closeDate = new Date(deal.close_date);
+                const today = new Date();
+                const daysToClose = Math.ceil((closeDate - today) / (1000 * 60 * 60 * 24));
+                const daysDisplay = daysToClose > 0 ? (daysToClose + ' days') : daysToClose === 0 ? 'Today' : (Math.abs(daysToClose) + ' days ago');
+                const daysColor = daysToClose < 0 ? '#ef4444' : daysToClose < 7 ? '#f59e0b' : '#10b981';
+                
+                return '<tr>' +
+                    '<td><strong>' + deal.customer + '</strong></td>' +
+                    '<td>' + deal.product + '</td>' +
+                    '<td><strong>' + formatCurrency(deal.value) + '</strong></td>' +
+                    '<td><span class="status-badge status-' + deal.status.toLowerCase().replace(' ', '-') + '">' + deal.status.charAt(0).toUpperCase() + deal.status.slice(1) + '</span></td>' +
+                    '<td>' + closeDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + '</td>' +
+                    '<td style="color: ' + daysColor + '; font-weight: 600;">' + daysDisplay + '</td>' +
+                    '<td>' +
+                        '<button onclick="viewDealDetails(\'' + deal.customer.replace(/'/g, "\\'") + '\', \'' + deal.product.replace(/'/g, "\\'") + '\')" style="padding: 5px 10px; background: #0078d4; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 12px;">View</button>' +
+                    '</td>' +
+                '</tr>';
+            }).join('');
+            
+            // Show "no results" message if filtered list is empty
+            if (filteredDeals.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 40px; color: #666;">No deals match your filters</td></tr>';
+            }
+        }
+
+        // View deal details
+        function viewDealDetails(customer, product) {
+            alert('View details for ' + customer + '\n\nProduct: ' + product + '\n\nThis would open a detailed view with:\n- Full deal history\n- Contact information\n- Next steps and activities\n- Communication timeline\n- Related opportunities');
+        }
+
+        // Load top products
+        async function loadTopProducts() {
+            try {
+                const response = await fetch('/api/sales/products', {
+                    headers: {
+                        'Authorization': 'Bearer ' + getAuthToken()
+                    }
+                });
+                
+                if (response.ok) {
+                    const products = await response.json();
+                    
+                    const ctx = document.getElementById('topProductsChart').getContext('2d');
+                    
+                    if (charts.topProducts) {
+                        charts.topProducts.destroy();
+                    }
+                    
+                    charts.topProducts = new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels: products.map(p => p.name),
+                            datasets: [{
+                                label: 'Revenue',
+                                data: products.map(p => p.revenue),
+                                backgroundColor: '#0078d4'
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            indexAxis: 'y',
+                            plugins: {
+                                legend: {
+                                    display: false
+                                }
+                            },
+                            scales: {
+                                x: {
+                                    ticks: {
+                                        callback: function(value) {
+                                            return formatCurrency(value);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    });
+                }
+            } catch (error) {
+                console.error('Error loading top products:', error);
+            }
+        }
+
+        // Load pipeline data
+        async function loadPipelineData() {
+            // Simulate pipeline stages
+            const stages = [
+                { name: 'Lead', count: 45, value: 2250000 },
+                { name: 'Qualified', count: 32, value: 1920000 },
+                { name: 'Proposal', count: 18, value: 1440000 },
+                { name: 'Negotiation', count: 12, value: 1080000 },
+                { name: 'Closed Won', count: 8, value: 720000 }
+            ];
+            
+            const ctx = document.getElementById('pipelineChart').getContext('2d');
+            
+            if (charts.pipeline) {
+                charts.pipeline.destroy();
+            }
+            
+            charts.pipeline = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: stages.map(s => s.name),
+                    datasets: [
+                        {
+                            label: 'Deal Count',
+                            data: stages.map(s => s.count),
+                            backgroundColor: '#0078d4',
+                            yAxisID: 'y'
+                        },
+                        {
+                            label: 'Pipeline Value',
+                            data: stages.map(s => s.value),
+                            type: 'line',
+                            borderColor: '#005a9e',
+                            backgroundColor: 'rgba(0, 90, 158, 0.1)',
+                            yAxisID: 'y1'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                            title: {
+                                display: true,
+                                text: 'Deal Count'
+                            }
+                        },
+                        y1: {
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            title: {
+                                display: true,
+                                text: 'Pipeline Value ($)'
+                            },
+                            ticks: {
+                                callback: function(value) {
+                                    return formatCurrency(value);
+                                }
+                            },
+                            grid: {
+                                drawOnChartArea: false
+                            }
+                        }
+                    }
+                }
+            });
+            
+            // Display pipeline stages
+            const stagesHTML = stages.map(stage => 
+                '<div class="pipeline-stage">' +
+                    '<h4>' + stage.name + '</h4>' +
+                    '<div class="pipeline-metrics">' +
+                        '<span>' + stage.count + ' deals</span>' +
+                        '<span><strong>' + formatCurrency(stage.value) + '</strong></span>' +
+                    '</div>' +
+                '</div>'
+            ).join('');
+            
+            document.getElementById('pipelineStages').innerHTML = stagesHTML;
+        }
+
+        // Load products tab
+        async function loadProductsTab() {
+            try {
+                const response = await fetch('/api/sales/products', {
+                    headers: {
+                        'Authorization': Bearer  + getAuthToken()
+                    }
+                });
+                
+                if (response.ok) {
+                    const products = await response.json();
+                    
+                    // Performance bar chart
+                    const ctx1 = document.getElementById('productPerformanceChart').getContext('2d');
+                    if (charts.productPerformance) {
+                        charts.productPerformance.destroy();
+                    }
+                    charts.productPerformance = new Chart(ctx1, {
+                        type: 'bar',
+                        data: {
+                            labels: products.map(p => p.name),
+                            datasets: [{
+                                label: 'Units Sold',
+                                data: products.map(p => p.deals),
+                                backgroundColor: '#0078d4'
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false
+                        }
+                    });
+                    
+                    // Revenue pie chart
+                    const ctx2 = document.getElementById('productRevenueChart').getContext('2d');
+                    if (charts.productRevenue) {
+                        charts.productRevenue.destroy();
+                    }
+                    charts.productRevenue = new Chart(ctx2, {
+                        type: 'doughnut',
+                        data: {
+                            labels: products.map(p => p.name),
+                            datasets: [{
+                                data: products.map(p => p.revenue),
+                                backgroundColor: [
+                                    '#0078d4',
+                                    '#005a9e',
+                                    '#50e6ff',
+                                    '#0099bc',
+                                    '#00b7c3'
+                                ]
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false
+                        }
+                    });
+                    
+                    // Details table
+                    const table = '<table class="data-table">' +
+                        '<thead>' +
+                            '<tr>' +
+                                '<th>Product</th>' +
+                                '<th>Revenue</th>' +
+                                '<th>Units Sold</th>' +
+                                '<th>Avg Value</th>' +
+                            '</tr>' +
+                        '</thead>' +
+                        '<tbody>' +
+                            products.map(p => 
+                                '<tr>' +
+                                    '<td>' + p.name + '</td>' +
+                                    '<td>' + formatCurrency(p.revenue) + '</td>' +
+                                    '<td>' + p.deals + '</td>' +
+                                    '<td>' + formatCurrency(p.revenue / p.deals) + '</td>' +
+                                '</tr>'
+                            ).join('') +
+                        '</tbody>' +
+                    '</table>';
+                    
+                    document.getElementById('productDetailsTable').innerHTML = table;
+                }
+            } catch (error) {
+                console.error('Error loading products tab:', error);
+            }
+        }
+
+        // Load activities
+        function loadActivities() {
+            const activities = [
+                { type: 'Meeting', customer: 'Acme Corp', time: '2 hours ago', description: 'Product demo completed' },
+                { type: 'Call', customer: 'TechStart Inc', time: '5 hours ago', description: 'Follow-up on proposal' },
+                { type: 'Email', customer: 'Global Systems', time: '1 day ago', description: 'Sent contract for review' },
+                { type: 'Meeting', customer: 'Innovation Labs', time: '2 days ago', description: 'Needs analysis session' },
+                { type: 'Call', customer: 'Digital Solutions', time: '3 days ago', description: 'Discovery call' }
+            ];
+            
+            const timeline = activities.map(activity => 
+                '<div class="pipeline-stage">' +
+                    '<h4><strong>' + activity.type + '</strong> - ' + activity.customer + '</h4>' +
+                    '<div class="pipeline-metrics">' +
+                        '<span>' + activity.description + '</span>' +
+                        '<span style="color: #666;">' + activity.time + '</span>' +
+                    '</div>' +
+                '</div>'
+            ).join('');
+            
+            document.getElementById('activitiesTimeline').innerHTML = timeline;
+        }
+
+        // Load goals data
+        async function loadGoalsData() {
+            try {
+                const response = await fetch('/api/sales/goals', {
+                    headers: {
+                        'Authorization': 'Bearer ' + getAuthToken()
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    document.getElementById('revenueTarget').textContent = formatCurrency(data.revenue_target);
+                    document.getElementById('dealsTarget').textContent = data.deals_target;
+                    
+                    const revenueProgress = (data.revenue_current / data.revenue_target * 100).toFixed(0);
+                    const dealsProgress = (data.deals_current / data.deals_target * 100).toFixed(0);
+                    
+                    document.getElementById('revenueProgress').textContent = revenueProgress + '%';
+                    document.getElementById('revenueProgressBar').style.width = revenueProgress + '%';
+                    
+                    document.getElementById('dealsProgress').textContent = dealsProgress + '%';
+                    document.getElementById('dealsProgressBar').style.width = dealsProgress + '%';
+                    
+                    document.getElementById('quotaAttainment').textContent = revenueProgress + '%';
+                    
+                    // Calculate days remaining in month
+                    const today = new Date();
+                    const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+                    const daysLeft = Math.ceil((lastDay - today) / (1000 * 60 * 60 * 24));
+                    document.getElementById('daysRemaining').textContent = daysLeft;
+                    
+                    // Goal progress chart
+                    const ctx = document.getElementById('goalProgressChart').getContext('2d');
+                    
+                    if (charts.goalProgress) {
+                        charts.goalProgress.destroy();
+                    }
+                    
+                    charts.goalProgress = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: ['Week 1', 'Week 2', 'Week 3', 'Week 4'],
+                            datasets: [
+                                {
+                                    label: 'Actual',
+                                    data: [25, 48, 65, parseInt(revenueProgress)],
+                                    borderColor: '#0078d4',
+                                    backgroundColor: 'rgba(0, 120, 212, 0.1)',
+                                    fill: true
+                                },
+                                {
+                                    label: 'Target',
+                                    data: [25, 50, 75, 100],
+                                    borderColor: '#10b981',
+                                    borderDash: [5, 5],
+                                    fill: false
+                                }
+                            ]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: {
+                                y: {
+                                    beginAtZero: true,
+                                    max: 100,
+                                    ticks: {
+                                        callback: function(value) {
+                                            return value + '%';
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    });
+                }
+            } catch (error) {
+                console.error('Error loading goals data:', error);
+            }
+        }
+
+        // Initialize dashboard
+        document.addEventListener('DOMContentLoaded', async () => {
+            // Check auth - redirect if not authenticated
+            const hasToken = checkAuth();
+            console.log('Auth status:', hasToken ? 'Token found' : 'Not authenticated');
+            
+            await loadUserInfo();
+            await loadDashboardMetrics();
+            await loadRevenueTrend();
+            await loadRecentDeals();
+            await loadTopProducts();
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,1592 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analytics Dashboard - Contoso Sales</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0078d4 0%, #005a9e 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .dashboard-container {
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            padding: 20px 30px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .header h1 {
+            color: #0078d4;
+            font-size: 28px;
+            margin: 0;
+        }
+
+        .nav-dropdown {
+            position: relative;
+        }
+
+        .nav-dropdown-btn {
+            padding: 10px 20px;
+            background: #0078d4;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.3s;
+        }
+
+        .nav-dropdown-btn:hover {
+            background: #5568d3;
+        }
+
+        .nav-dropdown-content {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            margin-top: 5px;
+            background: white;
+            min-width: 200px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            border-radius: 5px;
+            z-index: 1000;
+            overflow: hidden;
+        }
+
+        .nav-dropdown-content.show {
+            display: block;
+        }
+
+        .nav-dropdown-content a {
+            display: block;
+            padding: 12px 20px;
+            color: #333;
+            text-decoration: none;
+            transition: background 0.2s;
+        }
+
+        .nav-dropdown-content a:hover {
+            background: #f5f5f5;
+        }
+
+        .nav-dropdown-content a.active {
+            background: #f0f0ff;
+            color: #0078d4;
+            font-weight: 600;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+
+        .user-info {
+            color: #666;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .user-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #0078d4 0%, #005a9e 100%);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: #0078d4;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #005a9e;
+        }
+
+        .btn-secondary {
+            background: #f0f0f0;
+            color: #333;
+        }
+
+        .btn-secondary:hover {
+            background: #e0e0e0;
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .metric-card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .metric-label {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+
+        .metric-value {
+            font-size: 32px;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .metric-change {
+            font-size: 14px;
+        }
+
+        .metric-change.positive {
+            color: #10b981;
+        }
+
+        .metric-change.negative {
+            color: #ef4444;
+        }
+
+        .chart-section {
+            background: white;
+            padding: 25px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .chart-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .toggle-indicator {
+            color: #0078d4;
+            font-size: 18px;
+            transition: transform 0.3s;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 400px;
+        }
+
+        .chart-container.small {
+            height: 300px;
+        }
+
+        .data-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .sql-query-section {
+            background: white;
+            padding: 25px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .query-input {
+            width: 100%;
+            min-height: 120px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            margin-bottom: 15px;
+            resize: vertical;
+        }
+
+        .query-results {
+            margin-top: 20px;
+            overflow-x: auto;
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+
+        .data-table th,
+        .data-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .data-table th {
+            background: #f8f9fa;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .data-table tr:hover {
+            background: #f8f9fa;
+        }
+
+        .query-info {
+            margin-top: 10px;
+            color: #666;
+            font-size: 14px;
+        }
+
+        .tab-navigation {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .tab-btn {
+            padding: 10px 20px;
+            border: none;
+            background: transparent;
+            cursor: pointer;
+            font-size: 16px;
+            color: #666;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s;
+        }
+
+        .tab-btn.active {
+            color: #0078d4;
+            border-bottom-color: #0078d4;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #0078d4;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .error-message {
+            background: #fee;
+            color: #c33;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 15px 0;
+        }
+
+        .success-message {
+            background: #efe;
+            color: #3c3;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 15px 0;
+        }
+
+        .insight-card {
+            background: linear-gradient(135deg, #0078d4 0%, #005a9e 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 15px;
+        }
+
+        .insight-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+
+        .insight-value {
+            font-size: 28px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .insight-trend {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        /* Chat Styles */
+        .message {
+            margin-bottom: 15px;
+            padding: 12px 16px;
+            border-radius: 8px;
+            max-width: 85%;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message.user {
+            background: #0078d4;
+            color: white;
+            margin-left: auto;
+            text-align: right;
+        }
+
+        .message.agent {
+            background: white;
+            color: #333;
+            border: 1px solid #e0e0e0;
+        }
+
+        .message-content {
+            line-height: 1.6;
+        }
+
+        .message-content ul {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+
+        .message-content li {
+            margin: 5px 0;
+        }
+
+        .message.agent.loading {
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.6;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- Header -->
+        <div class="header">
+            <div class="header-left">
+                <h1>Contoso Sales</h1>
+                <div class="nav-dropdown">
+                    <button class="nav-dropdown-btn" onclick="toggleNavDropdown()">
+                        <span>Navigate</span>
+                        <span>▼</span>
+                    </button>
+                    <div class="nav-dropdown-content" id="navDropdown">
+                        <a href="/chat">AI Chat Assistant</a>
+                        <a href="/static/analyst-dashboard.html" class="active">Analytics Dashboard</a>
+                        <a href="/static/sales-dashboard.html">Sales Dashboard</a>
+                        <a href="/static/shop.html">Shop</a>
+                        <a href="/admin">Admin Portal</a>
+                    </div>
+                </div>
+            </div>
+            <div class="header-actions">
+                <div class="user-info">
+                    <div class="user-icon" id="userIcon">U</div>
+                    <span id="userInfo">Loading...</span>
+                </div>
+                <button class="btn btn-secondary" onclick="logout()">Logout</button>
+            </div>
+        </div>
+
+        <!-- Tab Navigation -->
+        <div class="tab-navigation">
+            <button class="tab-btn active" onclick="switchTab('overview')">Overview</button>
+            <button class="tab-btn" onclick="switchTab('timeseries')">Time Series</button>
+            <button class="tab-btn" onclick="switchTab('products')">Products</button>
+            <button class="tab-btn" onclick="switchTab('customers')">Customers</button>
+            <button class="tab-btn" onclick="switchTab('performance')">Sales Performance</button>
+            <button class="tab-btn" onclick="switchTab('quality')">Data Quality</button>
+            <button class="tab-btn" onclick="switchTab('query')">SQL Query</button>
+            <button class="tab-btn" onclick="switchTab('chat')">AI Chat Assistant</button>
+        </div>
+
+        <!-- Overview Tab -->
+        <div id="overview" class="tab-content active">
+            <!-- KPI Metrics -->
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <div class="metric-label">Total Customers</div>
+                    <div class="metric-value" id="totalCustomers">-</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Total Revenue</div>
+                    <div class="metric-value" id="totalRevenue">-</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Total Opportunities</div>
+                    <div class="metric-value" id="totalOpportunities">-</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Average Deal Value</div>
+                    <div class="metric-value" id="avgDealValue">-</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Conversion Rate</div>
+                    <div class="metric-value" id="conversionRate">-</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Avg Sales Cycle</div>
+                    <div class="metric-value" id="avgSalesCycle">-</div>
+                </div>
+            </div>
+
+            <!-- Predictive Insights -->
+            <div class="chart-section">
+                <div class="chart-header">
+                    <h2 class="chart-title">Predictive Insights</h2>
+                </div>
+                <div id="predictiveInsights"></div>
+            </div>
+
+            <!-- Cohort Analysis -->
+            <div class="chart-section">
+                <div class="chart-header" onclick="toggleSection('cohorts')">
+                    <h2 class="chart-title">Cohort Analysis</h2>
+                    <span class="toggle-indicator" id="cohortsToggle">▼</span>
+                </div>
+                <div id="cohortsContent">
+                    <div class="chart-container">
+                        <canvas id="cohortsChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Time Series Tab -->
+        <div id="timeseries" class="tab-content">
+            <div class="chart-section">
+                <div class="chart-header">
+                    <h2 class="chart-title">Revenue & Deals Over Time</h2>
+                </div>
+                <div class="chart-container">
+                    <canvas id="timeseriesChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Products Tab -->
+        <div id="products" class="tab-content">
+            <div class="data-grid">
+                <div class="chart-section">
+                    <div class="chart-header">
+                        <h2 class="chart-title">Product Revenue Distribution</h2>
+                    </div>
+                    <div class="chart-container small">
+                        <canvas id="productRevenueChart"></canvas>
+                    </div>
+                </div>
+                <div class="chart-section">
+                    <div class="chart-header">
+                        <h2 class="chart-title">Product Market Share</h2>
+                    </div>
+                    <div class="chart-container small">
+                        <canvas id="productShareChart"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="chart-section">
+                <div class="chart-header">
+                    <h2 class="chart-title">Product Performance Details</h2>
+                </div>
+                <div id="productTableContainer"></div>
+            </div>
+        </div>
+
+        <!-- Customers Tab -->
+        <div id="customers" class="tab-content">
+            <div class="data-grid">
+                <div class="chart-section">
+                    <div class="chart-header">
+                        <h2 class="chart-title">Customer Segments</h2>
+                    </div>
+                    <div class="chart-container small">
+                        <canvas id="customerSegmentChart"></canvas>
+                    </div>
+                </div>
+                <div class="chart-section">
+                    <div class="chart-header">
+                        <h2 class="chart-title">Segment Revenue</h2>
+                    </div>
+                    <div class="chart-container small">
+                        <canvas id="segmentRevenueChart"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="chart-section">
+                <div class="chart-header">
+                    <h2 class="chart-title">Customer Segment Details</h2>
+                </div>
+                <div id="segmentTableContainer"></div>
+            </div>
+        </div>
+
+        <!-- Sales Performance Tab -->
+        <div id="performance" class="tab-content">
+            <div class="chart-section">
+                <div class="chart-header">
+                    <h2 class="chart-title">Sales Rep Performance</h2>
+                </div>
+                <div class="chart-container">
+                    <canvas id="repPerformanceChart"></canvas>
+                </div>
+            </div>
+            <div class="chart-section">
+                <div class="chart-header">
+                    <h2 class="chart-title">Performance Metrics</h2>
+                </div>
+                <div id="performanceTableContainer"></div>
+            </div>
+        </div>
+
+        <!-- Data Quality Tab -->
+        <div id="quality" class="tab-content">
+            <div class="chart-section">
+                <div class="chart-header">
+                    <h2 class="chart-title">Data Quality Metrics</h2>
+                </div>
+                <div id="qualityTableContainer"></div>
+            </div>
+        </div>
+
+        <!-- SQL Query Tab -->
+        <div id="query" class="tab-content">
+            <div class="sql-query-section">
+                <h2 class="chart-title">Custom SQL Query</h2>
+                <p style="color: #666; margin: 10px 0;">Execute read-only SELECT queries on the database. Only SELECT statements are allowed.</p>
+                <textarea id="sqlQuery" class="query-input" placeholder="SELECT * FROM Sales.Customers LIMIT 100"></textarea>
+                <button class="btn btn-primary" onclick="executeQuery()">Execute Query</button>
+                <button class="btn btn-secondary" onclick="clearQuery()">Clear</button>
+                <div id="queryResults" class="query-results"></div>
+            </div>
+        </div>
+
+        <!-- AI Chat Assistant Tab -->
+        <div id="chat" class="tab-content">
+            <div class="chart-section" style="height: calc(100vh - 250px); display: flex; flex-direction: column;">
+                <div class="chart-header">
+                    <h2 class="chart-title">AI Data Analysis Assistant</h2>
+                    <button class="btn btn-secondary" onclick="newChatConversation()">New Conversation</button>
+                </div>
+                <div id="chatContainer" style="flex: 1; overflow-y: auto; padding: 20px; background: #f8f9fa; border-radius: 8px; margin-bottom: 15px;">
+                    <div class="message agent">
+                        <div class="message-content">
+                            <p>👋 Hello! I'm your AI Data Analysis Assistant. I can help you:</p>
+                            <ul>
+                                <li>Analyze sales trends and patterns</li>
+                                <li>Generate insights from your data</li>
+                                <li>Answer questions about customers and opportunities</li>
+                                <li>Create visualizations and reports</li>
+                                <li>Provide predictive analytics</li>
+                            </ul>
+                            <p>How can I assist you today?</p>
+                        </div>
+                    </div>
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <input type="text" id="chatInput" placeholder="Ask me anything about your data..." 
+                           style="flex: 1; padding: 12px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 14px;"
+                           onkeypress="if(event.key === 'Enter') sendChatMessage()">
+                    <button class="btn btn-primary" onclick="sendChatMessage()" id="chatSendBtn">Send</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let charts = {};
+        let chatThreadId = null;
+        
+        // Check authentication - but don't redirect, just return status
+        function checkAuth() {
+            const token = localStorage.getItem('auth_token') || sessionStorage.getItem('auth_token');
+            if (!token) {
+                console.log('No token in localStorage, but server may have validated via cookie');
+                return false;
+            }
+            return true;
+        }
+
+        // Get auth token
+        function getAuthToken() {
+            return localStorage.getItem('auth_token') || sessionStorage.getItem('auth_token') || '';
+        }
+
+        // Load user info
+        async function loadUserInfo() {
+            try {
+                const token = getAuthToken();
+                if (!token) {
+                    // No token - redirect to login
+                    window.location.href = '/login';
+                    return;
+                }
+                
+                const response = await fetch('/api/auth/me', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    const userName = data.full_name || data.email;
+                    document.getElementById('userInfo').textContent = userName;
+                    
+                    // Set user icon with initials
+                    const initials = userName.split(' ')
+                        .map(n => n[0])
+                        .join('')
+                        .substring(0, 2)
+                        .toUpperCase();
+                    document.getElementById('userIcon').textContent = initials;
+                    
+                    // Check if user has required roles
+                    const roles = data.roles || [];
+                    const hasAccess = roles.some(role => {
+                        const r = role.trim().toLowerCase();
+                        // Updated to match actual database role names
+                        return r === 'admin' || r === 'administrator' || r === 'superadmin' || 
+                               r === 'data analyst' || r === 'analyst' || r === 'poweruser';
+                    });
+                    
+                    if (!hasAccess) {
+                        alert('Access Denied: This dashboard requires Admin or Data Analyst role.\n\nYour roles: ' + roles.join(', '));
+                        window.location.href = '/chat';
+                    }
+                } else {
+                    // Auth failed - redirect to login
+                    window.location.href = '/login';
+                }
+            } catch (error) {
+                console.error('Error loading user info:', error);
+                window.location.href = '/login';
+            }
+        }
+
+        // Logout
+        function logout() {
+            localStorage.removeItem('auth_token');
+            localStorage.removeItem('user_data');
+            sessionStorage.removeItem('auth_token');
+            sessionStorage.removeItem('user_data');
+            window.location.href = '/login';
+        }
+
+        // Toggle navigation dropdown
+        function toggleNavDropdown() {
+            const dropdown = document.getElementById('navDropdown');
+            dropdown.classList.toggle('show');
+        }
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', function(event) {
+            const dropdown = document.getElementById('navDropdown');
+            const button = event.target.closest('.nav-dropdown-btn');
+            
+            if (!button && dropdown && !dropdown.contains(event.target)) {
+                dropdown.classList.remove('show');
+            }
+        });
+
+        // Tab switching
+        function switchTab(tabName) {
+            // Hide all tabs
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Remove active from all buttons
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            
+            // Show selected tab
+            document.getElementById(tabName).classList.add('active');
+            
+            // Activate button
+            event.target.classList.add('active');
+            
+            // Load data for specific tabs
+            if (tabName === 'timeseries') {
+                loadTimeSeriesData();
+            } else if (tabName === 'products') {
+                loadProductAnalytics();
+            } else if (tabName === 'customers') {
+                loadCustomerSegments();
+            } else if (tabName === 'performance') {
+                loadSalesRepPerformance();
+            } else if (tabName === 'quality') {
+                loadDataQuality();
+            }
+        }
+
+        // Toggle section
+        function toggleSection(sectionName) {
+            const content = document.getElementById(sectionName + 'Content');
+            const toggle = document.getElementById(sectionName + 'Toggle');
+            
+            if (content.style.display === 'none') {
+                content.style.display = 'block';
+                toggle.textContent = '▼';
+            } else {
+                content.style.display = 'none';
+                toggle.textContent = '▶';
+            }
+        }
+
+        // Format currency
+        function formatCurrency(value) {
+            if (value >= 1000000) {
+                return '$' + (value / 1000000).toFixed(1) + 'M';
+            } else if (value >= 1000) {
+                return '$' + (value / 1000).toFixed(1) + 'K';
+            }
+            return '$' + value.toFixed(0);
+        }
+
+        // Load overview metrics
+        async function loadOverviewMetrics() {
+            try {
+                const token = getAuthToken();
+                if (!token) {
+                    console.error('No auth token found');
+                    window.location.href = '/login';
+                    return;
+                }
+                
+                const response = await fetch('/api/analytics/metrics', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (response.status === 403) {
+                    console.error('Access denied - insufficient permissions');
+                    alert('Access denied. This dashboard requires Admin or Data Analyst role.');
+                    window.location.href = '/';
+                    return;
+                }
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    document.getElementById('totalCustomers').textContent = data.total_customers.toLocaleString();
+                    document.getElementById('totalRevenue').textContent = formatCurrency(data.total_revenue);
+                    document.getElementById('totalOpportunities').textContent = data.total_opportunities.toLocaleString();
+                    document.getElementById('avgDealValue').textContent = formatCurrency(data.avg_deal_value);
+                    document.getElementById('conversionRate').textContent = data.conversion_rate + '%';
+                    document.getElementById('avgSalesCycle').textContent = data.avg_sales_cycle_days + ' days';
+                } else {
+                    console.error('Failed to load metrics:', response.status, response.statusText);
+                }
+            } catch (error) {
+                console.error('Error loading metrics:', error);
+            }
+        }
+
+        // Load predictive insights
+        async function loadPredictiveInsights() {
+            try {
+                const token = getAuthToken();
+                if (!token) return;
+                
+                const response = await fetch('/api/analytics/predictive-insights', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (response.status === 403) {
+                    console.error('Access denied to predictive insights');
+                    return;
+                }
+                
+                if (response.ok) {
+                    const insights = await response.json();
+                    const container = document.getElementById('predictiveInsights');
+                    
+                    container.innerHTML = insights.map(insight => `
+                        <div class="insight-card">
+                            <div class="insight-title">${insight.metric}</div>
+                            <div class="insight-value">${formatCurrency(insight.current_value)} → ${formatCurrency(insight.predicted_value)}</div>
+                            <div class="insight-trend">
+                                ${insight.trend === 'up' ? '↑' : insight.trend === 'down' ? '↓' : '→'} 
+                                Confidence: ${(insight.confidence * 100).toFixed(0)}%
+                            </div>
+                        </div>
+                    `).join('');
+                }
+            } catch (error) {
+                console.error('Error loading predictive insights:', error);
+            }
+        }
+
+        // Load cohort analysis
+        async function loadCohortAnalysis() {
+            try {
+                const response = await fetch('/api/analytics/cohorts', {
+                    headers: {
+                        'Authorization': `Bearer ${getAuthToken()}`
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    const ctx = document.getElementById('cohortsChart').getContext('2d');
+                    
+                    if (charts.cohorts) {
+                        charts.cohorts.destroy();
+                    }
+                    
+                    charts.cohorts = new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels: data.map(d => d.cohort),
+                            datasets: [
+                                {
+                                    label: 'Revenue',
+                                    data: data.map(d => d.revenue),
+                                    backgroundColor: 'rgba(102, 126, 234, 0.8)',
+                                    yAxisID: 'y'
+                                },
+                                {
+                                    label: 'Retention Rate (%)',
+                                    data: data.map(d => d.retention_rate),
+                                    type: 'line',
+                                    borderColor: 'rgba(118, 75, 162, 1)',
+                                    backgroundColor: 'rgba(118, 75, 162, 0.2)',
+                                    yAxisID: 'y1'
+                                }
+                            ]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: {
+                                y: {
+                                    type: 'linear',
+                                    display: true,
+                                    position: 'left',
+                                    title: {
+                                        display: true,
+                                        text: 'Revenue ($)'
+                                    }
+                                },
+                                y1: {
+                                    type: 'linear',
+                                    display: true,
+                                    position: 'right',
+                                    title: {
+                                        display: true,
+                                        text: 'Retention Rate (%)'
+                                    },
+                                    grid: {
+                                        drawOnChartArea: false
+                                    }
+                                }
+                            }
+                        }
+                    });
+                }
+            } catch (error) {
+                console.error('Error loading cohort analysis:', error);
+            }
+        }
+
+        // Load time series data
+        async function loadTimeSeriesData() {
+            try {
+                const response = await fetch('/api/analytics/timeseries?days=30', {
+                    headers: {
+                        'Authorization': `Bearer ${getAuthToken()}`
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    const ctx = document.getElementById('timeseriesChart').getContext('2d');
+                    
+                    if (charts.timeseries) {
+                        charts.timeseries.destroy();
+                    }
+                    
+                    charts.timeseries = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: data.map(d => d.date),
+                            datasets: [
+                                {
+                                    label: 'Revenue',
+                                    data: data.map(d => d.revenue),
+                                    borderColor: 'rgba(102, 126, 234, 1)',
+                                    backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                                    yAxisID: 'y'
+                                },
+                                {
+                                    label: 'Deals',
+                                    data: data.map(d => d.deals),
+                                    borderColor: 'rgba(118, 75, 162, 1)',
+                                    backgroundColor: 'rgba(118, 75, 162, 0.1)',
+                                    yAxisID: 'y1'
+                                }
+                            ]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: {
+                                y: {
+                                    type: 'linear',
+                                    display: true,
+                                    position: 'left',
+                                    title: {
+                                        display: true,
+                                        text: 'Revenue ($)'
+                                    }
+                                },
+                                y1: {
+                                    type: 'linear',
+                                    display: true,
+                                    position: 'right',
+                                    title: {
+                                        display: true,
+                                        text: 'Number of Deals'
+                                    },
+                                    grid: {
+                                        drawOnChartArea: false
+                                    }
+                                }
+                            }
+                        }
+                    });
+                }
+            } catch (error) {
+                console.error('Error loading timeseries data:', error);
+            }
+        }
+
+        // Load product analytics
+        async function loadProductAnalytics() {
+            try {
+                const response = await fetch('/api/analytics/products', {
+                    headers: {
+                        'Authorization': `Bearer ${getAuthToken()}`
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    // Revenue chart
+                    const ctx1 = document.getElementById('productRevenueChart').getContext('2d');
+                    if (charts.productRevenue) {
+                        charts.productRevenue.destroy();
+                    }
+                    charts.productRevenue = new Chart(ctx1, {
+                        type: 'bar',
+                        data: {
+                            labels: data.map(d => d.product_name),
+                            datasets: [{
+                                label: 'Revenue',
+                                data: data.map(d => d.total_revenue),
+                                backgroundColor: 'rgba(102, 126, 234, 0.8)'
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false
+                        }
+                    });
+                    
+                    // Market share chart
+                    const ctx2 = document.getElementById('productShareChart').getContext('2d');
+                    if (charts.productShare) {
+                        charts.productShare.destroy();
+                    }
+                    charts.productShare = new Chart(ctx2, {
+                        type: 'doughnut',
+                        data: {
+                            labels: data.map(d => d.product_name),
+                            datasets: [{
+                                data: data.map(d => d.market_share),
+                                backgroundColor: [
+                                    'rgba(102, 126, 234, 0.8)',
+                                    'rgba(118, 75, 162, 0.8)',
+                                    'rgba(237, 100, 166, 0.8)',
+                                    'rgba(255, 154, 158, 0.8)',
+                                    'rgba(250, 208, 196, 0.8)'
+                                ]
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false
+                        }
+                    });
+                    
+                    // Table
+                    const table = `
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Product</th>
+                                    <th>Revenue</th>
+                                    <th>Units Sold</th>
+                                    <th>Avg Price</th>
+                                    <th>Growth Rate</th>
+                                    <th>Market Share</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${data.map(p => `
+                                    <tr>
+                                        <td>${p.product_name}</td>
+                                        <td>${formatCurrency(p.total_revenue)}</td>
+                                        <td>${p.units_sold}</td>
+                                        <td>${formatCurrency(p.avg_price)}</td>
+                                        <td>${p.growth_rate.toFixed(1)}%</td>
+                                        <td>${p.market_share.toFixed(1)}%</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    `;
+                    document.getElementById('productTableContainer').innerHTML = table;
+                }
+            } catch (error) {
+                console.error('Error loading product analytics:', error);
+            }
+        }
+
+        // Load customer segments
+        async function loadCustomerSegments() {
+            try {
+                const response = await fetch('/api/analytics/customer-segments', {
+                    headers: {
+                        'Authorization': `Bearer ${getAuthToken()}`
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    // Segment chart
+                    const ctx1 = document.getElementById('customerSegmentChart').getContext('2d');
+                    if (charts.customerSegment) {
+                        charts.customerSegment.destroy();
+                    }
+                    charts.customerSegment = new Chart(ctx1, {
+                        type: 'pie',
+                        data: {
+                            labels: data.map(d => d.segment_name),
+                            datasets: [{
+                                data: data.map(d => d.customer_count),
+                                backgroundColor: [
+                                    'rgba(102, 126, 234, 0.8)',
+                                    'rgba(118, 75, 162, 0.8)',
+                                    'rgba(237, 100, 166, 0.8)',
+                                    'rgba(255, 154, 158, 0.8)'
+                                ]
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false
+                        }
+                    });
+                    
+                    // Revenue chart
+                    const ctx2 = document.getElementById('segmentRevenueChart').getContext('2d');
+                    if (charts.segmentRevenue) {
+                        charts.segmentRevenue.destroy();
+                    }
+                    charts.segmentRevenue = new Chart(ctx2, {
+                        type: 'bar',
+                        data: {
+                            labels: data.map(d => d.segment_name),
+                            datasets: [{
+                                label: 'Total Revenue',
+                                data: data.map(d => d.total_revenue),
+                                backgroundColor: 'rgba(118, 75, 162, 0.8)'
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false
+                        }
+                    });
+                    
+                    // Table
+                    const table = `
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Segment</th>
+                                    <th>Customers</th>
+                                    <th>Avg Revenue</th>
+                                    <th>Total Revenue</th>
+                                    <th>Churn Rate</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${data.map(s => `
+                                    <tr>
+                                        <td>${s.segment_name}</td>
+                                        <td>${s.customer_count}</td>
+                                        <td>${formatCurrency(s.avg_revenue)}</td>
+                                        <td>${formatCurrency(s.total_revenue)}</td>
+                                        <td>${s.churn_rate.toFixed(1)}%</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    `;
+                    document.getElementById('segmentTableContainer').innerHTML = table;
+                }
+            } catch (error) {
+                console.error('Error loading customer segments:', error);
+            }
+        }
+
+        // Load sales rep performance
+        async function loadSalesRepPerformance() {
+            try {
+                const response = await fetch('/api/analytics/sales-rep-performance', {
+                    headers: {
+                        'Authorization': `Bearer ${getAuthToken()}`
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    // Performance chart
+                    const ctx = document.getElementById('repPerformanceChart').getContext('2d');
+                    if (charts.repPerformance) {
+                        charts.repPerformance.destroy();
+                    }
+                    charts.repPerformance = new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels: data.map(d => d.rep_name),
+                            datasets: [
+                                {
+                                    label: 'Revenue',
+                                    data: data.map(d => d.total_revenue),
+                                    backgroundColor: 'rgba(102, 126, 234, 0.8)',
+                                    yAxisID: 'y'
+                                },
+                                {
+                                    label: 'Win Rate (%)',
+                                    data: data.map(d => d.win_rate),
+                                    type: 'line',
+                                    borderColor: 'rgba(118, 75, 162, 1)',
+                                    backgroundColor: 'rgba(118, 75, 162, 0.2)',
+                                    yAxisID: 'y1'
+                                }
+                            ]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: {
+                                y: {
+                                    type: 'linear',
+                                    display: true,
+                                    position: 'left',
+                                    title: {
+                                        display: true,
+                                        text: 'Revenue ($)'
+                                    }
+                                },
+                                y1: {
+                                    type: 'linear',
+                                    display: true,
+                                    position: 'right',
+                                    title: {
+                                        display: true,
+                                        text: 'Win Rate (%)'
+                                    },
+                                    grid: {
+                                        drawOnChartArea: false
+                                    }
+                                }
+                            }
+                        }
+                    });
+                    
+                    // Table
+                    const table = `
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Sales Rep</th>
+                                    <th>Deals Closed</th>
+                                    <th>Total Revenue</th>
+                                    <th>Win Rate</th>
+                                    <th>Avg Deal Size</th>
+                                    <th>Quota Attainment</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${data.map(r => `
+                                    <tr>
+                                        <td>${r.rep_name}</td>
+                                        <td>${r.deals_closed}</td>
+                                        <td>${formatCurrency(r.total_revenue)}</td>
+                                        <td>${r.win_rate.toFixed(1)}%</td>
+                                        <td>${formatCurrency(r.avg_deal_size)}</td>
+                                        <td>${r.quota_attainment.toFixed(1)}%</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    `;
+                    document.getElementById('performanceTableContainer').innerHTML = table;
+                }
+            } catch (error) {
+                console.error('Error loading sales rep performance:', error);
+            }
+        }
+
+        // Load data quality
+        async function loadDataQuality() {
+            try {
+                const response = await fetch('/api/analytics/data-quality', {
+                    headers: {
+                        'Authorization': `Bearer ${getAuthToken()}`
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    const table = `
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Table</th>
+                                    <th>Total Records</th>
+                                    <th>Null Count</th>
+                                    <th>Completeness Score</th>
+                                    <th>Last Updated</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${data.map(q => `
+                                    <tr>
+                                        <td>${q.table_name}</td>
+                                        <td>${q.total_records.toLocaleString()}</td>
+                                        <td>${q.null_count}</td>
+                                        <td style="color: ${q.completeness_score >= 90 ? '#10b981' : q.completeness_score >= 70 ? '#f59e0b' : '#ef4444'}">${q.completeness_score}%</td>
+                                        <td>${q.last_updated || 'N/A'}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    `;
+                    document.getElementById('qualityTableContainer').innerHTML = table;
+                }
+            } catch (error) {
+                console.error('Error loading data quality:', error);
+            }
+        }
+
+        // Execute custom query
+        async function executeQuery() {
+            const query = document.getElementById('sqlQuery').value.trim();
+            
+            if (!query) {
+                alert('Please enter a SQL query');
+                return;
+            }
+            
+            const resultsContainer = document.getElementById('queryResults');
+            resultsContainer.innerHTML = '<div class="loading"><div class="spinner"></div>Executing query...</div>';
+            
+            try {
+                const response = await fetch('/api/analytics/execute-query', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${getAuthToken()}`
+                    },
+                    body: JSON.stringify({ query })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    if (data.row_count === 0) {
+                        resultsContainer.innerHTML = '<p style="color: #666;">No results returned</p>';
+                        return;
+                    }
+                    
+                    const table = `
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    ${data.columns.map(col => `<th>${col}</th>`).join('')}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${data.rows.map(row => `
+                                    <tr>
+                                        ${row.map(cell => `<td>${cell !== null ? cell : '<i>NULL</i>'}</td>`).join('')}
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                        <div class="query-info">
+                            ${data.row_count} rows returned in ${data.execution_time_ms}ms
+                            ${data.row_count === 1000 ? ' (limited to 1000 rows)' : ''}
+                        </div>
+                    `;
+                    resultsContainer.innerHTML = table;
+                } else {
+                    try {
+                        const error = await response.json();
+                        resultsContainer.innerHTML = `<div style="color: #dc3545; padding: 15px; background: #f8d7da; border-radius: 8px; border-left: 4px solid #dc3545;">
+                            <strong>Error:</strong> ${error.detail || error.message || 'Failed to execute query'}
+                        </div>`;
+                    } catch (e) {
+                        resultsContainer.innerHTML = `<div style="color: #dc3545; padding: 15px; background: #f8d7da; border-radius: 8px; border-left: 4px solid #dc3545;">
+                            <strong>Error:</strong> HTTP ${response.status} - ${response.statusText}
+                        </div>`;
+                    }
+                }
+            } catch (error) {
+                console.error('Query execution error:', error);
+                resultsContainer.innerHTML = `<div style="color: #dc3545; padding: 15px; background: #f8d7da; border-radius: 8px; border-left: 4px solid #dc3545;">
+                    <strong>Error:</strong> ${error.message || 'An unexpected error occurred'}
+                </div>`;
+            }
+        }
+
+        // Clear query
+        function clearQuery() {
+            document.getElementById('sqlQuery').value = '';
+            document.getElementById('queryResults').innerHTML = '';
+        }
+
+        // Chat Functions
+        async function sendChatMessage() {
+            const input = document.getElementById('chatInput');
+            const message = input.value.trim();
+            
+            if (!message) return;
+            
+            // Disable input
+            input.disabled = true;
+            document.getElementById('chatSendBtn').disabled = true;
+            
+            // Add user message
+            addChatMessage(message, 'user');
+            input.value = '';
+            
+            // Add loading indicator
+            const loadingId = addChatMessage('🤔 Analyzing your data request...', 'agent', true);
+            
+            try {
+                const token = getAuthToken();
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        message: message,
+                        thread_id: chatThreadId
+                    })
+                });
+                
+                // Remove loading indicator
+                const loadingMsg = document.getElementById(loadingId);
+                if (loadingMsg) loadingMsg.remove();
+                
+                if (!response.ok) {
+                    if (response.status === 401) {
+                        window.location.href = '/login';
+                        return;
+                    }
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                chatThreadId = data.thread_id;
+                
+                // Add AI response
+                addChatMessage(data.response, 'agent');
+            } catch (error) {
+                // Remove loading indicator
+                const loadingMsg = document.getElementById(loadingId);
+                if (loadingMsg) loadingMsg.remove();
+                
+                addChatMessage('❌ Error: ' + error.message + '. Please try again.', 'agent');
+            } finally {
+                input.disabled = false;
+                document.getElementById('chatSendBtn').disabled = false;
+                input.focus();
+            }
+        }
+
+        function addChatMessage(text, sender, isLoading = false) {
+            const container = document.getElementById('chatContainer');
+            const message = document.createElement('div');
+            const messageId = 'chat-msg-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+            message.id = messageId;
+            message.className = `message ${sender}`;
+            
+            if (isLoading) {
+                message.classList.add('loading');
+            }
+            
+            const content = document.createElement('div');
+            content.className = 'message-content';
+            
+            // Simple markdown rendering
+            let html = text
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                .replace(/`(.*?)`/g, '<code>$1</code>')
+                .replace(/\n/g, '<br>');
+            
+            content.innerHTML = html;
+            message.appendChild(content);
+            container.appendChild(message);
+            container.scrollTop = container.scrollHeight;
+            
+            return messageId;
+        }
+
+        function newChatConversation() {
+            chatThreadId = null;
+            const container = document.getElementById('chatContainer');
+            container.innerHTML = `
+                <div class="message agent">
+                    <div class="message-content">
+                        <p>👋 Hello! I'm your AI Data Analysis Assistant. I can help you:</p>
+                        <ul>
+                            <li>Analyze sales trends and patterns</li>
+                            <li>Generate insights from your data</li>
+                            <li>Answer questions about customers and opportunities</li>
+                            <li>Create visualizations and reports</li>
+                            <li>Provide predictive analytics</li>
+                        </ul>
+                        <p>How can I assist you today?</p>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Initialize dashboard
+        document.addEventListener('DOMContentLoaded', async () => {
+            // Check auth - redirect if not authenticated
+            const hasToken = checkAuth();
+            console.log('Auth status:', hasToken ? 'Token found' : 'Not authenticated');
+            
+            await loadUserInfo();
+            await loadOverviewMetrics();
+            await loadPredictiveInsights();
+            await loadCohortAnalysis();
+        });
+    </script>
+</body>
+</html>
