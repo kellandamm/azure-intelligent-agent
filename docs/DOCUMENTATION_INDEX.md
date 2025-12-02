@@ -47,6 +47,7 @@ Complete guide to deploying your Azure Agent Framework application with turnkey 
 |----------|-------------|--------------|
 | [Parameters Reference](PARAMETERS.md) | All bicepparam parameters explained | Configuring deployment |
 | [Azure Services Guide](AZURE_SERVICES_DEPLOYMENT.md) | Azure OpenAI, AI Foundry, Fabric, Power BI setup | Optional services |
+| [Enterprise Use Cases](DEMO_QUESTIONS.md) | Business scenarios and sample queries | Understanding capabilities |
 
 ### Deployment
 
@@ -206,6 +207,7 @@ azure-deployment-template/
     ├── 📄 DEPLOYMENT_COMPARISON.md           # Before/after analysis
     ├── 📄 AZURE_SERVICES_DEPLOYMENT.md       # Azure services guide
     ├── 📄 FABRIC_DEPLOYMENT.md               # Fabric data management
+    ├── 📄 DEMO_QUESTIONS.md                  # Enterprise use cases
     ├── 📄 QUICK_START.md                     # Quick start guide
     ├── 📄 PARAMETERS.md                      # Parameters reference
     ├── 📄 ARCHITECTURE.md                    # Architecture details

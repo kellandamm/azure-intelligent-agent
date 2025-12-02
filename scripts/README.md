@@ -248,6 +248,34 @@ az webapp log download --name <web-app-name> --resource-group <rg-name>
 | Configure SQL | manual | Grant managed identity access |
 | Deploy app code | ~3min | ZIP upload + dependency install |
 | Verify deployment | ~30s | Health checks |
+| **Smoke tests** | ~10s | **Optional: Comprehensive validation** |
+
+**🧪 Post-Deployment Smoke Tests:**
+
+After deployment completes, you'll be prompted to run smoke tests:
+```powershell
+🧪 Run smoke tests now? (Recommended)
+Enter 'y' to run smoke tests, any other key to skip: y
+```
+
+Or run manually:
+```powershell
+# Auto-discover URL from Azure
+.\tests\smoke-test.ps1 -ResourceGroupName "rg-myagents-prod"
+
+# Test specific URL
+.\tests\smoke-test.ps1 -Url "https://your-app.azurewebsites.net"
+```
+
+**What smoke tests verify:**
+- ✅ Health endpoints and application status
+- ✅ Authentication system
+- ✅ Chat and agent APIs
+- ✅ Sales and Analytics dashboards
+- ✅ Database connectivity
+- ✅ Response times and performance
+
+📖 **See [Smoke Test Guide](../tests/README.md) for full documentation**
 | **Total** | **~12-15 min** | Including manual SQL step |
 
 **Code-only redeployment:**

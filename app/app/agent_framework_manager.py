@@ -16,6 +16,7 @@ from agent_framework._types import ChatMessage, TextContent
 from config import settings
 from .agent_tools import (
     FABRIC_TOOLS,
+    SALES_TOOLS,
     CALCULATION_TOOLS,
     WEATHER_TOOLS,
     execute_tool_call,
@@ -61,11 +62,12 @@ class AgentFrameworkManager:
                 "id": settings.fabric_sales_agent_id,
                 "prompt": (
                     "You are SalesAssistant. Provide revenue insights, top products, and sales trends "
-                    "using clear, metric-driven language. When data is requested, call the provided Fabric "
+                    "using clear, metric-driven language. When data is requested, call the provided "
                     "tools to gather accurate figures before responding. Summaries should highlight key "
-                    "successes and risks, ending with an actionable recommendation."
+                    "successes and risks, ending with an actionable recommendation. Data is automatically "
+                    "filtered by the user's authorized region."
                 ),
-                "tools": FABRIC_TOOLS,
+                "tools": SALES_TOOLS,  # Use local tools with RLS support
             },
             "operations": {
                 "display_name": "OperationsAssistant",

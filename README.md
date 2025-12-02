@@ -475,7 +475,53 @@ az deployment group show \
 }
 ```
 
-### 2. Test Application
+### 2. Verify Deployment with Smoke Tests
+
+**Recommended**: Run comprehensive smoke tests to verify all functionality:
+
+```powershell
+# PowerShell - Auto-discover URL from Azure
+.\tests\smoke-test.ps1 -ResourceGroupName "rg-agents-prod"
+
+# Or test specific URL
+.\tests\smoke-test.ps1 -Url "https://myagents-prod-app.azurewebsites.net"
+```
+
+```bash
+# Python - Cross-platform
+python tests/smoke_test.py --url https://myagents-prod-app.azurewebsites.net
+
+# Local development
+python tests/smoke_test.py --url http://localhost:8000 --skip-auth
+```
+
+**What Smoke Tests Verify:**
+- ✅ Health endpoints and application status
+- ✅ Authentication system
+- ✅ Chat and agent APIs
+- ✅ Sales and Analytics dashboards
+- ✅ Database connectivity
+- ✅ Response times and performance
+- ✅ Row-Level Security (RLS) filtering
+
+**Example Output:**
+```
+✅ PASS - Health Endpoint (145ms)
+✅ PASS - Chat Endpoint (234ms)
+✅ PASS - Sales Dashboard (189ms)
+✅ PASS - Database Connectivity (98ms)
+========================================
+📊 TEST SUMMARY
+Total Tests: 15
+✅ Passed: 15
+⏱️  Duration: 3.42s
+
+✅ ALL TESTS PASSED - APPLICATION IS HEALTHY
+```
+
+📖 **See [Smoke Test Guide](tests/README.md) for detailed documentation**
+
+### 3. Test Application
 
 Open your browser to the `webAppUrl`:
 
@@ -489,7 +535,7 @@ https://myagents-prod-app.azurewebsites.net
 
 ⚠️ **CRITICAL**: Change the default password immediately!
 
-### 3. Monitor Application
+### 4. Monitor Application
 
 ```bash
 # Stream live logs
@@ -501,7 +547,7 @@ az webapp log tail \
 # Azure Portal → Application Insights → Live Metrics
 ```
 
-### 4. Initial Configuration
+### 5. Initial Configuration
 
 Navigate to the application settings page and configure:
 - ✅ Change default admin password
@@ -617,6 +663,14 @@ az resource list \
 
 ## 📚 Additional Resources
 
+### Documentation
+- [Documentation Index](docs/DOCUMENTATION_INDEX.md) - Complete documentation guide
+- [Enterprise Use Cases](docs/DEMO_QUESTIONS.md) - Business scenarios and sample queries
+- [Deployment Guide](docs/QUICK_START.md) - Step-by-step instructions
+- [Troubleshooting Guide](docs/TROUBLESHOOTING.md) - Common issues and solutions
+- [Smoke Test Guide](tests/README.md) - Testing and verification
+
+### Microsoft Resources
 - [Microsoft Agent Framework Documentation](https://learn.microsoft.com/azure/ai-services/agents/)
 - [Azure App Service Documentation](https://learn.microsoft.com/azure/app-service/)
 - [Azure SQL Database Best Practices](https://learn.microsoft.com/azure/azure-sql/database/best-practices-overview)

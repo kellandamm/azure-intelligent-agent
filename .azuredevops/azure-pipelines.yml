@@ -1,0 +1,195 @@
+# Azure DevOps Pipeline for Azure Intelligent Agent
+# Deploys infrastructure and runs comprehensive smoke tests
+
+trigger:
+  branches:
+    include:
+    - main
+    - develop
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  azureSubscription: 'Azure-Service-Connection'  # Update with your service connection name
+  resourceGroup: 'rg-agents-prod'
+  location: 'eastus2'
+  pythonVersion: '3.11'
+
+stages:
+- stage: Build
+  displayName: 'Build Application'
+  jobs:
+  - job: Build
+    displayName: 'Build'
+    steps:
+    - task: UsePythonVersion@0
+      inputs:
+        versionSpec: $(pythonVersion)
+      displayName: 'Use Python $(pythonVersion)'
+    
+    - script: |
+        python -m pip install --upgrade pip
+        pip install -r app/requirements.txt
+      displayName: 'Install dependencies'
+    
+    - task: ArchiveFiles@2
+      inputs:
+        rootFolderOrFile: '$(Build.SourcesDirectory)/app'
+        includeRootFolder: false
+        archiveType: 'zip'
+        archiveFile: '$(Build.ArtifactStagingDirectory)/app.zip'
+      displayName: 'Archive application'
+    
+    - task: PublishBuildArtifacts@1
+      inputs:
+        pathToPublish: '$(Build.ArtifactStagingDirectory)'
+        artifactName: 'drop'
+      displayName: 'Publish artifacts'
+
+- stage: Deploy
+  displayName: 'Deploy to Azure'
+  dependsOn: Build
+  jobs:
+  - deployment: Deploy
+    displayName: 'Deploy Infrastructure and App'
+    environment: 'production'
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - task: AzureCLI@2
+            name: DeployInfrastructure
+            inputs:
+              azureSubscription: $(azureSubscription)
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                # Deploy infrastructure
+                echo "Deploying infrastructure..."
+                deployment_output=$(az deployment group create \
+                  --name pipeline-$(Build.BuildNumber) \
+                  --resource-group $(resourceGroup) \
+                  --template-file $(Pipeline.Workspace)/drop/bicep/main.bicep \
+                  --parameters $(Pipeline.Workspace)/drop/bicep/main.bicepparam \
+                  --query properties.outputs \
+                  --output json)
+                
+                # Extract outputs
+                app_name=$(echo $deployment_output | jq -r '.webAppName.value')
+                app_url=$(echo $deployment_output | jq -r '.webAppUrl.value')
+                
+                echo "##vso[task.setvariable variable=AppServiceName;isOutput=true]$app_name"
+                echo "##vso[task.setvariable variable=AppServiceUrl;isOutput=true]$app_url"
+                echo "Deployed to: $app_url"
+            displayName: 'Deploy Infrastructure'
+          
+          - task: DownloadBuildArtifacts@0
+            inputs:
+              artifactName: 'drop'
+              downloadPath: '$(System.ArtifactsDirectory)'
+            displayName: 'Download artifacts'
+          
+          - task: AzureWebApp@1
+            inputs:
+              azureSubscription: $(azureSubscription)
+              appName: $(DeployInfrastructure.AppServiceName)
+              package: '$(System.ArtifactsDirectory)/drop/app.zip'
+            displayName: 'Deploy application code'
+          
+          - task: PowerShell@2
+            inputs:
+              targetType: 'inline'
+              script: |
+                Write-Host "Waiting for deployment to stabilize..."
+                Start-Sleep -Seconds 30
+            displayName: 'Wait for stabilization'
+
+- stage: Test
+  displayName: 'Run Smoke Tests'
+  dependsOn: Deploy
+  jobs:
+  - job: SmokeTests
+    displayName: 'Run smoke tests'
+    variables:
+      AppServiceUrl: $[ stageDependencies.Deploy.Deploy.outputs['Deploy.DeployInfrastructure.AppServiceUrl'] ]
+    steps:
+    - task: UsePythonVersion@0
+      inputs:
+        versionSpec: $(pythonVersion)
+      displayName: 'Use Python $(pythonVersion)'
+    
+    - script: |
+        python -m pip install --upgrade pip
+        pip install requests
+      displayName: 'Install test dependencies'
+    
+    - task: PythonScript@0
+      inputs:
+        scriptSource: 'filePath'
+        scriptPath: 'tests/smoke_test.py'
+        arguments: '--url $(AppServiceUrl) --skip-auth --json-output $(Build.ArtifactStagingDirectory)/smoke-test-results.json'
+      displayName: 'Run smoke tests'
+      continueOnError: true
+    
+    - task: PublishTestResults@2
+      condition: always()
+      inputs:
+        testResultsFormat: 'JUnit'
+        testResultsFiles: '$(Build.ArtifactStagingDirectory)/smoke-test-results.json'
+        testRunTitle: 'Smoke Tests'
+      displayName: 'Publish test results'
+    
+    - task: PublishBuildArtifacts@1
+      condition: always()
+      inputs:
+        pathToPublish: '$(Build.ArtifactStagingDirectory)/smoke-test-results.json'
+        artifactName: 'test-results'
+      displayName: 'Publish test artifacts'
+    
+    - task: PowerShell@2
+      condition: always()
+      inputs:
+        targetType: 'inline'
+        script: |
+          $results = Get-Content '$(Build.ArtifactStagingDirectory)/smoke-test-results.json' | ConvertFrom-Json
+          
+          Write-Host "========================================" -ForegroundColor Magenta
+          Write-Host "📊 SMOKE TEST SUMMARY" -ForegroundColor Magenta
+          Write-Host "========================================" -ForegroundColor Magenta
+          Write-Host "Total Tests: $($results.total_tests)"
+          Write-Host "✅ Passed: $($results.passed_tests)" -ForegroundColor Green
+          if ($results.failed_tests -gt 0) {
+            Write-Host "❌ Failed: $($results.failed_tests)" -ForegroundColor Red
+          }
+          Write-Host "⏱️  Duration: $($results.duration_seconds)s"
+          Write-Host ""
+          
+          if (-not $results.passed) {
+            Write-Host "❌ SMOKE TESTS FAILED" -ForegroundColor Red
+            Write-Host "Failed tests:"
+            $results.results | Where-Object { -not $_.passed } | ForEach-Object {
+              Write-Host "  • $($_.name): $($_.error_message)" -ForegroundColor Red
+            }
+            exit 1
+          } else {
+            Write-Host "✅ ALL TESTS PASSED" -ForegroundColor Green
+          }
+      displayName: 'Display test summary'
+
+- stage: Notify
+  displayName: 'Notifications'
+  dependsOn: Test
+  condition: always()
+  jobs:
+  - job: SendNotification
+    displayName: 'Send deployment notification'
+    steps:
+    - task: PowerShell@2
+      inputs:
+        targetType: 'inline'
+        script: |
+          # Add your notification logic here (email, Teams, Slack, etc.)
+          Write-Host "Deployment pipeline completed"
+          Write-Host "Status: $(Agent.JobStatus)"
+      displayName: 'Send notification'

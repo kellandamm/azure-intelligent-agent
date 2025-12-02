@@ -194,6 +194,27 @@ ALTER ROLE db_owner ADD MEMBER [<your-webapp-name>];
 
 ---
 
+## 📖 Next Steps
+
+After successful deployment:
+
+1. **Test Your Agents** - Try the [Enterprise Use Cases](DEMO_QUESTIONS.md)
+   - Executive dashboards and strategic analysis
+   - Sales operations and pipeline forecasting
+   - Financial planning and budget analysis
+   - Customer success and retention scenarios
+
+2. **Run Smoke Tests** - Verify deployment health
+   ```powershell
+   .\tests\smoke-test.ps1 -ResourceGroupName "rg-myagents-prod"
+   ```
+
+3. **Review Documentation**
+   - [Documentation Index](DOCUMENTATION_INDEX.md) - Complete guide
+   - [Troubleshooting Guide](TROUBLESHOOTING.md) - Common issues
+
+---
+
 ## 🎯 Quick Commands Reference
 
 ```bash

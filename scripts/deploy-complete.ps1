@@ -665,21 +665,57 @@ if ($deployment) {
 }
 
 Write-Host "`n💡 Next Steps:" -ForegroundColor Cyan
-Write-Host "  1. Open the application URL in your browser" -ForegroundColor White
-Write-Host "  2. Test the agent endpoints" -ForegroundColor White
+Write-Host "  1. Run smoke tests to verify deployment" -ForegroundColor White
+Write-Host "     .\tests\smoke-test.ps1 -ResourceGroupName $ResourceGroupName" -ForegroundColor Gray
+Write-Host "  2. Open the application URL in your browser" -ForegroundColor White
+Write-Host "  3. Test the agent endpoints" -ForegroundColor White
 if ($DeployFabric) {
-    Write-Host "  3. Complete Fabric SQL grants (see instructions above)" -ForegroundColor White
-    Write-Host "  4. View database data: python fabric\database\view_tables.py" -ForegroundColor White
-    Write-Host "  5. Monitor logs: az webapp log tail --name <web-app-name> --resource-group $ResourceGroupName" -ForegroundColor White
-    Write-Host "  6. View metrics in Azure Portal → Application Insights" -ForegroundColor White
+    Write-Host "  4. Complete Fabric SQL grants (see instructions above)" -ForegroundColor White
+    Write-Host "  5. View database data: python fabric\database\view_tables.py" -ForegroundColor White
+    Write-Host "  6. Monitor logs: az webapp log tail --name <web-app-name> --resource-group $ResourceGroupName" -ForegroundColor White
+    Write-Host "  7. View metrics in Azure Portal → Application Insights" -ForegroundColor White
 } else {
-    Write-Host "  3. Monitor logs: az webapp log tail --name <web-app-name> --resource-group $ResourceGroupName" -ForegroundColor White
-    Write-Host "  4. View metrics in Azure Portal → Application Insights" -ForegroundColor White
+    Write-Host "  4. Monitor logs: az webapp log tail --name <web-app-name> --resource-group $ResourceGroupName" -ForegroundColor White
+    Write-Host "  5. View metrics in Azure Portal → Application Insights" -ForegroundColor White
 }
 
 Write-Host "`n📚 Documentation:" -ForegroundColor Cyan
 Write-Host "  README: $TemplateRoot\README.md" -ForegroundColor White
 Write-Host "  Troubleshooting: $TemplateRoot\docs\QUICK_START.md" -ForegroundColor White
+Write-Host "  Smoke Tests: $TemplateRoot\tests\README.md" -ForegroundColor White
 
 Write-Host "`n✅ Deployment completed successfully!" -ForegroundColor Green
 Write-Host ""
+
+# ========================================
+# Optional: Run Smoke Tests
+# ========================================
+
+$runSmokeTests = $false
+if ($PSCmdlet.ShouldProcess("Run smoke tests to verify deployment?", "Smoke Tests", "Run")) {
+    Write-Host "`n🧪 Run smoke tests now? (Recommended)" -ForegroundColor Yellow
+    $response = Read-Host "  Enter 'y' to run smoke tests, any other key to skip"
+    $runSmokeTests = ($response -eq 'y' -or $response -eq 'Y')
+}
+
+if ($runSmokeTests) {
+    Write-Step "🧪 Running Smoke Tests"
+    
+    $smokeTestScript = Join-Path $TemplateRoot "tests\smoke-test.ps1"
+    if (Test-Path $smokeTestScript) {
+        try {
+            & $smokeTestScript -ResourceGroupName $ResourceGroupName -VerboseOutput
+            Write-Success "Smoke tests completed"
+        }
+        catch {
+            Write-Warning-Custom "Smoke tests failed: $_"
+            Write-Info "You can run smoke tests manually later:"
+            Write-Info "  .\tests\smoke-test.ps1 -ResourceGroupName $ResourceGroupName"
+        }
+    } else {
+        Write-Warning-Custom "Smoke test script not found at: $smokeTestScript"
+    }
+} else {
+    Write-Info "Skipping smoke tests. Run manually later:"
+    Write-Info "  .\tests\smoke-test.ps1 -ResourceGroupName $ResourceGroupName"
+}
