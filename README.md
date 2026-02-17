@@ -42,7 +42,7 @@ Supports **optional Azure OpenAI deployment**! You can deploy Azure OpenAI with 
 
 ## 🔐 Security First
 
-**Last Security Audit:** January 30, 2026 | **Score:** 75/100 (MEDIUM RISK) | [View Full Report →](SECURITY_REVIEW_REPORT.md)
+**Last Security Audit:** January 30, 2026 |
 
 ### ✅ Security Features Implemented
 - ✅ **Authentication:** JWT with HttpOnly cookies, dependency injection enforcement
