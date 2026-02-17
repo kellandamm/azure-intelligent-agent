@@ -99,7 +99,7 @@ az functionapp config appsettings set `
     --name $FunctionAppName `
     --resource-group $ResourceGroupName `
     --settings `
-        "SQL_SERVER=aiagentsdemo.database.windows.net" `
+        "SQL_SERVER=<your-sql-server>.database.windows.net" `
         "SQL_DATABASE=$SqlDatabase" `
         "SQL_USERNAME=$SqlUsername" `
         "SQL_PASSWORD=$SqlPassword" `

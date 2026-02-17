@@ -1,6 +1,6 @@
 -- ========================================
 -- Azure SQL Database Schema Setup
--- Database: aiagentsdemo.database.windows.net
+-- Database: <your-sql-server>.database.windows.net
 -- ========================================
 
 -- Drop existing tables if they exist (in reverse order due to foreign keys)

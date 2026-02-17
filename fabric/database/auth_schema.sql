@@ -1,6 +1,6 @@
 -- ========================================
 -- Authentication & Authorization Schema
--- Database: aiagentsdemo.database.windows.net
+-- Database: <your-sql-server>.database.windows.net
 -- ========================================
 
 -- Drop existing auth tables if they exist (in reverse order due to foreign keys)

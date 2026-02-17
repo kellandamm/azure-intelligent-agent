@@ -14,20 +14,20 @@ param environmentName string
 @description('Primary location for all resources')
 param location string
 
-@description('Existing resource group name')
-param resourceGroupName string = 'rg-agentframework'
+@description('Existing resource group name - REQUIRED: Provide your resource group name')
+param resourceGroupName string
 
-@description('Existing Container Apps Environment name')
-param existingContainerEnvName string = 'env-agent-demos'
+@description('Existing Container Apps Environment name - REQUIRED: Provide your Container Apps environment name')
+param existingContainerEnvName string
 
-@description('Existing Container Registry name')
-param existingAcrName string = 'acragentdemos'
+@description('Existing Container Registry name (without .azurecr.io) - REQUIRED: Provide your ACR name')
+param existingAcrName string
 
-@description('Existing Log Analytics Workspace name')
-param existingLogAnalyticsName string = 'workspace-rgagentframework6XXE'
+@description('Existing Log Analytics Workspace name - REQUIRED: Provide your Log Analytics workspace name')
+param existingLogAnalyticsName string
 
-@description('Existing Application Insights name (optional)')
-param existingAppInsightsName string = 'agentframework-demo-insights-prod'
+@description('Existing Application Insights name - Optional: Provide if you have existing App Insights')
+param existingAppInsightsName string = ''
 
 // ============================================================================
 // Azure AI Foundry Configuration

@@ -112,7 +112,7 @@ That's it! This single command:
 
 ```bash
 # Navigate to template directory
-cd c:\code\azure-deployment-template
+cd <your-repo-path>
 
 # Initialize azd (first time only)
 azd init
@@ -381,7 +381,7 @@ You can use both methods interchangeably:
 
 ```bash
 # 1. Navigate to template
-cd c:\code\azure-deployment-template
+cd <your-repo-path>
 
 # 2. Initialize and deploy everything
 azd up

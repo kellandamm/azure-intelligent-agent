@@ -18,6 +18,7 @@ from utils.auth import (
 )
 from utils.db_connection import DatabaseConnection
 from config import settings
+from app.agents.admin_config_agent import AdminConfigAgent
 
 # Create router
 admin_agent_router = APIRouter(prefix="/api/admin/agents", tags=["Agent Management"])
@@ -42,6 +43,11 @@ class AgentTestRequest(BaseModel):
     """Model for testing an agent."""
     agent_key: str
     test_message: str = Field(..., min_length=1)
+
+
+class ConfigUpdateRequest(BaseModel):
+    """Model for natural language configuration updates."""
+    request: str = Field(..., min_length=1, description="Natural language configuration request")
 
 
 class DashboardStatsResponse(BaseModel):
@@ -671,6 +677,177 @@ async def get_system_health(current_user: dict = Depends(get_current_user)):
         health_data["status"] = "degraded"
     
     return health_data
+
+
+# ========================================
+# Admin Configuration Agent Routes
+# ========================================
+
+@admin_agent_router.post("/config/natural-update")
+async def natural_language_config_update(
+    request: ConfigUpdateRequest,
+    current_user: dict = Depends(require_superadmin)
+):
+    """
+    Update any system configuration using natural language.
+    SuperAdmin only.
+    
+    Examples:
+    - "Update SalesAssistant to focus more on Azure products"
+    - "Add web_search tool to AnalyticsAssistant"
+    - "Disable the FinancialAdvisor agent"
+    - "Change max request timeout to 120 seconds"
+    - "Scale the web app to 3 instances"
+    - "List all agent configurations"
+    """
+    try:
+        db = DatabaseConnection(settings.fabric_connection_string)
+        agent = AdminConfigAgent(user_id=current_user.get("email", "unknown"), db=db)
+        result = await agent.process_request(request.request)
+        return result
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Configuration update failed: {str(e)}"
+        )
+
+
+@admin_agent_router.get("/config/history")
+async def get_configuration_history(
+    category: Optional[str] = None,
+    limit: int = 50,
+    current_user: dict = Depends(require_superadmin)
+):
+    """
+    Get configuration change history.
+    SuperAdmin only.
+    
+    Query parameters:
+    - category: Filter by category (agent, app, infrastructure)
+    - limit: Maximum number of records to return (default 50)
+    """
+    try:
+        db = DatabaseConnection(settings.fabric_connection_string)
+        
+        query = """
+        SELECT TOP (@limit)
+            id, category, target, changed_by, 
+            change_summary, timestamp, applied, rollback_available
+        FROM configuration_changes
+        """
+        
+        if category:
+            query += " WHERE category = @category"
+        
+        query += " ORDER BY timestamp DESC"
+        
+        params = {"limit": limit}
+        if category:
+            params["category"] = category
+        
+        changes = db.execute_query(query, params)
+        
+        return {
+            "success": True,
+            "changes": [
+                {
+                    "id": row[0],
+                    "category": row[1],
+                    "target": row[2],
+                    "changed_by": row[3],
+                    "change_summary": row[4],
+                    "timestamp": row[5],
+                    "applied": row[6],
+                    "rollback_available": row[7]
+                }
+                for row in changes
+            ]
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch history: {str(e)}"
+        )
+
+
+@admin_agent_router.post("/config/rollback/{change_id}")
+async def rollback_configuration(
+    change_id: int,
+    current_user: dict = Depends(require_superadmin)
+):
+    """
+    Rollback a configuration change by ID.
+    SuperAdmin only.
+    """
+    try:
+        db = DatabaseConnection(settings.fabric_connection_string)
+        
+        # Get the change record
+        query = """
+        SELECT category, target, old_config, rollback_available
+        FROM configuration_changes
+        WHERE id = @change_id
+        """
+        
+        result = db.execute_query(query, {"change_id": change_id})
+        
+        if not result:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Change record not found"
+            )
+        
+        category, target, old_config_str, rollback_available = result[0]
+        
+        if not rollback_available:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Rollback not available for this change"
+            )
+        
+        old_config = json.loads(old_config_str)
+        
+        # Apply rollback based on category
+        if category == "agent":
+            configs = load_agent_configs()
+            configs[target] = old_config
+            save_agent_configs(configs)
+            message = f"✅ Rolled back agent configuration for {target}"
+        
+        elif category == "app":
+            from pathlib import Path
+            config_path = Path("config/app_config.json")
+            with open(config_path, 'w') as f:
+                json.dump(old_config, f, indent=2)
+            message = f"✅ Rolled back app configuration. Restart required."
+        
+        elif category == "infrastructure":
+            from pathlib import Path
+            import yaml
+            config_path = Path("infrastructure/config.yaml")
+            with open(config_path, 'w') as f:
+                yaml.dump(old_config, f, default_flow_style=False)
+            message = f"✅ Rolled back infrastructure configuration. Deployment required."
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Unknown category: {category}"
+            )
+        
+        return {
+            "success": True,
+            "message": message,
+            "category": category,
+            "target": target
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Rollback failed: {str(e)}"
+        )
 
 
 # ========================================

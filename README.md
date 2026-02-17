@@ -2,7 +2,12 @@
 
 🚀 **Production-ready deployment template for intelligent AI agent applications on Azure**
 
-This comprehensive starter template enables anyone to deploy intelligent AI agent applications to Azure using Infrastructure as Code (Bicep) and Azure Developer CLI (azd). Perfect for building production-ready, secure, and scalable AI agent solutions.
+[![Security](https://img.shields.io/badge/Security-Hardened-green)](SECURITY_REVIEW_REPORT.md)
+[![Score](https://img.shields.io/badge/Security_Score-75%2F100-yellow)](SECURITY_FIXES_APPLIED.md)
+[![Status](https://img.shields.io/badge/Status-Production_Ready-brightgreen)](docs/AZURE_FOUNDRY_MCP_DEPLOYMENT.md)
+[![Version](https://img.shields.io/badge/Version-1.2.0-blue)](docs/CHANGELOG.md)
+
+This comprehensive starter template enables you to deploy intelligent AI agent applications to Azure using Infrastructure as Code (Bicep) and Azure Developer CLI (azd). Perfect for building production-ready, secure, and scalable AI agent solutions.
 
 Supports **optional Azure OpenAI deployment**! You can deploy Azure OpenAI with your app or use an existing instance. See [Azure Services Deployment Guide](docs/AZURE_SERVICES_DEPLOYMENT.md).
 
@@ -10,14 +15,117 @@ Supports **optional Azure OpenAI deployment**! You can deploy Azure OpenAI with 
 
 ---
 
+## 🆕 What's New in v1.2.0
+
+**Three-Factor Architecture Implementation** - Major architectural improvement for maintainability and testability!
+
+✨ **New Services Layer**:
+- `AuthService` - Authentication & authorization logic
+- `ChatService` - Chat processing with RLS context
+- `AdminService` - Configuration & health checks
+- `AnalyticsService` - Metrics & insights
+
+✨ **New Route Modules**:
+- `routes_pages.py` - HTML page routes
+- `routes_chat.py` - Chat API endpoints
+- `routes_admin_api.py` - Admin API endpoints
+- `routes_analytics_api.py` - Analytics API endpoints
+
+✨ **Testing & Quality**:
+- 14 unit tests for services layer
+- Improved code maintainability (47% reduction in main.py size)
+- Azure App Service compatibility verified
+
+📖 **See [CHANGELOG.md](docs/CHANGELOG.md) for complete version history**
+
+---
+
+## 🔐 Security First
+
+**Last Security Audit:** January 30, 2026 | **Score:** 75/100 (MEDIUM RISK) | [View Full Report →](SECURITY_REVIEW_REPORT.md)
+
+### ✅ Security Features Implemented
+- ✅ **Authentication:** JWT with HttpOnly cookies, dependency injection enforcement
+- ✅ **Rate Limiting:** Prevents brute force attacks (5 login attempts/minute)
+- ✅ **Input Validation:** Prompt injection detection, length limits, sanitization
+- ✅ **CORS Protection:** Restricted to configured domains only
+- ✅ **Security Headers:** XSS, clickjacking, MIME-sniffing protection
+- ✅ **RLS Infrastructure:** Database-level Row-Level Security ready to activate
+- ✅ **Audit Logging:** All data access logged for compliance
+- ✅ **No Default Credentials:** Secure admin setup required (see [guide](CREATE_ADMIN_USER.md))
+
+### 📋 Before Production Deployment
+- [ ] Generate unique `JWT_SECRET` - never use defaults!
+- [ ] Configure production domains in CORS settings
+- [ ] Create admin user with strong password
+- [ ] Activate RLS policies on your tables
+- [ ] Review [Security Checklist](SECURITY_FIXES_APPLIED.md#deployment-checklist)
+
+**⚠️ CRITICAL:** The default admin credentials have been **removed** for security. You must create your admin user following [CREATE_ADMIN_USER.md](CREATE_ADMIN_USER.md).
+
+---
+
+## 🚀 Quick Start
+
+### Prerequisites
+
+Before you begin, ensure you have:
+
+1. **Azure Subscription** with contributor access
+2. **Azure CLI** installed ([Install](https://docs.microsoft.com/cli/azure/install-azure-cli))
+3. **Azure Developer CLI (azd)** installed ([Install](https://aka.ms/azure-dev/install))
+4. **Docker Desktop** (for local builds and deployments)
+5. **Python 3.10+** (for local development)
+
+### First-Time Setup
+
+1. **Clone this repository:**
+   ```bash
+   git clone <your-repo-url>
+   cd azure-intelligent-agent
+   ```
+
+2. **Configure your environment:**
+   ```bash
+   # Copy environment template
+   cd app
+   cp .env.example .env
+   
+   # Edit .env with your Azure resource details
+   # See CONFIGURATION.md for detailed instructions
+   ```
+
+3. **Set deployment variables:**
+   ```powershell
+   # PowerShell
+   $env:AZURE_RESOURCE_GROUP = "rg-myagent-prod"
+   $env:AZURE_APP_NAME = "myagent-app"
+   $env:AZURE_CONTAINER_REGISTRY = "myagentacr"
+   ```
+   
+   ```bash
+   # Bash/Linux
+   export AZURE_RESOURCE_GROUP="rg-myagent-prod"
+   export AZURE_APP_NAME="myagent-app"
+   export AZURE_CONTAINER_REGISTRY="myagentacr"
+   ```
+
+4. **Deploy to Azure:**
+   ```bash
+   azd up
+   ```
+
+📖 **For detailed configuration instructions, see [CONFIGURATION.md](CONFIGURATION.md)**
+
+---
+
 ## 📋 Table of Contents
 
-- [🚀 Deployment Options](#-deployment-options)
+- [Deployment Options](#-deployment-options)
 - [Features](#-features)
 - [Architecture](#-architecture)
-- [Prerequisites](#-prerequisites)
-- [Quick Start](#-quick-start)
 - [Configuration](#-configuration)
+- [Local Development](#-local-development)
 - [Deployment](#-deployment)
 - [Post-Deployment](#-post-deployment)
 - [Troubleshooting](#-troubleshooting)
@@ -48,7 +156,7 @@ azd up
 
 📖 **[Full azd Guide](docs/AZD_DEPLOYMENT_GUIDE.md)**
 
-### Option 4: Azure AI Foundry + MCP Server 🆕
+### Option 2: Azure AI Foundry + MCP Server 🆕
 
 **Advanced architecture** with Azure AI Foundry native agents and centralized function calling:
 
@@ -67,28 +175,26 @@ azd up
 
 ---
 
-### Option 2: PowerShell Scripts - Maximum Control
-
-**For detailed control and customization**:
+### Option 3: PowerShell Scripts - Maximum Control
 
 **For detailed control and customization**:
 
 ```powershell
-# 1. Configure parameters (one-time setup)
-bicep\main.bicepparam
-code bicep\main.bicepparam  # Update <REPLACE_WITH_*> values
+# 1. Set environment variables
+$env:AZURE_RESOURCE_GROUP = "rg-myagents-prod"
+$env:AZURE_APP_NAME = "myagent-app"
+$env:AZURE_CONTAINER_REGISTRY = "myagentacr"
 
-# 2. Run complete deployment (10-15 minutes)
-cd scripts
-.\deploy-complete.ps1 -ResourceGroupName "rg-myagents-prod"
+# 2. Run deployment script
+.\deploy.ps1
 ```
 
 - ✅ **Detailed progress** - See every step
 - ✅ **Maximum control** - Full customization
 - ✅ **Familiar** - PowerShell scripting
-- ✅ **Skip flags** - Partial deployments
+- ✅ **Environment variables** - Easy configuration
 
-📖 **[PowerShell Scripts Guide](scripts/README.md)**
+📖 **[Deployment Guide](DEPLOYMENT.md)** | **[Configuration Guide](CONFIGURATION.md)**
 
 ---
 
@@ -140,10 +246,76 @@ azd deploy  # 3 minutes
   - Azure Function for ongoing data maintenance
   - Management tools for viewing and testing database content
   - Deploy with `-DeployFabric` flag (see [Fabric Deployment Guide](docs/FABRIC_DEPLOYMENT.md))
+- **🏛️ Three-Factor Architecture (v1.2.0)**: Clean separation of concerns for maintainability
+  - **Factor 1: Routes** - HTTP layer handling requests/responses (4 route modules)
+  - **Factor 2: Services** - Business logic layer (4 service classes)
+  - **Factor 3: Configuration** - Startup and registration (minimal main.py)
+  - **Benefits**: Improved testability, maintainability, and Azure App Service compatibility
 
 ---
 
-## 🏗️ Architecture
+## 🏛️ Application Architecture (v1.2.0)
+
+### Three-Factor Pattern
+
+This application follows a **Three-Factor Architecture** pattern for clean separation of concerns:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      FastAPI Application                      │
+│                                                               │
+│  ┌────────────────────────────────────────────────────────┐ │
+│  │  Factor 1: Routes (HTTP Layer)                         │ │
+│  │  ─────────────────────────────────────────────────────  │ │
+│  │  • routes_pages.py      - HTML page routes            │ │
+│  │  • routes_chat.py       - Chat API endpoints          │ │
+│  │  • routes_admin_api.py  - Admin API endpoints         │ │
+│  │  • routes_analytics_api.py - Analytics API endpoints  │ │
+│  └────────────┬───────────────────────────────────────────┘ │
+│               │ calls                                         │
+│               ▼                                               │
+│  ┌────────────────────────────────────────────────────────┐ │
+│  │  Factor 2: Services (Business Logic Layer)            │ │
+│  │  ─────────────────────────────────────────────────────  │ │
+│  │  • AuthService      - Authentication & authorization   │ │
+│  │  • ChatService      - Chat processing with RLS context │ │
+│  │  • AdminService     - Configuration & health checks    │ │
+│  │  • AnalyticsService - Metrics & insights              │ │
+│  └────────────────────────────────────────────────────────┘ │
+│                                                               │
+│  ┌────────────────────────────────────────────────────────┐ │
+│  │  Factor 3: Configuration (main.py)                     │ │
+│  │  ─────────────────────────────────────────────────────  │ │
+│  │  • FastAPI app initialization                          │ │
+│  │  • Router registration                                 │ │
+│  │  • Middleware setup (CORS, RLS, rate limiting)        │ │
+│  │  • Startup configuration                               │ │
+│  └────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Services Layer
+
+The application includes four core services for business logic:
+
+| Service | Purpose | Key Methods |
+|---------|---------|-------------|
+| **AuthService** | Authentication & authorization | `verify_token()`, `check_user_access()`, `authenticate_user()` |
+| **ChatService** | Chat processing with RLS | `process_message()`, `get_rls_context()`, `log_interaction()` |
+| **AdminService** | Admin operations | `get_system_stats()`, `get_health_status()`, `get_configuration()` |
+| **AnalyticsService** | Analytics & insights | `get_metrics()`, `get_cohort_analysis()`, `get_insights()` |
+
+**Benefits**:
+- ✅ **Testable**: Services are plain Python classes (no HTTP dependencies)
+- ✅ **Maintainable**: Business logic isolated from HTTP framework
+- ✅ **Azure-Ready**: Absolute imports for App Service compatibility
+- ✅ **14 Unit Tests**: Comprehensive test coverage for all services
+
+📖 **See [IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) for detailed architecture documentation**
+
+---
+
+## 🏗️ Azure Infrastructure Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────┐

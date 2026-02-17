@@ -13,8 +13,8 @@ This guide explains how to deploy the application using **Azure AI Foundry agent
 ## Prerequisites
 
 1. Azure AI Foundry project with agents created
-2. Existing Container Apps environment (uses `rg-agentframework`)
-3. Azure Container Registry (uses `acragentdemos`)
+2. Existing Container Apps environment (configure your environment name)
+3. Azure Container Registry (configure your ACR name)
 
 ## Deployment Options
 
@@ -37,7 +37,7 @@ Creates new resource group with all new resources.
 1. **Create agents in Azure AI Foundry portal** (ai.azure.com)
 2. **Configure environment**:
    ```powershell
-   cd C:\code\azure-intelligent-agent
+   cd <your-repo-path>
    azd env new production
    azd env set AZURE_LOCATION eastus2
    azd env set PROJECT_ENDPOINT "<your-foundry-endpoint>"

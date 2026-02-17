@@ -1,6 +1,6 @@
 """
 GraphRAG Proxy Routes - Forward authenticated requests to GraphRAG service
-This file should be added to: C:\code\agentsdemos\app\routes_graphrag_proxy.py
+This file implements GraphRAG proxy routes for the agent application.
 """
 from fastapi import APIRouter, HTTPException, Depends, Request
 from fastapi.responses import JSONResponse

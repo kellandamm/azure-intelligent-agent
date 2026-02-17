@@ -36,7 +36,7 @@ def daily_data_generator(myTimer: func.TimerRequest) -> None:
     fake = Faker()
     
     # Database connection configuration from environment variables
-    SERVER = os.environ.get('SQL_SERVER', 'aiagentsdemo.database.windows.net')
+    SERVER = os.environ.get('SQL_SERVER', '<your-sql-server>.database.windows.net')
     DATABASE = os.environ.get('SQL_DATABASE')
     AUTH_TYPE = os.environ.get('SQL_AUTH_TYPE', 'AzureAD')
     

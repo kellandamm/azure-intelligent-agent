@@ -633,15 +633,26 @@
         // Get token from localStorage or parent window
         function getToken() {
             if (!authToken) {
-                authToken = localStorage.getItem('access_token');
+                // Try auth_token first (current system), then access_token (legacy)
+                authToken = localStorage.getItem('auth_token') || localStorage.getItem('access_token');
             }
             if (!authToken) {
                 // Try to get from parent if in iframe
                 if (window.parent !== window) {
-                    // We're in an iframe, wait for parent to send token
-                    return null;
+                    // Try parent's localStorage
+                    try {
+                        authToken = window.parent.localStorage.getItem('auth_token') || window.parent.localStorage.getItem('access_token');
+                    } catch (e) {
+                        console.log('Cannot access parent localStorage (cross-origin)');
+                    }
                 }
-                window.location.href = '/';
+            }
+            if (!authToken) {
+                console.error('No auth token found');
+                if (window.parent === window) {
+                    window.location.href = '/login';
+                }
+                return null;
             }
             return authToken;
         }

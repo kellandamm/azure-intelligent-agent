@@ -1,6 +1,6 @@
 """
 Script to generate initial synthetic data for Azure SQL Database
-Database: aiagentsdemo.database.windows.net
+Database: <your-sql-server>.database.windows.net
 
 This script creates initial realistic data for:
 - Products (100 records)
@@ -20,7 +20,7 @@ from azure.identity import DefaultAzureCredential
 fake = Faker()
 
 # Database connection configuration
-SERVER = os.getenv('SQL_SERVER', 'aiagentsdemo.database.windows.net')
+SERVER = os.getenv('SQL_SERVER', '<your-sql-server>.database.windows.net')
 DATABASE = os.getenv('SQL_DATABASE', 'aiagentsdb')
 AUTH_TYPE = os.getenv('SQL_AUTH_TYPE', 'AzureAD')
 

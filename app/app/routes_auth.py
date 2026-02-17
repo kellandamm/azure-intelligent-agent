@@ -8,6 +8,7 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, EmailStr, Field
 
 from utils.auth import AuthManager, get_current_user, require_admin, require_permission
+from app.rate_limiter import rate_limiter
 
 # Create routers
 auth_router = APIRouter(prefix="/api/auth", tags=["Authentication"])
@@ -106,8 +107,13 @@ async def login(request: Request, login_data: LoginRequest):
     """
     Authenticate user and return JWT token.
     Sets token as HTTP-only cookie for server-side authentication.
+    Rate limited to prevent brute force attacks.
     """
     from fastapi.responses import JSONResponse
+    
+    # Enforce rate limiting (5 attempts per minute per IP)
+    client_ip = rate_limiter.get_client_ip(request)
+    rate_limiter.check_rate_limit(client_ip, "/api/auth/login", max_requests=5, window_seconds=60)
 
     auth_manager: AuthManager = request.app.state.auth_manager
 

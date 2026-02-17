@@ -49,9 +49,9 @@ class Settings(BaseSettings):
     
     # Azure Deployment
     azure_subscription_id: Optional[str] = None
-    azure_resource_group: str = "rg-agentframework"
+    azure_resource_group: str = os.getenv("AZURE_RESOURCE_GROUP", "")
     azure_location: str = "eastus2"
-    azure_container_registry: str = "acragentdemos"
+    azure_container_registry: str = os.getenv("AZURE_CONTAINER_REGISTRY", "")
     application_insights_name: str = "agentframework-demos"
     
     # Application Configuration
@@ -68,7 +68,7 @@ class Settings(BaseSettings):
     
     # Database Configuration for Authentication (Optional - only needed if authentication is enabled)
     sql_server: Optional[str] = None  # e.g., 'myserver.database.windows.net'
-    sql_database: Optional[str] = None  # e.g., 'aiagentsdemo'
+    sql_database: Optional[str] = None  # e.g., 'your-database-name'
     sql_username: Optional[str] = None  # Optional if using Azure AD auth
     sql_password: Optional[str] = None  # Optional if using Azure AD auth
     sql_driver: str = "ODBC Driver 18 for SQL Server"

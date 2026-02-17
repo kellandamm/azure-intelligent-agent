@@ -1,6 +1,6 @@
 -- ========================================
 -- Authentication & Authorization Schema
--- Database: aiagentsdemo.database.windows.net
+-- Database: <your-sql-server>.database.windows.net
 -- ========================================
 
 -- Drop existing auth tables if they exist (in reverse order due to foreign keys)
@@ -191,19 +191,46 @@ GO
 
 -- ========================================
 -- Create Default Admin User
--- Password: Admin@123 (hashed with bcrypt)
--- IMPORTANT: Change this password after first login!
+-- SECURITY: Default password removed for security reasons
+-- Run the following to create your admin user after deployment:
+-- 
+-- EXEC dbo.sp_CreateAdminUser 
+--     @Username = 'youradmin',
+--     @Email = 'admin@yourcompany.com', 
+--     @Password = 'YourSecurePassword123!';
 -- ========================================
-SET IDENTITY_INSERT dbo.Users ON;
-INSERT INTO dbo.Users (UserID, Username, Email, PasswordHash, FirstName, LastName, IsActive, IsEmailVerified)
-VALUES (1, 'admin', 'admin@example.com', 
-        '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5GyYIq.dG3jPy', 
-        'System', 'Administrator', 1, 1);
-SET IDENTITY_INSERT dbo.Users OFF;
-GO
 
--- Assign SuperAdmin role to default admin
-INSERT INTO dbo.UserRoles (UserID, RoleID) VALUES (1, 1);
+-- Stored procedure to create admin user securely
+CREATE OR ALTER PROCEDURE dbo.sp_CreateAdminUser
+    @Username NVARCHAR(100),
+    @Email NVARCHAR(255),
+    @Password NVARCHAR(100)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    
+    -- Check if admin already exists
+    IF EXISTS (SELECT 1 FROM dbo.Users WHERE Username = @Username)
+    BEGIN
+        RAISERROR('Admin user already exists', 16, 1);
+        RETURN;
+    END
+    
+    -- Validate password complexity (minimum 8 chars, uppercase, lowercase, number, special char)
+    IF LEN(@Password) < 8 
+        OR @Password NOT LIKE '%[A-Z]%' 
+        OR @Password NOT LIKE '%[a-z]%' 
+        OR @Password NOT LIKE '%[0-9]%'
+        OR @Password NOT LIKE '%[^a-zA-Z0-9]%'
+    BEGIN
+        RAISERROR('Password must be at least 8 characters with uppercase, lowercase, number, and special character', 16, 1);
+        RETURN;
+    END
+    
+    -- Note: Password hashing must be done in application code with bcrypt
+    -- This is a placeholder - call from Python with hashed password
+    RAISERROR('Please use the application API to create admin user with proper password hashing', 16, 1);
+END;
 GO
 
 -- ========================================

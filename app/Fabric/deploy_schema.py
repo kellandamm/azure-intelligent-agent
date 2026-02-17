@@ -14,7 +14,7 @@ def get_azure_ad_token():
 
 def deploy_schema():
     """Deploy the database schema"""
-    SERVER = os.getenv('SQL_SERVER', 'aiagentsdemo.database.windows.net')
+    SERVER = os.getenv('SQL_SERVER', '<your-sql-server>.database.windows.net')
     DATABASE = os.getenv('SQL_DATABASE', 'aiagentsdb')
     
     print("=" * 70)

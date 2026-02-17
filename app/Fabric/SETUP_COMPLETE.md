@@ -9,7 +9,7 @@ All tasks have been completed successfully! Your Azure SQL synthetic data system
 ## 📊 What Was Accomplished
 
 ### ✅ 1. Database Schema Created
-- **Server:** `aiagentsdemo.database.windows.net`
+- **Server:** `<your-sql-server>.database.windows.net`
 - **Database:** `aiagentsdb`
 - **Tables Created:**
   - ✓ dbo.Categories (10 pre-seeded records)
@@ -75,7 +75,7 @@ All tasks have been completed successfully! Your Azure SQL synthetic data system
 
 ```powershell
 # Navigate to the project
-cd C:\code\agentsdemos\Fabric
+cd <your-repo-path>/app/Fabric
 
 # Run automated deployment
 .\deploy-to-azure.ps1 `
@@ -181,7 +181,7 @@ schedule="0 0 0 * * 1"     # Every Monday at midnight
 ### Environment Variables
 ```json
 {
-  "SQL_SERVER": "aiagentsdemo.database.windows.net",
+  "SQL_SERVER": "<your-sql-server>.database.windows.net",
   "SQL_DATABASE": "aiagentsdb",
   "SQL_AUTH_TYPE": "AzureAD"
 }
@@ -229,7 +229,7 @@ python test_connection.py
 
 # Check firewall rules
 az sql server firewall-rule list \
-  --resource-group rg-agentframework \
+  --resource-group <your-resource-group> \
   --server aiagentsdemo
 ```
 
@@ -270,12 +270,12 @@ Your synthetic data generator is complete and operational!
 - **Full Documentation:** `README.md`
 - **Database Setup:** `DATABASE_SETUP.md`
 - **Quick Reference:** `QUICK_REFERENCE.md`
-- **Project Location:** `C:\code\agentsdemos\Fabric`
+- **Project Location:** `<your-repo-path>/app/Fabric`
 
 ---
 
 **Setup Date:** October 17, 2025  
-**Database:** aiagentsdb @ aiagentsdemo.database.windows.net  
+**Database:** <your-database> @ <your-sql-server>.database.windows.net  
 **Authentication:** Azure AD (admin@MngEnv180378.onmicrosoft.com)  
 **Status:** ✅ OPERATIONAL
 

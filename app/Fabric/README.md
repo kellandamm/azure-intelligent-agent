@@ -1,6 +1,6 @@
 # Azure SQL Synthetic Data Generator
 
-This project contains scripts and an Azure Function to generate and maintain synthetic data for the Azure SQL database `aiagentsdemo.database.windows.net`.
+This project contains scripts and an Azure Function to generate and maintain synthetic data for your Azure SQL database.
 
 ## 📋 Table of Contents
 
@@ -62,7 +62,7 @@ sudo ACCEPT_EULA=Y apt-get install -y msodbcsql18
 ### 3. Install Python Dependencies
 
 ```bash
-cd C:\code\agentsdemos\Fabric
+cd <your-repo-path>/app/Fabric
 pip install -r requirements.txt
 ```
 
@@ -77,7 +77,7 @@ Connect to your Azure SQL Database and run the schema script:
 
 Or using sqlcmd:
 ```bash
-sqlcmd -S aiagentsdemo.database.windows.net -d your_database_name -U your_username -P your_password -i schema.sql
+sqlcmd -S <your-sql-server>.database.windows.net -d your_database_name -U your_username -P your_password -i schema.sql
 ```
 
 ## 📊 Initial Data Generation
@@ -95,7 +95,7 @@ Set environment variables:
 
 ```powershell
 # PowerShell
-$env:SQL_SERVER="aiagentsdemo.database.windows.net"
+$env:SQL_SERVER="<your-sql-server>.database.windows.net"
 $env:SQL_DATABASE="your_database_name"
 $env:SQL_USERNAME="your_username"
 $env:SQL_PASSWORD="your_password"
@@ -103,7 +103,7 @@ $env:SQL_PASSWORD="your_password"
 
 Or create a `.env` file:
 ```
-SQL_SERVER=aiagentsdemo.database.windows.net
+SQL_SERVER=<your-sql-server>.database.windows.net
 SQL_DATABASE=your_database_name
 SQL_USERNAME=your_username
 SQL_PASSWORD=your_password
@@ -138,7 +138,7 @@ cp local.settings.json.template local.settings.json
   "Values": {
     "AzureWebJobsStorage": "UseDevelopmentStorage=true",
     "FUNCTIONS_WORKER_RUNTIME": "python",
-    "SQL_SERVER": "aiagentsdemo.database.windows.net",
+    "SQL_SERVER": "<your-sql-server>.database.windows.net",
     "SQL_DATABASE": "your_database_name",
     "SQL_USERNAME": "your_username",
     "SQL_PASSWORD": "your_password"
@@ -164,7 +164,7 @@ az storage account create --name stfabricsynthdata --resource-group rg-fabric-sy
 az functionapp create --resource-group rg-fabric-synthetic-data --consumption-plan-location eastus --runtime python --runtime-version 3.11 --functions-version 4 --name func-fabric-synthetic-data --storage-account stfabricsynthdata --os-type Linux
 
 # Configure app settings
-az functionapp config appsettings set --name func-fabric-synthetic-data --resource-group rg-fabric-synthetic-data --settings SQL_SERVER="aiagentsdemo.database.windows.net" SQL_DATABASE="your_database_name" SQL_USERNAME="your_username" SQL_PASSWORD="your_password"
+az functionapp config appsettings set --name func-fabric-synthetic-data --resource-group rg-fabric-synthetic-data --settings SQL_SERVER="<your-sql-server>.database.windows.net" SQL_DATABASE="your_database_name" SQL_USERNAME="your_username" SQL_PASSWORD="your_password"
 
 # Deploy the function
 func azure functionapp publish func-fabric-synthetic-data
@@ -178,7 +178,7 @@ func azure functionapp publish func-fabric-synthetic-data
 4. Click "Deploy to Function App"
 5. Follow the prompts to create or select a Function App
 6. After deployment, add Application Settings in the Azure Portal:
-   - `SQL_SERVER`: aiagentsdemo.database.windows.net
+   - `SQL_SERVER`: <your-sql-server>.database.windows.net
    - `SQL_DATABASE`: your_database_name
    - `SQL_USERNAME`: your_username
    - `SQL_PASSWORD`: your_password
@@ -228,7 +228,7 @@ run_on_startup=False,
 
 | Variable | Description | Example |
 |----------|-------------|---------|
-| `SQL_SERVER` | Azure SQL Server hostname | aiagentsdemo.database.windows.net |
+| `SQL_SERVER` | Azure SQL Server hostname | <your-sql-server>.database.windows.net |
 | `SQL_DATABASE` | Database name | FabricDB |
 | `SQL_USERNAME` | SQL authentication username | sqladmin |
 | `SQL_PASSWORD` | SQL authentication password | YourStrongP@ssw0rd! |

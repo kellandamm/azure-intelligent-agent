@@ -3,7 +3,7 @@
 ## 📁 Project Structure
 
 ```
-C:\code\agentsdemos\Fabric/
+<your-repo-path>/app/Fabric/
 ├── schema.sql                      # Database schema with all tables
 ├── generate_initial_data.py        # One-time script to create initial data
 ├── function_app.py                 # Azure Function (runs every 24 hours)
@@ -38,7 +38,7 @@ C:\code\agentsdemos\Fabric/
 
 ```sql
 -- Connect to Azure SQL and run:
-sqlcmd -S aiagentsdemo.database.windows.net -d YourDB -U YourUser -i schema.sql
+sqlcmd -S <your-sql-server>.database.windows.net -d YourDB -U YourUser -i schema.sql
 ```
 
 ### 2️⃣ Configure Local Settings
@@ -88,7 +88,7 @@ func start
 
 ```json
 {
-  "SQL_SERVER": "aiagentsdemo.database.windows.net",
+  "SQL_SERVER": "<your-sql-server>.database.windows.net",
   "SQL_DATABASE": "your_database_name",
   "SQL_USERNAME": "your_username",
   "SQL_PASSWORD": "your_password"
@@ -272,4 +272,4 @@ After deployment, you should see:
 
 **Last Updated:** October 2025  
 **Version:** 1.0  
-**Database:** aiagentsdemo.database.windows.net
+**Database:** <your-sql-server>.database.windows.net

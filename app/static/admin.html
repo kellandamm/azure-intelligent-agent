@@ -570,6 +570,9 @@
             <button class="nav-tab" onclick="switchMainTab('agents')" id="agentManagementTab">
                 🤖 Agent Management
             </button>
+            <button class="nav-tab" onclick="switchMainTab('config')" id="configManagementTab">
+                ⚙️ Configuration
+            </button>
             <button class="nav-tab" onclick="switchMainTab('testing')">
                 🧪 Testing Tools
             </button>
@@ -631,6 +634,61 @@
             <iframe id="agentManagementFrame" src="/static/admin-dashboard.html"></iframe>
         </div>
         <!-- End Agent Management Tab -->
+
+        <!-- Configuration Management Tab -->
+        <div id="configTab" class="tab-content">
+            <div class="dashboard-header">
+                <h2>⚙️ Configuration Assistant</h2>
+                <p style="color: #666; margin-top: 10px;">Manage agents, app settings, and infrastructure using natural language</p>
+            </div>
+            
+            <div style="padding: 20px;">
+                <!-- Quick Actions -->
+                <div style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;">
+                    <button class="btn btn-primary" onclick="sendConfigCommand('List all agents and their current configurations')">
+                        📋 List All Agents
+                    </button>
+                    <button class="btn btn-primary" onclick="sendConfigCommand('Show me the configuration change history')">
+                        📜 View History
+                    </button>
+                    <button class="btn btn-primary" onclick="sendConfigCommand('Show current application settings')">
+                        ⚙️ App Settings
+                    </button>
+                </div>
+                
+                <!-- Chat Interface -->
+                <div style="background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); padding: 20px; min-height: 500px; display: flex; flex-direction: column;">
+                    <div id="configChatMessages" style="flex: 1; overflow-y: auto; margin-bottom: 20px; max-height: 500px;">
+                        <div style="padding: 15px; background: #f8f9fa; border-radius: 8px; margin-bottom: 15px;">
+                            <strong>👋 Welcome to Configuration Assistant!</strong>
+                            <p style="margin: 10px 0 0 0; color: #666;">
+                                I can help you manage your agent configurations using natural language. Try commands like:
+                            </p>
+                            <ul style="margin: 10px 0 0 0; color: #666;">
+                                <li>"Update SalesAssistant to focus more on Azure AI services"</li>
+                                <li>"Add web_search tool to AnalyticsAssistant"</li>
+                                <li>"Show me recent configuration changes"</li>
+                                <li>"Disable the FinancialAdvisor agent"</li>
+                            </ul>
+                        </div>
+                    </div>
+                    
+                    <div style="display: flex; gap: 10px;">
+                        <input 
+                            type="text" 
+                            id="configChatInput" 
+                            placeholder="Type your configuration request..." 
+                            style="flex: 1; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px;"
+                            onkeypress="if(event.key === 'Enter') sendConfigMessage()"
+                        />
+                        <button class="btn btn-primary" onclick="sendConfigMessage()" style="padding: 12px 24px;">
+                            Send
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- End Configuration Management Tab -->
 
         <!-- Testing Tools Tab -->
         <div id="testingTab" class="tab-content">
@@ -958,9 +1016,12 @@
                 } catch (e) {
                     console.log('Iframe not ready yet, will wait for onload');
                 }
+            } else if (tabName === 'config') {
+                document.getElementById('configTab').classList.add('active');
+                document.getElementById('configManagementTab').classList.add('active');
             } else if (tabName === 'testing') {
                 document.getElementById('testingTab').classList.add('active');
-                document.querySelectorAll('.nav-tab')[2].classList.add('active');
+                document.querySelectorAll('.nav-tab')[3].classList.add('active');
             }
         }
 
@@ -1015,16 +1076,19 @@
                     return false;
                 }
 
-                // Show Agent Management tab only for SuperAdmin
+                // Show Agent Management and Configuration tabs only for SuperAdmin
                 const agentManagementTab = document.getElementById('agentManagementTab');
+                const configManagementTab = document.getElementById('configManagementTab');
                 const isSuperAdmin = roles.some(role => 
                     role.trim().toLowerCase() === 'superadmin'
                 );
                 
                 if (isSuperAdmin) {
                     agentManagementTab.style.display = 'block';
+                    configManagementTab.style.display = 'block';
                 } else {
                     agentManagementTab.style.display = 'none';
+                    configManagementTab.style.display = 'none';
                 }
 
                 return true;
@@ -1555,6 +1619,79 @@
                 await loadUsers();
             }
         });
+
+        // Configuration Chat Functions
+        async function sendConfigMessage() {
+            const input = document.getElementById('configChatInput');
+            const message = input.value.trim();
+            if (!message) return;
+
+            // Add user message
+            addConfigMessage('user', message);
+            input.value = '';
+
+            // Show loading
+            const loadingId = addConfigMessage('assistant', '⏳ Processing...');
+
+            try {
+                const response = await fetch('/api/admin/agents/config/natural-update', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({ request: message })
+                });
+
+                const result = await response.json();
+
+                // Remove loading message
+                document.getElementById(loadingId).remove();
+
+                if (result.success) {
+                    let responseText = `✅ ${result.message}`;
+                    if (result.changes) {
+                        responseText += '\n\n**Changes Applied:**\n';
+                        for (const [key, value] of Object.entries(result.changes)) {
+                            responseText += `\n• ${key}: ${JSON.stringify(value)}`;
+                        }
+                    }
+                    if (result.note) {
+                        responseText += `\n\nℹ️ ${result.note}`;
+                    }
+                    addConfigMessage('assistant', responseText);
+                } else {
+                    addConfigMessage('assistant', `❌ ${result.message || 'Configuration update failed'}`);
+                }
+            } catch (error) {
+                document.getElementById(loadingId)?.remove();
+                addConfigMessage('assistant', `❌ Error: ${error.message}`);
+            }
+        }
+
+        function sendConfigCommand(command) {
+            document.getElementById('configChatInput').value = command;
+            sendConfigMessage();
+        }
+
+        function addConfigMessage(role, content) {
+            const messagesDiv = document.getElementById('configChatMessages');
+            const messageId = 'msg-' + Date.now();
+            const messageDiv = document.createElement('div');
+            messageDiv.id = messageId;
+            messageDiv.style.cssText = `
+                padding: 12px;
+                margin-bottom: 10px;
+                border-radius: 8px;
+                background: ${role === 'user' ? '#0078d4' : '#f8f9fa'};
+                color: ${role === 'user' ? 'white' : '#333'};
+                white-space: pre-wrap;
+            `;
+            messageDiv.innerHTML = `<strong>${role === 'user' ? 'You' : 'Assistant'}:</strong><br>${content.replace(/\n/g, '<br>')}`;
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+            return messageId;
+        }
     </script>
 </body>
 </html>

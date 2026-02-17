@@ -15,7 +15,7 @@ from fastapi import FastAPI, HTTPException, Depends, Request, status
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, validator
 
 
 # Ensure application package directory is first on sys.path so top-level imports (like
@@ -150,14 +150,33 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Add CORS middleware
+# Add CORS middleware - SECURITY: Restrict to specific domains in production
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:8080",
+        "http://127.0.0.1:8080",
+        # Add your production domains here:
+        # "https://yourdomain.com",
+        # "https://app.yourdomain.com",
+    ],
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
+    allow_headers=["Authorization", "Content-Type"],
+    max_age=3600,
 )
+
+# Add security headers middleware
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    """Add security headers to all responses."""
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self' 'unsafe-inline' cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:;"
+    return response
 
 # Mount static files directory
 static_dir = Path(__file__).parent / "static"
@@ -179,11 +198,31 @@ app.include_router(fabric_test_router)  # Fabric connection testing
 
 # Pydantic Models
 class ChatRequest(BaseModel):
-    """Chat request model."""
+    """Chat request model with security validation."""
 
-    message: str
-    agent_type: str = "orchestrator"
-    thread_id: Optional[str] = None
+    message: str = Field(..., min_length=1, max_length=4000, description="User message (1-4000 characters)")
+    agent_type: str = Field(default="orchestrator", pattern="^[a-z_]+$")
+    thread_id: Optional[str] = Field(None, max_length=100)
+    
+    @validator('message')
+    def sanitize_message(cls, v):
+        """Sanitize message to prevent injection attacks."""
+        # Remove control characters except newlines and tabs
+        v = ''.join(char for char in v if ord(char) >= 32 or char in ('\n', '\t'))
+        
+        # Check for potential prompt injection patterns
+        dangerous_patterns = [
+            'ignore previous', 'ignore all previous', 'system prompt',
+            'admin mode', 'developer mode', 'god mode',
+            'override instructions', 'disregard instructions'
+        ]
+        v_lower = v.lower()
+        for pattern in dangerous_patterns:
+            if pattern in v_lower:
+                logger.warning(f"Potential prompt injection detected: {pattern}")
+                raise ValueError(f'Message contains suspicious content: {pattern}')
+        
+        return v.strip()
 
 
 class ChatResponse(BaseModel):
@@ -303,6 +342,16 @@ async def chat_page(request: Request):
         # User is authenticated - continue to serve page
         logger.info(f"✅ User {user_data.get('username')} accessed chat page")
 
+    # Serve the new contoso-sales-chat.html file
+    static_dir = Path(__file__).parent / "static"
+    return FileResponse(str(static_dir / "contoso-sales-chat.html"))
+
+
+# OLD IMPLEMENTATION REMOVED - Now serving from static file
+# This preserves authentication logic but serves from file instead of embedded HTML
+@app.get("/chat-old", response_class=HTMLResponse)
+async def chat_page_old(request: Request):
+    """OLD embedded HTML version - kept for reference."""
     html_content = (
         """
     <!DOCTYPE html>

@@ -4,7 +4,7 @@ This guide walks you through setting up the Azure SQL Database and configuring t
 
 ## Step 1: Create or Access Azure SQL Database
 
-### Option A: Using Existing Database (aiagentsdemo.database.windows.net)
+### Option A: Using Existing Database (<your-sql-server>.database.windows.net)
 
 If the database already exists, ensure you have:
 - Server admin credentials
@@ -16,7 +16,7 @@ If the database already exists, ensure you have:
 ```bash
 # Using Azure CLI
 az sql server create \
-  --name aiagentsdemo \
+  --name <your-database-name> \
   --resource-group your-resource-group \
   --location eastus \
   --admin-user sqladmin \
@@ -24,7 +24,7 @@ az sql server create \
 
 az sql db create \
   --resource-group your-resource-group \
-  --server aiagentsdemo \
+  --server <your-sql-server> \
   --name FabricDB \
   --service-objective S0
 ```
@@ -47,7 +47,7 @@ $myIp = (Invoke-WebRequest -Uri "https://api.ipify.org").Content
 # Add firewall rule
 az sql server firewall-rule create \
   --resource-group your-resource-group \
-  --server aiagentsdemo \
+  --server <your-sql-server> \
   --name AllowMyIP \
   --start-ip-address $myIp \
   --end-ip-address $myIp
@@ -58,7 +58,7 @@ az sql server firewall-rule create \
 ```bash
 az sql server firewall-rule create \
   --resource-group your-resource-group \
-  --server aiagentsdemo \
+  --server <your-sql-server> \
   --name AllowAzureServices \
   --start-ip-address 0.0.0.0 \
   --end-ip-address 0.0.0.0
@@ -69,7 +69,7 @@ az sql server firewall-rule create \
 ### Using Azure Data Studio
 
 1. Download Azure Data Studio: https://aka.ms/azuredatastudio
-2. Connect to `aiagentsdemo.database.windows.net`
+2. Connect to `<your-sql-server>.database.windows.net`
 3. Open `schema.sql`
 4. Execute the script
 
@@ -77,10 +77,10 @@ az sql server firewall-rule create \
 
 ```powershell
 # Windows
-sqlcmd -S aiagentsdemo.database.windows.net -d FabricDB -U sqladmin -P YourPassword -i schema.sql
+sqlcmd -S <your-sql-server>.database.windows.net -d FabricDB -U sqladmin -P YourPassword -i schema.sql
 
 # Linux/macOS
-sqlcmd -S aiagentsdemo.database.windows.net -d FabricDB -U sqladmin -P 'YourPassword' -i schema.sql
+sqlcmd -S <your-sql-server>.database.windows.net -d FabricDB -U sqladmin -P 'YourPassword' -i schema.sql
 ```
 
 ### Using Azure Portal Query Editor
@@ -124,7 +124,7 @@ Expected tables:
   "Values": {
     "AzureWebJobsStorage": "UseDevelopmentStorage=true",
     "FUNCTIONS_WORKER_RUNTIME": "python",
-    "SQL_SERVER": "aiagentsdemo.database.windows.net",
+    "SQL_SERVER": "<your-sql-server>.database.windows.net",
     "SQL_DATABASE": "FabricDB",
     "SQL_USERNAME": "sqladmin",
     "SQL_PASSWORD": "YourStrongP@ssw0rd!"
@@ -136,7 +136,7 @@ Expected tables:
 
 **PowerShell:**
 ```powershell
-$env:SQL_SERVER="aiagentsdemo.database.windows.net"
+$env:SQL_SERVER="<your-sql-server>.database.windows.net"
 $env:SQL_DATABASE="FabricDB"
 $env:SQL_USERNAME="sqladmin"
 $env:SQL_PASSWORD="YourStrongP@ssw0rd!"
@@ -144,7 +144,7 @@ $env:SQL_PASSWORD="YourStrongP@ssw0rd!"
 
 **Bash:**
 ```bash
-export SQL_SERVER="aiagentsdemo.database.windows.net"
+export SQL_SERVER="<your-sql-server>.database.windows.net"
 export SQL_DATABASE="FabricDB"
 export SQL_USERNAME="sqladmin"
 export SQL_PASSWORD="YourStrongP@ssw0rd!"
@@ -160,7 +160,7 @@ Create `test_connection.py`:
 import os
 import pyodbc
 
-SERVER = os.getenv('SQL_SERVER', 'aiagentsdemo.database.windows.net')
+SERVER = os.getenv('SQL_SERVER', '<your-sql-server>.database.windows.net')
 DATABASE = os.getenv('SQL_DATABASE', 'FabricDB')
 USERNAME = os.getenv('SQL_USERNAME')
 PASSWORD = os.getenv('SQL_PASSWORD')

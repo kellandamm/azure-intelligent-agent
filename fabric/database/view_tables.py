@@ -1,6 +1,6 @@
 """
 View all tables and data in the Azure SQL Database
-Database: aiagentsdemo.database.windows.net/aiagentsdb
+Database: <your-sql-server>.database.windows.net/<your-database>
 """
 
 import os
@@ -10,7 +10,7 @@ from azure.identity import DefaultAzureCredential
 from datetime import datetime
 
 # Database connection configuration
-SERVER = os.getenv('SQL_SERVER', 'aiagentsdemo.database.windows.net')
+SERVER = os.getenv('SQL_SERVER', '<your-sql-server>.database.windows.net')
 DATABASE = os.getenv('SQL_DATABASE', 'aiagentsdb')
 
 def get_azure_ad_token():

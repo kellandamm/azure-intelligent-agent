@@ -149,7 +149,7 @@ Before running any deployment script:
    - Update all `<REPLACE_WITH_*>` placeholders
 
 4. **Application code available** (for first deployment)
-   - Source code in parent directory: `c:\code\agentsdemos\`
+   - Source code in parent directory: `<your-repo-path>`
    - Contains: main.py, config.py, requirements.txt, etc.
 
 ---

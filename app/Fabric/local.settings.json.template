@@ -6,7 +6,7 @@
   "Values": {
     "AzureWebJobsStorage": "UseDevelopmentStorage=true",
     "FUNCTIONS_WORKER_RUNTIME": "python",
-    "SQL_SERVER": "aiagentsdemo.database.windows.net",
+    "SQL_SERVER": "<your-sql-server>.database.windows.net",
     "SQL_DATABASE": "your_database_name",
     "SQL_USERNAME": "your_username",
     "SQL_PASSWORD": "your_password"

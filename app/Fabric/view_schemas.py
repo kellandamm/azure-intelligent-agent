@@ -1,6 +1,6 @@
 """
 View table schemas in the Azure SQL Database
-Database: aiagentsdemo.database.windows.net/aiagentsdb
+Database: <your-sql-server>.database.windows.net/<your-database>
 """
 
 import os
@@ -9,7 +9,7 @@ import struct
 from azure.identity import DefaultAzureCredential
 
 # Database connection configuration
-SERVER = os.getenv('SQL_SERVER', 'aiagentsdemo.database.windows.net')
+SERVER = os.getenv('SQL_SERVER', '<your-sql-server>.database.windows.net')
 DATABASE = os.getenv('SQL_DATABASE', 'aiagentsdb')
 
 def get_azure_ad_token():
