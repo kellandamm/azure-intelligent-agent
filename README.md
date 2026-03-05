@@ -95,19 +95,17 @@ Before you begin, ensure you have:
    # See CONFIGURATION.md for detailed instructions
    ```
 
-3. **Set deployment variables:**
+3. **Set deployment variables** (only resource group is required — resource names are auto-generated):
    ```powershell
    # PowerShell
    $env:AZURE_RESOURCE_GROUP = "rg-myagent-prod"
-   $env:AZURE_APP_NAME = "myagent-app"
-   $env:AZURE_CONTAINER_REGISTRY = "myagentacr"
+   # appName and sqlServerName are auto-generated from the resource group ID
+   # Optional: uncomment param appName in bicep/main.bicepparam to use a custom name
    ```
    
    ```bash
    # Bash/Linux
    export AZURE_RESOURCE_GROUP="rg-myagent-prod"
-   export AZURE_APP_NAME="myagent-app"
-   export AZURE_CONTAINER_REGISTRY="myagentacr"
    ```
 
 4. **Deploy to Azure:**
@@ -139,13 +137,13 @@ Choose your preferred deployment method:
 
 ### Option 1: Azure Developer CLI (azd) - Recommended ⭐
 
-**The simplest way to deploy** - perfect for developers:
+**The simplest way to deploy** — resource names are auto-generated, just provide your external service credentials:
 
 ```bash
-# 1. Configure parameters (one-time setup)
-bicep\main.bicepparam
+# 1. Fill in external service credentials in bicep/main.bicepparam
+#    (appName and sqlServerName are auto-generated — no manual editing needed)
 
-# 2.Then one command deploys everything!
+# 2. One command deploys everything!
 azd up
 ```
 
@@ -180,12 +178,10 @@ azd up
 **For detailed control and customization**:
 
 ```powershell
-# 1. Set environment variables
+# 1. Set resource group (names are auto-generated)
 $env:AZURE_RESOURCE_GROUP = "rg-myagents-prod"
-$env:AZURE_APP_NAME = "myagent-app"
-$env:AZURE_CONTAINER_REGISTRY = "myagentacr"
 
-# 2. Run deployment script
+# 2. Fill external service credentials in bicep/main.bicepparam, then:
 .\deploy.ps1
 ```
 

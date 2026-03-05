@@ -10,10 +10,10 @@ targetScope = 'resourceGroup'
 // Parameters - General
 // ========================================
 
-@description('Name prefix for all resources (e.g., "myagentapp"). Resources will be named like {appName}-{resource}-{environment}')
+@description('Name prefix for all resources (e.g., "myagentapp"). Resources will be named like {appName}-{resource}-{environment}. Auto-generated from the resource group ID if not provided.')
 @minLength(3)
 @maxLength(20)
-param appName string
+param appName string = 'agent${take(uniqueString(resourceGroup().id), 8)}'
 
 @description('Azure region for all resources')
 param location string = resourceGroup().location
@@ -132,10 +132,10 @@ param powerbiClientSecret string
 // Parameters - SQL Database
 // ========================================
 
-@description('SQL Server name (must be globally unique)')
+@description('SQL Server name (must be globally unique). Auto-generated from appName if not provided.')
 @minLength(3)
 @maxLength(63)
-param sqlServerName string
+param sqlServerName string = '${appName}-sql'
 
 @description('SQL Database name')
 param sqlDatabaseName string = 'aiagentsdb'

@@ -44,20 +44,23 @@ cp .env.example .env
 
 ### 2. Azure Resource Names
 
-Set these environment variables **before running deployment scripts**:
+Resource names such as `appName` and `sqlServerName` are **auto-generated** from your resource group ID — no manual editing required.
+
+- `appName` → `agent<8-char-unique-hash>` (e.g. `agent3f8a1b2c`)
+- `sqlServerName` → `<appName>-sql` (e.g. `agent3f8a1b2c-sql`)
+
+**Optional override** — only needed if you want a custom name:
 
 ```powershell
-# PowerShell
-$env:AZURE_RESOURCE_GROUP = "rg-myagent-prod"
-$env:AZURE_APP_NAME = "myagent-app"
-$env:AZURE_CONTAINER_REGISTRY = "myagentacr"
+# PowerShell (azd)
+azd env set AZURE_APP_NAME "myagent-app"
+# Then uncomment and set param appName in bicep/main.bicepparam
 ```
 
-```bash
-# Bash
-export AZURE_RESOURCE_GROUP="rg-myagent-prod"
-export AZURE_APP_NAME="myagent-app"
-export AZURE_CONTAINER_REGISTRY="myagentacr"
+Only `AZURE_RESOURCE_GROUP` is still required:
+
+```powershell
+$env:AZURE_RESOURCE_GROUP = "rg-myagent-prod"
 ```
 
 ### 3. Azure OpenAI Configuration
@@ -197,15 +200,16 @@ For Infrastructure as Code deployment:
    cp bicep/main.bicepparam.template bicep/main.bicepparam
    ```
 
-2. **Edit `bicep/main.bicepparam`:**
+2. **Edit `bicep/main.bicepparam`** — only set external service credentials:
    ```bicep
    using './main.bicep'
    
-   param environmentName = 'prod'
-   param location = 'eastus2'
-   param sqlServerName = 'your-sql-server'
-   param sqlDatabaseName = 'your-database'
-   // ... other parameters
+   // appName and sqlServerName are AUTO-GENERATED — no need to set them
+   // Only set external service values:
+   param azureOpenAIEndpoint = 'https://your-openai.openai.azure.com/'
+   param azureOpenAIApiKey   = '<your-api-key>'
+   param projectEndpoint     = '<your-ai-foundry-endpoint>'
+   // ... Fabric, Power BI, SQL AD admin params
    ```
 
 3. **NEVER commit `*.bicepparam` files** - they contain secrets!

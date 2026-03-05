@@ -6,17 +6,23 @@
 
 ## 🚀 First-Time Deployment
 
+> **Resource names are auto-generated** — `appName` and `sqlServerName` are derived from your
+> resource group ID. You only need to fill in **external service credentials** in `bicep/main.bicepparam`.
+
 ### Using azd (Simplest):
 
 ```bash
+# 1. Edit bicep/main.bicepparam and fill in your credentials
+#    (only OpenAI, Fabric, Power BI, SQL AD admin fields are required)
+# 2. Deploy:
 azd up
 ```
 
 ### Using PowerShell:
 
 ```powershell
-Copy-Item bicep\main.bicepparam.template bicep\main.bicepparam
-code bicep\main.bicepparam  # Edit parameters
+# Edit bicep/main.bicepparam with your external service credentials
+code bicep\main.bicepparam
 cd scripts
 .\deploy-complete.ps1 -ResourceGroupName "rg-myagents-prod"
 ```
@@ -52,8 +58,10 @@ azd env new prod
 # Switch environments
 azd env select dev
 
-# Set variables
+# Override auto-generated app name (optional)
 azd env set AZURE_APP_NAME "myagents"
+
+# SQL AD admin credentials (if using Azure AD auth)
 azd env set AZURE_SQL_ADMINISTRATOR_LOGIN "sqladmin"
 azd env set AZURE_SQL_ADMINISTRATOR_PASSWORD "SecurePass123!"
 
