@@ -53,6 +53,9 @@ Supports **optional Azure OpenAI deployment**! You can deploy Azure OpenAI with 
 - ✅ **RLS Infrastructure:** Database-level Row-Level Security ready to activate
 - ✅ **Audit Logging:** All data access logged for compliance
 - ✅ **No Default Credentials:** Secure admin setup required (see [guide](CREATE_ADMIN_USER.md))
+- ✅ **SQL Private Endpoint:** SQL Server has public network access disabled; App Service connects via VNet private endpoint (MCAPS policy compliant)
+- ✅ **Azure AD-only SQL Auth:** SQL Server uses managed identity — no SQL username/password in-transit
+- ✅ **AI Content Safety:** RAI policy enforces indirect attack protection and content filters on Azure OpenAI
 
 ### 📋 Before Production Deployment
 - [ ] Generate unique `JWT_SECRET` - never use defaults!
@@ -228,10 +231,11 @@ azd deploy  # 3 minutes
 
 - **Infrastructure as Code**: Complete Azure infrastructure defined in Bicep templates
 - **Modular Architecture**: Separate Bicep modules for each Azure service (App Service, SQL, Key Vault, etc.)
-- **Security Best Practices**: 
+- **Security Best Practices**:
   - Azure Key Vault for secrets management
   - Managed identities for Azure AD authentication
   - HTTPS-only endpoints with TLS 1.2+
+  - SQL Server private endpoint (no public network access) — MCAPS compliant
   - Row-Level Security (RLS) for SQL
 - **Production Ready**: Application Insights monitoring, health checks, auto-scaling support
 - **Flexible Configuration**: Support for dev/staging/prod environments

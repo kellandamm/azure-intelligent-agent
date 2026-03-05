@@ -162,6 +162,20 @@ az deployment group list --resource-group <rg-name>
 az webapp log tail --name <app-name> --resource-group <rg-name>
 ```
 
+### Policy Violation — SQL Server Blocked by MCAPS
+
+If `azd provision` fails with **"Resource was disallowed by policy"** on the SQL server:
+- This is the MCAPS deny policy blocking `publicNetworkAccess = Enabled`
+- Ensure `enableVnetIntegration = true` in `bicep/main.bicepparam` (the default)
+- That parameter deploys the VNet + private endpoint and sets `publicNetworkAccess = Disabled`
+
+### SQL Connection Failing After Deployment
+
+If the App Service cannot reach SQL:
+1. Verify VNet integration is active: Portal → App Service → Networking → VNet Integration
+2. Confirm the private endpoint is provisioned: Portal → SQL Server → Private endpoint connections
+3. Check private DNS zone `privatelink.database.windows.net` has a VNet link to your VNet
+
 ---
 
 ## 📚 Documentation Links
@@ -207,26 +221,28 @@ azd down
 ## ⚙️ Required Environment Variables (azd)
 
 ```bash
-AZURE_APP_NAME                    # Required: Application name
-AZURE_SQL_ADMINISTRATOR_LOGIN     # Required: SQL admin username
-AZURE_SQL_ADMINISTRATOR_PASSWORD  # Required: SQL admin password
-AZURE_LOCATION                    # Optional: Azure region (default: eastus2)
-AZURE_ENVIRONMENT_NAME            # Optional: Environment (default: dev)
+AZURE_RESOURCE_GROUP         # Required: Target resource group
+# appName, sqlServerName are AUTO-GENERATED from the resource group ID — no manual setting needed
+AZURE_APP_NAME               # Optional override: custom application name prefix
+AZURE_LOCATION               # Optional: Azure region (default: eastus2)
+AZURE_ENVIRONMENT_NAME       # Optional: Environment tag (default: dev)
 ```
 
----
-
+> SQL uses Azure AD authentication with the App Service managed identity.
+> No SQL username/password environment variables are required.
 ## 📝 Required Parameters (PowerShell)
 
-Edit `bicep/main.bicepparam`:
+Edit `bicep/main.bicepparam` — only external service credentials need to be set:
 
 ```bicep
-param appName = 'myagents'                              // Required
-param sqlAdministratorLogin = 'sqladmin'                // Required
-param sqlAdministratorPassword = 'SecurePass123!'       // Required
-param azureOpenAIEndpoint = 'https://...'              // Required
-param azureOpenAIDeployment = 'gpt-4o'                 // Required
-param projectEndpoint = 'https://...'                  // Required
+// appName, sqlServerName are AUTO-GENERATED — no need to set them
+param azureOpenAIEndpoint = 'https://...'         // Required
+param azureOpenAIApiKey   = '<key>'               // Required
+param projectEndpoint     = 'https://...'         // Required
+// Fabric, Power BI params ...
+// Azure AD SQL admin (required for sqlUseAzureAuth = true):
+param sqlAzureAdAdminLogin = 'admin@yourorg.com'  // Required
+param sqlAzureAdAdminSid   = '<object-id>'         // Required
 ```
 
 ---
@@ -235,9 +251,9 @@ param projectEndpoint = 'https://...'                  // Required
 
 | Phase | Time |
 |-------|------|
-| **First deployment** | 12-15 minutes |
+| **First deployment** | 15-20 minutes (includes VNet + private endpoint provisioning) |
 | **Code update** | 3-5 minutes |
-| **Infrastructure only** | 8-10 minutes |
+| **Infrastructure only** | 10-15 minutes |
 
 ---
 
@@ -246,7 +262,7 @@ param projectEndpoint = 'https://...'                  // Required
 1. **Use azd for simplicity** - One command does everything
 2. **Use PowerShell for control** - See every step
 3. **Create multiple environments** - Test before production
-4. **Always configure SQL manually** - Required security step
+4. **VNet integration is on by default** - Required for MCAPS compliance; SQL has no public internet access
 5. **Monitor with Application Insights** - Included by default
 6. **Use Key Vault for secrets** - Production best practice
 

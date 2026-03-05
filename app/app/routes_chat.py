@@ -13,6 +13,8 @@ from services.auth_service import AuthService
 from services.chat_service import ChatService
 from config import settings
 from utils.logging_config import logger
+# Import content-safety helpers so the HTTP layer can detect filtered responses
+from azure_foundry_agent_manager import _is_content_safety_error
 
 
 router = APIRouter()
@@ -53,6 +55,7 @@ class ChatResponse(BaseModel):
     thread_id: str
     agent_id: str
     run_id: str
+    content_filtered: bool = False
 
 
 @router.post("/api/chat", response_model=ChatResponse)
@@ -74,13 +77,29 @@ async def chat_with_agent(request: ChatRequest, req: Request):
         await ChatService.set_rls_context(req, user_data)
     
     # Process chat message
-    result = await ChatService.process_chat_message(
-        message=request.message,
-        agent_type=request.agent_type,
-        thread_id=request.thread_id,
-        user_context=user_data,
-        user_id=user_id,
-        request=req
-    )
-    
+    try:
+        result = await ChatService.process_chat_message(
+            message=request.message,
+            agent_type=request.agent_type,
+            thread_id=request.thread_id,
+            user_context=user_data,
+            user_id=user_id,
+            request=req
+        )
+    except Exception as exc:
+        # Surface content-safety blocks as 422 (not 500) so clients can distinguish them
+        if _is_content_safety_error(exc):
+            logger.warning(f"Content safety policy blocked chat request from user={user_id}")
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail={
+                    "error": "content_filtered",
+                    "message": (
+                        "Your request was blocked by the content safety policy. "
+                        "Please rephrase your message."
+                    ),
+                },
+            )
+        raise
+
     return ChatResponse(**result)

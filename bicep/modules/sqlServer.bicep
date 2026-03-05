@@ -43,6 +43,9 @@ param enableAudit bool = false
 @description('Enable threat detection')
 param enableThreatDetection bool = false
 
+@description('Enable SQL Vulnerability Assessment (Express configuration, no storage account needed). Recommended by MCSB (SecurityCenterBuiltIn).')
+param enableVulnerabilityAssessment bool = false
+
 @description('Minimum TLS version')
 @allowed([
   '1.0'
@@ -50,6 +53,13 @@ param enableThreatDetection bool = false
   '1.2'
 ])
 param minimalTlsVersion string = '1.2'
+
+@description('Public network access for SQL server. Set Disabled for MCAPS compliance — connectivity must go through a private endpoint.')
+@allowed([
+  'Enabled'
+  'Disabled'
+])
+param publicNetworkAccess string = 'Disabled'
 
 // ========================================
 // Resources
@@ -66,7 +76,7 @@ resource sqlServer 'Microsoft.Sql/servers@2023-05-01-preview' = {
     administratorLogin: azureADOnlyAuthentication ? null : administratorLogin
     administratorLoginPassword: azureADOnlyAuthentication ? null : administratorLoginPassword
     minimalTlsVersion: minimalTlsVersion
-    publicNetworkAccess: 'Enabled'
+    publicNetworkAccess: publicNetworkAccess
     restrictOutboundNetworkAccess: 'Disabled'
   }
 }
@@ -142,6 +152,16 @@ resource securityAlertPolicies 'Microsoft.Sql/servers/securityAlertPolicies@2023
     state: 'Enabled'
     emailAccountAdmins: true
     retentionDays: 90
+  }
+}
+
+// SQL Vulnerability Assessment - Express configuration (no storage account required)
+// Recommended by MCSB (SecurityCenterBuiltIn): SQL servers should have vulnerability assessment enabled.
+resource sqlVulnerabilityAssessment 'Microsoft.Sql/servers/sqlVulnerabilityAssessments@2022-11-01-preview' = if (enableVulnerabilityAssessment) {
+  parent: sqlServer
+  name: 'default'
+  properties: {
+    state: 'Enabled'
   }
 }
 

@@ -43,6 +43,12 @@ param healthCheckPath string = '/health'
 @description('App command line (startup script)')
 param appCommandLine string = 'gunicorn -w 4 -k uvicorn.workers.UvicornWorker main:app --bind 0.0.0.0:8000 --timeout 600'
 
+@description('Log Analytics Workspace resource ID for diagnostic settings. Leave empty to skip.')
+param logAnalyticsWorkspaceId string = ''
+
+@description('VNet subnet resource ID for regional VNet integration (outbound). Leave empty to skip.')
+param vnetSubnetId string = ''
+
 // ========================================
 // Variables
 // ========================================
@@ -94,6 +100,36 @@ resource webApp 'Microsoft.Web/sites@2023-01-01' = {
       appSettings: appSettings
       pythonVersion: pythonVersion
     }
+  }
+}
+
+// Regional VNet integration — routes App Service outbound traffic through the VNet
+// Required for private endpoint connectivity when SQL public access is disabled
+resource vnetIntegration 'Microsoft.Web/sites/networkConfig@2023-01-01' = if (!empty(vnetSubnetId)) {
+  parent: webApp
+  name: 'virtualNetwork'
+  properties: {
+    subnetResourceId: vnetSubnetId
+    swiftSupported: true
+  }
+}
+
+// Diagnostic settings – sent to Log Analytics when workspace ID is provided (satisfies MCSB)
+resource webAppDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = if (!empty(logAnalyticsWorkspaceId)) {
+  name: 'appservice-diagnostics'
+  scope: webApp
+  properties: {
+    workspaceId: logAnalyticsWorkspaceId
+    logs: [
+      { category: 'AppServiceHTTPLogs',       enabled: true, retentionPolicy: { enabled: false, days: 0 } }
+      { category: 'AppServiceConsoleLogs',    enabled: true, retentionPolicy: { enabled: false, days: 0 } }
+      { category: 'AppServiceAppLogs',        enabled: true, retentionPolicy: { enabled: false, days: 0 } }
+      { category: 'AppServiceAuditLogs',      enabled: true, retentionPolicy: { enabled: false, days: 0 } }
+      { category: 'AppServiceIPSecAuditLogs', enabled: true, retentionPolicy: { enabled: false, days: 0 } }
+    ]
+    metrics: [
+      { category: 'AllMetrics', enabled: true, retentionPolicy: { enabled: false, days: 0 } }
+    ]
   }
 }
 

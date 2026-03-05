@@ -28,6 +28,34 @@ import httpx
 
 Message = Dict[str, Any]
 
+# Error codes returned by Azure OpenAI / Azure AI Foundry when the
+# content-filter policy (Security Policy 5207647b) blocks a request.
+_CONTENT_FILTER_CODES = frozenset([
+    "content_filter",
+    "ResponsibleAIPolicyViolation",
+    "content_management_policy",
+])
+
+
+def _is_content_safety_error(exc: Exception) -> bool:
+    """Return True if *exc* was raised because the AI content filter blocked the request."""
+    # Azure AI Foundry / azure-core raises HttpResponseError
+    error_code = getattr(getattr(exc, 'error', None), 'code', None) or ""
+    if error_code in _CONTENT_FILTER_CODES:
+        return True
+    # String fallback for wrapped or unexpected exception types
+    msg = str(exc).lower()
+    return any(kw in msg for kw in ("content_filter", "responsibleaipolicyviolation", "content_management"))
+
+
+def _content_safety_message() -> str:
+    """Return a user-facing message for content-filter blocks."""
+    return (
+        "I'm unable to respond to that request because it was flagged by the content safety "
+        "policy. Please rephrase your question or contact your administrator if you believe "
+        "this is in error."
+    )
+
 
 @dataclass
 class ChatResult:
@@ -222,6 +250,11 @@ class AzureAIFoundryAgentManager:
             
             if run.status == "failed":
                 logger.error(f"❌ Specialist run failed: {run.last_error}")
+                last_error = run.last_error or {}
+                error_code = getattr(last_error, 'code', None) or (last_error.get('code') if isinstance(last_error, dict) else None) or ""
+                if error_code in _CONTENT_FILTER_CODES or any(kw in str(last_error).lower() for kw in ("content_filter", "responsibleaipolicy")):
+                    logger.warning(f"⚠️ Content safety filter triggered for specialist={specialist_type}")
+                    return _content_safety_message()
                 return f"Error: Specialist agent failed - {run.last_error}"
             
             # Get the response messages
@@ -252,6 +285,9 @@ class AzureAIFoundryAgentManager:
             return formatted_response
             
         except Exception as e:
+            if _is_content_safety_error(e):
+                logger.warning(f"⚠️ Content safety filter raised exception for specialist={specialist_type}: {e}")
+                return _content_safety_message()
             logger.error(f"❌ Error routing to {specialist_type}: {e}")
             return f"Error contacting {specialist_type}: {str(e)}"
 
@@ -306,9 +342,21 @@ class AzureAIFoundryAgentManager:
                     agent_id=agent_id
                 )
                 
-                if run.status == "failed":
-                    logger.error(f"❌ Agent run failed: {run.last_error}")
-                    raise RuntimeError(f"Agent run failed: {run.last_error}")
+            if run.status == "failed":
+                logger.error(f"❌ Agent run failed: {run.last_error}")
+                # Detect content-filter failures reported via run.last_error
+                last_error = run.last_error or {}
+                error_code = getattr(last_error, 'code', None) or (last_error.get('code') if isinstance(last_error, dict) else None) or ""
+                if error_code in _CONTENT_FILTER_CODES or any(kw in str(last_error).lower() for kw in ("content_filter", "responsibleaipolicy")):
+                    logger.warning(f"⚠️ Content safety filter triggered for thread={actual_thread_id}")
+                    return ChatResult(
+                        response=_content_safety_message(),
+                        thread_id=actual_thread_id,
+                        agent_id=agent_id,
+                        run_id=run.id,
+                        metadata={"content_filtered": True, "agent_type": normalized_type}
+                    )
+                raise RuntimeError(f"Agent run failed: {run.last_error}")
                 
                 # Get the response messages
                 messages = await asyncio.to_thread(
@@ -343,6 +391,15 @@ class AzureAIFoundryAgentManager:
                 )
 
             except Exception as e:
+                if _is_content_safety_error(e):
+                    logger.warning(f"⚠️ Content safety filter raised exception for thread={actual_thread_id}: {e}")
+                    return ChatResult(
+                        response=_content_safety_message(),
+                        thread_id=actual_thread_id,
+                        agent_id=agent_id,
+                        run_id="",
+                        metadata={"content_filtered": True, "agent_type": normalized_type}
+                    )
                 logger.error(f"❌ Chat error: {e}")
                 raise
 

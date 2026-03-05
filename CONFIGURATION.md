@@ -7,6 +7,7 @@ This guide explains how to configure the Azure Intelligent Agent application bef
 - [Prerequisites](#prerequisites)
 - [Required Configuration](#required-configuration)
 - [Optional Configuration](#optional-configuration)
+- [Network Architecture (MCAPS Compliance)](#network-architecture-mcaps-compliance)
 - [Configuration Files](#configuration-files)
 - [Security Best Practices](#security-best-practices)
 - [Validation](#validation)
@@ -79,23 +80,21 @@ AZURE_OPENAI_API_VERSION=2024-08-01-preview
 
 ### 4. Database Configuration
 
-Configure your SQL database connection:
+SQL Server is deployed **without public network access** (required by MCAPS deny policy).
+Connectivity from the App Service is routed through an Azure Virtual Network via a private endpoint.
+
+Configure your SQL connection in `.env`:
 
 ```env
-SQL_SERVER=your-server.database.windows.net
+SQL_SERVER=your-server.database.windows.net  # still uses the FQDN; DNS resolves to private IP within VNet
 SQL_DATABASE=your-database-name
-SQL_USE_AZURE_AUTH=true  # Recommended: Use Azure AD authentication
-SQL_USERNAME=  # Leave empty if using Azure AD
-SQL_PASSWORD=  # Leave empty if using Azure AD
+SQL_USE_AZURE_AUTH=true  # Recommended: Use managed identity / Azure AD authentication
+SQL_USERNAME=             # Leave empty when using Azure AD
+SQL_PASSWORD=             # Leave empty when using Azure AD
 ```
 
-**For Azure SQL:**
-- Portal: SQL Database → Connection strings
-- Recommended: Use Azure AD authentication (no username/password)
-
-**For Microsoft Fabric SQL:**
-- Fabric portal: Workspace → SQL analytics endpoint
-- Format: `xyz-abc123.datawarehouse.fabric.microsoft.com`
+> **Note:** The App Service resolves the SQL FQDN to a private IP through the VNet-linked private DNS zone
+> (`privatelink.database.windows.net`). No direct public internet path to SQL exists.
 
 ### 5. JWT Secret
 
@@ -180,6 +179,42 @@ FABRIC_CLIENT_ID=your-sp-client-id
 FABRIC_CLIENT_SECRET=your-sp-secret
 FABRIC_SQL_USE_AZURE_AUTH=true
 ```
+
+---
+
+## Network Architecture (MCAPS Compliance)
+
+An MCAPS subscription-level deny policy blocks the creation of SQL servers with `publicNetworkAccess = Enabled`.
+This project addresses that policy by deploying a private network topology:
+
+```
+ Azure Virtual Network (10.100.0.0/16)
+ ├── appservice-subnet (10.100.1.0/24)   ← App Service outbound VNet integration
+ └── private-endpoint-subnet (10.100.2.0/24)
+         └── SQL Private Endpoint
+                 ↕  (private IP, no internet)
+             Azure SQL Server  (publicNetworkAccess: Disabled)
+```
+
+### What gets deployed
+
+| Resource | Default | Purpose |
+|---|---|---|
+| Virtual Network | enabled | Isolates SQL from the internet |
+| App Service VNet Integration | enabled | Routes App Service outbound traffic through the VNet |
+| SQL Private Endpoint | enabled | Assigns a private IP to the SQL server inside the VNet |
+| Private DNS Zone | enabled | Resolves `*.database.windows.net` to the private IP |
+
+### Bicep parameter
+
+```bicep
+// In bicep/main.bicepparam — controls all four resources above:
+param enableVnetIntegration = true   // Set false only in non-MCAPS environments
+```
+
+> **Warning:** Setting `enableVnetIntegration = false` re-enables `publicNetworkAccess` on the SQL server
+> and removes the VNet/private-endpoint infrastructure. Only do this in sandbox environments where
+> the MCAPS deny policy is not applied.
 
 ---
 
