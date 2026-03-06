@@ -773,7 +773,7 @@ Common violations and fixes:
 
 | Policy Violation | Symptom | Fix |
 |--------|---------|-----|
-| Azure AD-only authentication required | `RequestDisallowedByPolicy` on SQL server | `administrators` block must be **inline** on the server resource — child `/administrators` resources are not evaluated by policy at ARM validation time |
+| Azure AD-only authentication required | `RequestDisallowedByPolicy` on SQL server | `administrators` block must be **inline** on the server resource — child `/administrators` resources are not evaluated by policy at ARM validation time. **`sqlAzureAdAdminLogin` and `sqlAzureAdAdminSid` in `bicep/main.bicepparam` cannot be empty** — run `az ad signed-in-user show --query id -o tsv` to get your Object ID |
 | Outbound network access restricted | SQL server creation blocked | Set `restrictOutboundNetworkAccess: 'Enabled'` in sqlServer params |
 | Public network access not allowed | SQL server creation blocked | Set `publicNetworkAccess: 'Disabled'` and deploy VNet + private endpoint (the default) |
 

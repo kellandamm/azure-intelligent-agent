@@ -53,7 +53,11 @@ param powerbiClientId = '<service principal client ID>'
 param powerbiTenantId = '<your tenant ID>'
 param powerbiClientSecret = '<service principal secret>'
 
-// SQL AD Admin (get SID with: az ad user show --id <UPN> --query id -o tsv)
+// SQL AD Admin — REQUIRED, cannot be left empty
+// Azure Policy blocks deployment if these are blank or placeholder strings
+// Get your values:
+//   az ad signed-in-user show --query userPrincipalName -o tsv  → login
+//   az ad signed-in-user show --query id -o tsv                 → sid (GUID)
 param sqlAzureAdAdminLogin = 'admin@yourdomain.com'
 param sqlAzureAdAdminSid = '<Azure AD object ID GUID>'
 ```

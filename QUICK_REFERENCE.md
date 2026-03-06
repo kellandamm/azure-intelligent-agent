@@ -62,8 +62,9 @@ azd env select dev
 azd env set AZURE_APP_NAME "myagents"
 
 # SQL admin is configured via Azure AD — set these in bicep/main.bicepparam instead:
-# param sqlAzureAdAdminLogin = 'admin@yourdomain.com'
-# param sqlAzureAdAdminSid   = '<object-id GUID>'  (az ad user show --id <UPN> --query id -o tsv)
+# param sqlAzureAdAdminLogin = 'admin@yourdomain.com'      ← az ad signed-in-user show --query userPrincipalName -o tsv
+# param sqlAzureAdAdminSid   = '<object-id GUID>'          ← az ad signed-in-user show --query id -o tsv
+# ⚠️ REQUIRED: leaving these empty causes RequestDisallowedByPolicy at deployment time
 
 # View variables
 azd env get-values
@@ -243,9 +244,12 @@ param azureOpenAIEndpoint = 'https://...'         // Required
 param azureOpenAIApiKey   = '<key>'               // Required
 param projectEndpoint     = 'https://...'         // Required
 // Fabric, Power BI params ...
-// Azure AD SQL admin (required for sqlUseAzureAuth = true):
-param sqlAzureAdAdminLogin = 'admin@yourorg.com'  // Required
-param sqlAzureAdAdminSid   = '<object-id>'         // Required
+// Azure AD SQL admin — REQUIRED (cannot be left empty)
+// Azure Policy blocks deployment without these values
+// Run: az ad signed-in-user show --query userPrincipalName -o tsv  → login
+//      az ad signed-in-user show --query id -o tsv                 → sid
+param sqlAzureAdAdminLogin = 'admin@yourorg.com'  // ← your UPN
+param sqlAzureAdAdminSid   = '<object-id>'         // ← GUID from above command
 ```
 
 ---

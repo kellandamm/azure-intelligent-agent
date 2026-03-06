@@ -251,18 +251,22 @@ All agent ID parameters follow the same pattern:
 
 ### `sqlAzureAdAdminLogin`
 - **Type**: string
-- **Required**: Only if `sqlUseAzureAuth = true`
+- **Required**: **Yes** (when `sqlUseAzureAuth = true`, which is the default)
 - **Format**: Email address or UPN
 - **Description**: Azure AD admin user/group for SQL
 - **Where to Find**: Azure AD → Users → Select user → User Principal Name
 - **Example**: `admin@mycompany.com`
+- **Command**: `az ad signed-in-user show --query userPrincipalName -o tsv`
+- ⚠️ **Cannot be left empty** — must be provided together with `sqlAzureAdAdminSid`.
 
 ### `sqlAzureAdAdminSid`
 - **Type**: string (GUID)
-- **Required**: Only if `sqlUseAzureAuth = true`
+- **Required**: **Yes** (when `sqlUseAzureAuth = true`, which is the default)
 - **Description**: Azure AD Object ID of admin user/group
 - **Where to Find**: Azure AD → Users → Select user → Object ID
 - **Example**: `12345678-1234-1234-1234-123456789012`
+- **Command**: `az ad signed-in-user show --query id -o tsv`
+- ⚠️ **Cannot be left empty** — Azure Policy requires the inline `administrators` block to be present on the SQL server. An empty value causes `RequestDisallowedByPolicy` at deployment time.
 
 ---
 

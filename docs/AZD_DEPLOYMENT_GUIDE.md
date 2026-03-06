@@ -171,7 +171,17 @@ azd env get-values
 
 > **Note:** SQL uses Azure AD (Entra) authentication with the App Service managed identity.
 > Set `sqlAzureAdAdminLogin` and `sqlAzureAdAdminSid` in `bicep/main.bicepparam` instead of using
-> SQL username/password credentials. Get the SID with: `az ad user show --id <UPN> --query id -o tsv`
+> SQL username/password credentials.
+>
+> ⚠️ **These values cannot be left empty.** Azure Policy requires the `administrators` block to be
+> present on the SQL server at deployment time. Leaving them blank causes a `RequestDisallowedByPolicy`
+> error even though the fields are optional in the template.
+>
+> ```powershell
+> # Get your values:
+> az ad signed-in-user show --query userPrincipalName -o tsv  # → sqlAzureAdAdminLogin
+> az ad signed-in-user show --query id -o tsv                 # → sqlAzureAdAdminSid (GUID)
+> ```
 
 ### Step 3: Validate Policy Compliance (Recommended)
 
@@ -288,6 +298,7 @@ azd env select staging
 
 > **SQL Admin:** Set `sqlAzureAdAdminLogin` and `sqlAzureAdAdminSid` directly in `bicep/main.bicepparam`.
 > The template uses Azure AD-only SQL authentication — no SQL password is required.
+> ⚠️ **Both values are required** — leaving them empty causes `RequestDisallowedByPolicy` at provisioning time.
 
 ---
 
@@ -578,8 +589,9 @@ azd env get-values
 # Set missing variables
 azd env set AZURE_APP_NAME "myagents"
 # SQL admin is set in bicep/main.bicepparam (not an azd env var):
-#   param sqlAzureAdAdminLogin = 'admin@yourdomain.com'
-#   param sqlAzureAdAdminSid   = '<Azure AD Object ID GUID>'
+#   param sqlAzureAdAdminLogin = 'admin@yourdomain.com'      ← your UPN
+#   param sqlAzureAdAdminSid   = '<Azure AD Object ID GUID>' ← run: az ad signed-in-user show --query id -o tsv
+# ⚠️ Both must be set — empty strings cause RequestDisallowedByPolicy at deployment time
 ```
 
 ---
