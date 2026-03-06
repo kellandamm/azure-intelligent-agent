@@ -38,7 +38,7 @@ using './main.bicep'
 
 // Azure region for deployment
 // Example: 'eastus2', 'westus2', 'westeurope'
-param location = ''
+param location = 'westus2'
 
 // Environment (dev/staging/prod) - affects resource names and tags
 param environment = 'prod'
