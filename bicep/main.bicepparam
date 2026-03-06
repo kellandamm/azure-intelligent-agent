@@ -38,7 +38,7 @@ using './main.bicep'
 
 // Azure region for deployment
 // Example: 'eastus2', 'westus2', 'westeurope'
-param location = '
+param location = ''
 
 // Environment (dev/staging/prod) - affects resource names and tags
 param environment = 'prod'
@@ -70,7 +70,7 @@ param azureOpenAIApiKey = ''
 
 // Azure AI Foundry project endpoint URL
 // Format: https://<project-name>.<region>.api.azureml.ms/agents/v1.0/subscriptions/<sub-id>/...
-param projectEndpoint = '
+param projectEndpoint = ''
 
 // Connection name for Azure OpenAI in AI Foundry
 param connectionName = 'aoai-connection'
