@@ -1019,6 +1019,25 @@
             } else if (tabName === 'config') {
                 document.getElementById('configTab').classList.add('active');
                 document.getElementById('configManagementTab').classList.add('active');
+                
+                // Pass auth token to config iframe
+                const iframe = document.getElementById('configManagementFrame');
+                iframe.onload = function() {
+                    iframe.contentWindow.postMessage({
+                        type: 'AUTH_TOKEN',
+                        token: authToken
+                    }, '*');
+                };
+                try {
+                    if (iframe.contentWindow) {
+                        iframe.contentWindow.postMessage({
+                            type: 'AUTH_TOKEN',
+                            token: authToken
+                        }, '*');
+                    }
+                } catch (e) {
+                    console.log('Config iframe not ready yet');
+                }
             } else if (tabName === 'testing') {
                 document.getElementById('testingTab').classList.add('active');
                 document.querySelectorAll('.nav-tab')[3].classList.add('active');

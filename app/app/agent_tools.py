@@ -42,11 +42,6 @@ class FabricDataTools:
         user_region: Optional[str] = None
         if user_context:
             user_region = user_context.get("region")
-            
-            # DEBUG: Log what we received
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.info(f"🔍 RLS FILTER - user_region: {user_region}, user_context keys: {list(user_context.keys())}")
 
         # --- Query Fabric Gold Lakehouse directly -------------------------
         sales_by_region: Dict[str, Dict[str, Any]] = {}
@@ -735,46 +730,7 @@ class WeatherTools:
         return {"location": location, "forecast_days": days, "forecasts": forecasts}
 
 
-# Tool definitions for Local Sales Tools with RLS Support
-SALES_TOOLS = [
-    {
-        "type": "function",
-        "function": {
-            "name": "get_sales_summary",
-            "description": "Get sales summary and metrics for a specified time period with Row-Level Security (RLS) filtering based on user permissions",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "time_period": {
-                        "type": "string",
-                        "description": "Time period to analyze (e.g., 'last_quarter', 'last_month', 'ytd')",
-                        "enum": ["last_quarter", "last_month", "last_year", "ytd"],
-                    }
-                },
-                "required": [],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_customer_demographics",
-            "description": "Get customer demographic information with RLS filtering",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "segment": {
-                        "type": "string",
-                        "description": "Optional customer segment to filter by",
-                    }
-                },
-                "required": [],
-            },
-        },
-    },
-]
-
-# Tool definitions for Azure AI Agents (Fabric - No RLS)
+# Tool definitions for Azure AI Agents
 FABRIC_TOOLS = [
     {
         "type": "function",

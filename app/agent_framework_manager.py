@@ -15,12 +15,14 @@ from agent_framework._types import ChatMessage, TextContent
 from config import settings
 from agent_tools import (
     FABRIC_TOOLS,
+    SALES_TOOLS,
     CALCULATION_TOOLS,
     WEATHER_TOOLS,
+    SUPPORT_TOOLS,
     execute_tool_call,
 )
 from utils.logging_config import logger
-from chart_generator import ResponseFormatter, ChartGenerator
+from app.chart_generator import ResponseFormatter, ChartGenerator
 
 
 Message = Dict[str, Any]
@@ -51,6 +53,7 @@ class AgentFrameworkManager:
 
         self.sessions: Dict[str, List[Message]] = {}
         self._lock = asyncio.Lock()
+        self.user_context: Optional[Dict[str, Any]] = None  # Store user context for RLS
 
         # Specialist agent definitions
         self.specialist_profiles: Dict[str, Dict[str, Any]] = {
@@ -58,58 +61,135 @@ class AgentFrameworkManager:
                 "display_name": "SalesAssistant",
                 "id": settings.fabric_sales_agent_id,
                 "prompt": (
-                    "You are SalesAssistant. Provide revenue insights, top products, and sales trends "
-                    "using clear, metric-driven language. When data is requested, call the provided Fabric "
-                    "tools to gather accurate figures before responding. Summaries should highlight key "
-                    "successes and risks, ending with an actionable recommendation."
+                    "You are SalesAssistant with direct access to Fabric lakehouse data via Data Agents. "
+                    "Provide revenue insights, top products, and sales trends using clear, metric-driven language. "
+                    "When users ask about sales data, query the SalesFact, CustomerDim, and ProductDim tables. "
+                    "IMPORTANT: Always query for the most recent data. Use date filters like 'last month', 'current quarter', or 'year 2026' to ensure up-to-date results. "
+                    "Data is automatically filtered by the user's authorized region. "
+                    "Summaries should highlight key successes and risks, ending with an actionable recommendation."
                 ),
-                "tools": FABRIC_TOOLS,
+                "tools": self._get_data_agent_tools() if settings.enable_data_agents else SALES_TOOLS,
             },
             "operations": {
                 "display_name": "OperationsAssistant",
                 "id": settings.fabric_realtime_agent_id,
                 "prompt": (
-                    "You are OperationsAssistant. Monitor real-time operational metrics, uptime, and system "
-                    "health. Use Fabric data tools to reference current status and highlight incidents. Focus "
-                    "on providing concise readiness summaries and next best actions."
+                    "You are OperationsAssistant with access to operational data in Fabric lakehouse. "
+                    "Query InventoryFact, OrderFact, and FulfillmentMetrics tables for real-time operational metrics, "
+                    "uptime, and system health. Focus on providing concise readiness summaries and next best actions."
                 ),
-                "tools": FABRIC_TOOLS,
+                "tools": self._get_data_agent_tools(["InventoryFact", "OrderFact", "FulfillmentMetrics"]) if settings.enable_data_agents else FABRIC_TOOLS,
             },
             "analytics": {
                 "display_name": "AnalyticsAssistant",
                 "id": settings.fabric_analytics_agent_id or "analytics-agent-framework",
                 "prompt": (
-                    "You are AnalyticsAssistant, a senior business intelligence analyst specializing in Microsoft Fabric data.\n"
-                    "Capabilities:\n"
-                    "- Analyze sales performance, growth trends, and seasonality\n"
-                    "- Provide customer demographic insights and segmentation\n"
-                    "- Monitor inventory, fulfillment, and operational KPIs\n"
-                    "- Summarize key patterns with supporting data points\n\n"
-                    "When users request reports or visualizations, provide the insights and let the system know "
-                    "that charts will be automatically generated. Always cite metrics and suggest actionable insights."
+                    "You are AnalyticsAssistant with LIVE access to Microsoft Fabric lakehouse. You can query data RIGHT NOW.\n\n"
+                    "🚫 FORBIDDEN RESPONSES:\n"
+                    "- 'Suggest segmenting customers using RFM analysis' → NO, DO the analysis\n"
+                    "- 'Run a customer segmentation report' → NO, RUN the query yourself\n"
+                    "- 'This involves filtering for...' → NO, EXECUTE the filter now\n"
+                    "- 'Average order value was $421' without customer names → UNACCEPTABLE\n\n"
+                    "✅ REQUIRED BEHAVIOR:\n"
+                    "- IMMEDIATELY use data_agent tool when user asks about customers/sales/products\n"
+                    "- Return ACTUAL customer names, IDs, and individual spending amounts\n"
+                    "- Show row-level detail, not just summary statistics\n"
+                    "- Use real numbers from the query, not placeholders\n\n"
+                    "EXAMPLE GOOD RESPONSE:\n"
+                    "'I found 23 customers who haven't purchased in 90+ days:\n"
+                    "1. Acme Corp (ID: 1045) - Last order: 127 days ago - Avg monthly spend: $3,240\n"
+                    "2. Beta Industries (ID: 1089) - Last order: 94 days ago - Avg monthly spend: $1,876\n"
+                    "[... rest of list]'\n\n"
+                    "QUERY APPROACH:\n"
+                    "1. IMMEDIATELY query: 'Show CustomerID, CustomerName, MAX(OrderDate) as LastPurchase, SUM(TotalAmount) as TotalSpent, "
+                    "COUNT(OrderID) as OrderCount, AVG(TotalAmount) as AvgOrderValue FROM SalesFact JOIN CustomerDim ON CustomerID "
+                    "WHERE YEAR(OrderDate) >= 2025 GROUP BY CustomerID, CustomerName HAVING DATEDIFF(day, MAX(OrderDate), GETDATE()) > 90'\n"
+                    "2. Present ACTUAL results with customer names\n"
+                    "3. Calculate metrics from REAL data (monthly spend = total spend / months between first and last order)\n"
+                    "4. Provide specific, actionable insights based on ACTUAL customer details\n\n"
+                    "Tables available: SalesFact, InventoryFact, CustomerDim, ProductDim, PerformanceMetrics\n"
+                    "🎯 Your job: Query data and show REAL customer details. Not theory, not suggestions - ACTUAL RESULTS."
                 ),
-                "tools": FABRIC_TOOLS,
+                "tools": self._get_data_agent_tools() if settings.enable_data_agents else FABRIC_TOOLS,
             },
             "financial": {
                 "display_name": "FinancialAdvisor",
                 "id": settings.fabric_financial_agent_id or "financial-agent-framework",
                 "prompt": (
-                    "You are FinancialAdvisor. Offer ROI calculations, revenue forecasting, and profitability analysis.\n"
-                    "When presenting financial forecasts or comparisons, structure your response with clear numbers "
-                    "and note that interactive charts will be displayed automatically. Whenever math is needed, call "
-                    "the calculation tools to provide accurate numbers. Explain your assumptions, outline risks, "
-                    "and conclude with a financial recommendation."
+                    "You are FinancialAdvisor with direct access to Microsoft Fabric lakehouse for financial analysis.\n\n"
+                    "You have access to:\n"
+                    "1. Real-time inventory and sales data via Data Agents (InventoryFact, SalesFact, ProductDim tables)\n"
+                    "2. Financial calculation tools (calculate_roi, forecast_revenue, calculate_carrying_costs)\n\n"
+                    "For CARRYING COSTS calculations:\n"
+                    "- AUTOMATICALLY query InventoryFact for aged inventory data (items over 60 days)\n"
+                    "- Use calculate_carrying_costs tool with the inventory value you retrieve\n"
+                    "- Default assumptions: 25% annual carrying cost rate (storage, depreciation, insurance, opportunity cost)\n"
+                    "- Break down costs by: storage (8%), depreciation (7%), insurance (3%), obsolescence (4%), opportunity cost (3%)\n"
+                    "- Present results with specific products and their individual carrying costs\n\n"
+                    "For REVENUE FORECASTS:\n"
+                    "- Query SalesFact for recent revenue and growth trends\n"
+                    "- Use forecast_revenue with actual historical data\n"
+                    "- Include period-by-period breakdowns\n\n"
+                    "For ROI CALCULATIONS:\n"
+                    "- Query actual investment and return data when available\n"
+                    "- Use calculate_roi tool with real numbers\n\n"
+                    "IMPORTANT: Always query for current 2026 data. Don't ask users for data you can retrieve automatically. "
+                    "Present findings with clear numbers, assumptions, breakdown by category, and actionable financial recommendations."
                 ),
-                "tools": CALCULATION_TOOLS,
+                "tools": (self._get_data_agent_tools(["InventoryFact", "SalesFact", "ProductDim", "CustomerDim"]) if settings.enable_data_agents else FABRIC_TOOLS) + CALCULATION_TOOLS,
             },
             "support": {
                 "display_name": "CustomerSupportAssistant",
                 "id": settings.fabric_support_agent_id or "support-agent-framework",
                 "prompt": (
-                    "You are CustomerSupportAssistant, a friendly and empathetic support specialist.\n"
-                    "Clarify the customer request, offer clear troubleshooting steps, and suggest helpful follow-ups."
+                    "You are CustomerSupportAssistant, a friendly, empathetic, and highly capable customer support specialist.\n"
+                    "You help customers with account issues, order inquiries, product questions, billing concerns, and general troubleshooting.\n\n"
+                    "Your capabilities:\n"
+                    "- Search knowledge base for help articles and step-by-step guides\n"
+                    "- Look up order status and tracking information\n"
+                    "- Create support tickets for complex issues requiring investigation\n"
+                    "- Provide quick solutions for common issues\n\n"
+                    "Best practices:\n"
+                    "1. Always be empathetic and acknowledge the customer's concern\n"
+                    "2. Use tools to find accurate information (don't guess)\n"
+                    "3. Provide clear, step-by-step instructions\n"
+                    "4. Offer multiple solutions when available\n"
+                    "5. Escalate complex issues by creating a support ticket\n"
+                    "6. Follow up with next steps and contact information\n\n"
+                    "Remember: Customer satisfaction is your top priority. Be patient, thorough, and helpful."
                 ),
-                "tools": [],
+                "tools": SUPPORT_TOOLS,
+            },
+            "customer_success": {
+                "display_name": "CustomerSuccessAgent",
+                "id": settings.fabric_support_agent_id or "customer-success-framework",
+                "prompt": (
+                    "You are CustomerSuccessAgent with DIRECT, IMMEDIATE access to Microsoft Fabric lakehouse.\n\n"
+                    "🚫 NEVER say: 'data isn't directly available', 'can be calculated', 'need to run a report', 'need to access data'\n"
+                    "✅ ALWAYS: Query the data IMMEDIATELY and provide ACTUAL customer lists with real numbers\n\n"
+                    "When user asks about churned/inactive/at-risk customers:\n"
+                    "1. IMMEDIATELY use your data_agent tool to query SalesFact and CustomerDim\n"
+                    "2. Request this exact data: CustomerID, CustomerName, OrderDate, TotalAmount\n"
+                    "3. Calculate: days since last purchase, total spend, average order value, purchase frequency\n"
+                    "4. Return SPECIFIC customer names and numbers - NOT generic analysis\n\n"
+                    "QUERY TEMPLATE (use data_agent tool with this):\n"
+                    "'From SalesFact joined with CustomerDim, show me customers whose most recent OrderDate is more than 90 days ago "
+                    "but who had multiple purchases before that. Include CustomerID, CustomerName, last OrderDate, "
+                    "sum of TotalAmount, count of orders, and average order value. Filter for transactions in 2025-2026.'\n\n"
+                    "REQUIRED OUTPUT FORMAT:\n"
+                    "✅ Total Customers at Risk: [ACTUAL COUNT from query]\n"
+                    "✅ Total Revenue at Stake: $[ACTUAL SUM from query]\n"
+                    "✅ Average Customer Value: $[ACTUAL AVG from query]\n\n"
+                    "📋 Customer Details: [ACTUAL NAMES AND IDS from query]\n"
+                    "1. [REAL Customer Name] (ID: [REAL ID])\n"
+                    "   - Last Purchase: [ACTUAL DAYS] days ago ([REAL DATE])\n"
+                    "   - Lifetime Revenue: $[REAL AMOUNT]\n"
+                    "   - Avg Monthly Spend: $[CALCULATED from real data]\n"
+                    "   - Total Orders: [REAL COUNT]\n"
+                    "2. [Next customer...]\n\n"
+                    "🎯 CRITICAL: You HAVE the data. Query it NOW. Show REAL customer names and numbers. No excuses."
+                ),
+                "tools": self._get_data_agent_tools(["SalesFact", "CustomerDim", "ProductDim"]) if settings.enable_data_agents else FABRIC_TOOLS,
             },
             "coordinator": {
                 "display_name": "OperationsCoordinator",
@@ -148,14 +228,26 @@ class AgentFrameworkManager:
         self.orchestrator_prompt = (
             "You are RetailAssistantOrchestrator. Analyze each user request, decide whether to answer directly "
             "or to call one of the specialist functions. Available specialists:\n"
-            "- SalesAssistant: revenue insights, sales trends, top products\n"
+            "- SalesAssistant: revenue insights, sales trends, top products, current sales data\n"
             "- OperationsAssistant: real-time metrics, system health, uptime\n"
-            "- AnalyticsAssistant: business intelligence, patterns, KPIs\n"
-            "- FinancialAdvisor: ROI, forecasting, profitability\n"
-            "- CustomerSupportAssistant: troubleshooting, customer service\n"
+            "- AnalyticsAssistant: business intelligence, patterns, KPIs, comparative analysis\n"
+            "- FinancialAdvisor: ROI calculations, revenue forecasting, financial projections, growth predictions\n"
+            "- CustomerSupportAssistant: troubleshooting, customer service issues\n"
+            "- CustomerSuccessAgent: **CHURN ANALYSIS**, at-risk customers, retention, customer lists with spending history\n"
             "- OperationsCoordinator: logistics, supply chain, weather impacts\n"
-            "- CustomerSuccessAgent: customer health, retention, engagement, churn risk\n"
             "- OperationsExcellenceAgent: efficiency, process optimization, productivity KPIs\n\n"
+            "Routing Guidelines:\n"
+            "- Use CustomerSuccessAgent for: 'churned customers', 'haven't purchased', 'inactive customers', 'at-risk', 'customer retention', 'days since last purchase'\n"
+            "- Use FinancialAdvisor for: 'forecast', 'predict', 'project', 'ROI', 'future revenue', 'growth projections'\n"
+            "- Use SalesAssistant for: 'current sales', 'last quarter', 'top products', 'what were sales'\n"
+            "- Use AnalyticsAssistant for: 'trends', 'patterns', 'compare', 'analyze' (general business intelligence)\n\n"
+            "Row-Level Security (RLS) Handling:\n"
+            "When a specialist returns data, it is ALREADY filtered for the user's authorized scope (e.g., their region). "
+            "If the response indicates a specific region (e.g., 'region': 'East'), that means the user has access to THAT region's data. "
+            "When summarizing:\n"
+            "- State the data you CAN provide clearly (e.g., 'Here is your East region data')\n"
+            "- If the user asked for a different region than what was returned, explain: 'The data shown is for your authorized region'\n"
+            "- Never incorrectly state which region the user has access to\n\n"
             "When a specialist is used, summarize their findings, cite the specialist by name, and add your own "
             "brief recommendation. If no specialist is required, answer confidently using available context."
         )
@@ -231,6 +323,55 @@ class AgentFrameworkManager:
 
         self.orchestrator_agent_id = settings.fabric_orchestrator_agent_id or "agent-framework-orchestrator"
 
+    def _get_data_agent_tools(self, tables: Optional[List[str]] = None) -> List[Dict[str, Any]]:
+        """
+        Generate Data Agent tool configuration for querying Fabric lakehouse.
+        
+        Args:
+            tables: Optional list of specific tables to query. If None, allows all tables.
+            
+        Returns:
+            List of tool definitions including Data Agent configuration
+        """
+        if not settings.enable_data_agents:
+            logger.warning("⚠️ Data Agents DISABLED - using mock data tools. Set ENABLE_DATA_AGENTS=true to enable real queries.")
+            return FABRIC_TOOLS
+        
+        if not settings.fabric_lakehouse_id:
+            logger.error("❌ Data Agents enabled but FABRIC_LAKEHOUSE_ID not configured! Falling back to mock data.")
+            return FABRIC_TOOLS
+        
+        # Default tables if none specified
+        if tables is None:
+            tables = ["SalesFact", "InventoryFact", "CustomerDim", "ProductDim", "PerformanceMetrics"]
+        
+        logger.info(f"✅ Configuring Data Agent tools for tables: {', '.join(tables)}")
+        logger.info(f"   Lakehouse: {settings.fabric_lakehouse_name} (ID: {settings.fabric_lakehouse_id[:20]}...)")
+        
+        data_agent_tool = {
+            "type": "fabric_data_agent",
+            "fabric": {
+                "workspace_id": settings.fabric_workspace_id,
+                "lakehouse_id": settings.fabric_lakehouse_id,
+                "lakehouse_name": settings.fabric_lakehouse_name,
+                "tables": tables,
+                "use_user_context": True,  # Apply RLS filtering
+                "security_context": {
+                    "region": self.user_context.get("region") if self.user_context else None,
+                    "roles": self.user_context.get("roles") if self.user_context else [],
+                }
+            },
+            "description": (
+                f"Query Microsoft Fabric lakehouse for real-time data. "
+                f"Available tables: {', '.join(tables)}. "
+                f"Use natural language like: 'show customers who haven't purchased in 90 days with their spending history' or "
+                f"'list inventory items over 60 days old with costs'. Data is automatically filtered by user permissions."
+            )
+        }
+        
+        # Return Data Agent tool plus any calculation tools if needed
+        return [data_agent_tool]
+
     @staticmethod
     def _create_credential():
         try:
@@ -260,13 +401,13 @@ class AgentFrameworkManager:
             {"role": "user", "content": question},
         ]
         
-        # Run the specialist WITHOUT tools for now (tools need to be callable functions)
-        # The specialist will use its knowledge to answer based on the prompt
+        # Enable tools for specialists so they can query Fabric data
+        tool_executor = self._execute_tool_call if profile["tools"] else None
         try:
             response_text, _, _ = await self._chat_with_tools(
                 messages=messages,
-                tools=None,  # TODO: Convert tool schemas to callable functions
-                tool_executor=None,
+                tools=profile["tools"] if profile["tools"] else None,
+                tool_executor=tool_executor,
             )
             
             # Format the response with visual enhancements
@@ -288,8 +429,12 @@ class AgentFrameworkManager:
         message: str,
         agent_type: Optional[str] = None,
         thread_id: Optional[str] = None,
+        user_context: Optional[Dict[str, Any]] = None,
     ) -> ChatResult:
         """Process a chat request through the orchestrator or specific specialist."""
+
+        # Store user context for tool execution
+        self.user_context = user_context
 
         normalized_type = (agent_type or "").strip().lower()
         if not normalized_type or normalized_type in {"sales", "orchestrator", "auto", "default"}:
@@ -535,7 +680,7 @@ class AgentFrameworkManager:
             arguments = {}
 
         try:
-            result = await asyncio.to_thread(execute_tool_call, name, arguments)
+            result = await asyncio.to_thread(execute_tool_call, name, arguments, self.user_context)
         except Exception as exc:  # pragma: no cover - surface error to model
             logger.error("❌ Tool '%s' execution failed: %s", name, exc)
             result = {"error": str(exc)}
@@ -646,5 +791,5 @@ class AgentFrameworkManager:
         return assistant_message
 
 
+# Singleton manager used by FastAPI endpoints
 agent_framework_manager = AgentFrameworkManager()
-"""Singleton manager used by FastAPI endpoints."""

@@ -1,0 +1,54 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual Environment
+venv/
+.venv/
+env/
+ENV/
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+tests/
+
+# Documentation (optional - comment out if you want to include)
+# *.md
+
+# Deployment scripts
+deploy-*.ps1
+*.ps1
+
+# Docker files
+Dockerfile
+docker-compose.yml
+
+# Logs
+*.log
+logs/
+
+# Environment files (will be set via Azure config)
+.env
+.env.local
+.env.*.local
+
+# Azure
+.azure/

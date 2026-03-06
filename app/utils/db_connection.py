@@ -288,13 +288,18 @@ def build_connection_string(
     ]
     
     if use_azure_auth:
-        # In Azure (Managed Identity available), use ActiveDirectoryMsi
-        # Locally, DatabaseConnection will use access tokens instead
-        if any([
+        # Azure AD authentication
+        # Check if running in Azure (App Service, Functions, VM, etc.)
+        is_azure_environment = any([
             os.getenv('WEBSITE_INSTANCE_ID'),  # App Service/Functions
-            os.getenv('IDENTITY_ENDPOINT'),     # Managed Identity available
-        ]):
+            os.getenv('IDENTITY_ENDPOINT'),     # Managed Identity
+            os.getenv('MSI_ENDPOINT')           # Legacy managed identity
+        ])
+        
+        if is_azure_environment:
+            # Running in Azure - use Managed Identity (driver handles token automatically)
             conn_str_parts.append("Authentication=ActiveDirectoryMsi")
+        # For local dev, we'll use access token via attrs_before (no Authentication parameter)
     elif username and password:
         # SQL authentication
         conn_str_parts.append(f"UID={username}")

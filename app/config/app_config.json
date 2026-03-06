@@ -1,0 +1,23 @@
+{
+  "request_timeout": 60,
+  "logging": {
+    "level": "INFO",
+    "format": "json"
+  },
+  "rate_limiting": {
+    "enabled": true,
+    "requests_per_hour": 1000,
+    "requests_per_minute": 100
+  },
+  "llm": {
+    "default_model": "gpt-4o",
+    "max_tokens": 4000,
+    "temperature": 0.7,
+    "timeout": 30
+  },
+  "security": {
+    "require_auth": true,
+    "session_timeout": 3600,
+    "max_login_attempts": 5
+  }
+}
