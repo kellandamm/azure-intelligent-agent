@@ -38,7 +38,7 @@ using './main.bicep'
 
 // Azure region for deployment
 // Example: 'eastus2', 'westus2', 'westeurope'
-param location = 'eastus2'
+param location = '
 
 // Environment (dev/staging/prod) - affects resource names and tags
 param environment = 'prod'
@@ -50,18 +50,18 @@ param environment = 'prod'
 
 // Azure OpenAI service endpoint
 // Format: https://<your-resource-name>.openai.azure.com/
-param azureOpenAIEndpoint = '<REPLACE_WITH_YOUR_AZURE_OPENAI_ENDPOINT>'
+param azureOpenAIEndpoint = ''
 
 // Model deployment name in Azure OpenAI
 // Example: 'gpt-4o', 'gpt-35-turbo', 'gpt-4'
-param azureOpenAIDeployment = 'gpt-4o'
+param azureOpenAIDeployment = 'gpt-5.2'
 
 // Azure OpenAI API version
 param azureOpenAIApiVersion = '2024-08-01-preview'
 
 // Azure OpenAI API Key (from Azure Portal → Keys and Endpoint)
 // ⚠️ SENSITIVE: Store in Azure Key Vault or use --parameters @secure-params.json
-param azureOpenAIApiKey = '<REPLACE_WITH_YOUR_AZURE_OPENAI_API_KEY>'
+param azureOpenAIApiKey = ''
 
 // ========================================
 // Azure AI Foundry Configuration
@@ -70,13 +70,13 @@ param azureOpenAIApiKey = '<REPLACE_WITH_YOUR_AZURE_OPENAI_API_KEY>'
 
 // Azure AI Foundry project endpoint URL
 // Format: https://<project-name>.<region>.api.azureml.ms/agents/v1.0/subscriptions/<sub-id>/...
-param projectEndpoint = '<REPLACE_WITH_YOUR_AI_FOUNDRY_PROJECT_ENDPOINT>'
+param projectEndpoint = '
 
 // Connection name for Azure OpenAI in AI Foundry
 param connectionName = 'aoai-connection'
 
 // Model deployment name in AI Foundry (usually same as Azure OpenAI deployment)
-param modelDeploymentName = 'gpt-4o'
+param modelDeploymentName = 'gpt-5.2'
 
 // ========================================
 // Microsoft Fabric Configuration
@@ -147,8 +147,9 @@ param sqlAdminPassword = ''
 // Azure AD admin configuration (required if sqlUseAzureAuth = true)
 // This user/group will have admin access to the SQL database
 // Get from Azure AD: Users/Groups → Object ID
-param sqlAzureAdAdminLogin = '<REPLACE_WITH_AZURE_AD_ADMIN_EMAIL>'
-param sqlAzureAdAdminSid = '<REPLACE_WITH_AZURE_AD_ADMIN_OBJECT_ID>'
+// Run: az ad signed-in-user show --query id -o tsv
+param sqlAzureAdAdminLogin = ''
+param sqlAzureAdAdminSid = ''
 
 // ========================================
 // Authentication & Security
