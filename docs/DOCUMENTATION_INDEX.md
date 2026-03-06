@@ -18,13 +18,7 @@ Complete guide to deploying your Azure Agent Framework application with turnkey 
 
 ### Path 2: Using PowerShell Scripts
 
-1. **[Visual Deployment Guide](TURNKEY_DEPLOYMENT_VISUAL_GUIDE.md)** ⭐ **DETAILED CONTROL**
-   - Step-by-step visual walkthrough
-   - Shows exactly what you'll see during deployment
-   - Perfect for first-time users wanting control
-   - **Time: 5 minutes to read, 15 minutes to deploy**
-
-2. **[Scripts README](../scripts/README.md)**
+1. **[Scripts README](../scripts/README.md)** ⭐ **DETAILED CONTROL**
    - Detailed documentation of all deployment scripts
    - Parameter reference and examples
    - Troubleshooting guide
@@ -36,10 +30,10 @@ Complete guide to deploying your Azure Agent Framework application with turnkey 
 ### Getting Started
 
 | Document | Description | When to Read |
-|----------|-------------|--------------|
+|----------|-------------|-------------- |
 | [Main README](../README.md) | Project overview and features | Before starting |
 | [Quick Start](QUICK_START.md) | Step-by-step deployment guide | First deployment |
-| [Visual Guide](TURNKEY_DEPLOYMENT_VISUAL_GUIDE.md) | Visual walkthrough with examples | Need visual guidance |
+| [Configuration Guide](../CONFIGURATION.md) | Environment variables, network architecture | Configuring the app |
 
 ### Configuration
 
@@ -74,12 +68,13 @@ Complete guide to deploying your Azure Agent Framework application with turnkey 
 ### Scenario 1: "I want to deploy for the first time"
 
 **Path A: Using azd (Simplest):**
-1. Read: [azd Deployment Guide](AZD_DEPLOYMENT_GUIDE.md) - 5 min
-2. Run: `azd up` - 15 min
-3. Verify: Open application URL
+1. Run: `azd init` to create your environment - 2 min
+2. Read: [azd Deployment Guide](AZD_DEPLOYMENT_GUIDE.md) - 5 min
+3. Run: `azd up` - 15 min
+4. Verify: Open application URL
 
 **Path B: Using PowerShell (More Control):**
-1. Read: [Visual Deployment Guide](TURNKEY_DEPLOYMENT_VISUAL_GUIDE.md) - 5 min
+1. Read: [Scripts README](../scripts/README.md) - 5 min
 2. Configure: [Parameters Reference](PARAMETERS.md) - 10 min
 3. Deploy: Run `deploy-complete.ps1` - 15 min
 4. Verify: Follow post-deployment checklist
@@ -150,8 +145,8 @@ Complete guide to deploying your Azure Agent Framework application with turnkey 
 
 **Path:**
 1. Check: [Scripts README](../scripts/README.md) - Common Issues section
-2. Review: [Troubleshooting Guide](TROUBLESHOOTING.md)
-3. View logs: `az webapp log tail --name <app> --resource-group <rg>`
+2. View logs: `az webapp log tail --name <app> --resource-group <rg>`
+3. Run: `.\scripts\validate-policy-compliance.ps1 -ResourceGroup <rg>` to check for policy violations
 4. Check: Azure Portal for resource status
 
 **Resolution time: Usually 5-15 minutes**

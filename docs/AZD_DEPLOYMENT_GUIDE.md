@@ -130,8 +130,6 @@ azd init
 ```bash
 # Set required variables
 azd env set AZURE_APP_NAME "myagents"
-azd env set AZURE_SQL_ADMINISTRATOR_LOGIN "sqladmin"
-azd env set AZURE_SQL_ADMINISTRATOR_PASSWORD "YourSecureP@ssw0rd123!"
 
 # Optional: Deploy new Azure OpenAI
 azd env set AZURE_OPENAI_DEPLOY "true"
@@ -150,9 +148,23 @@ azd env set AZURE_AI_PROJECT_NAME "your-project"
 azd env get-values
 ```
 
+> **Note:** SQL uses Azure AD (Entra) authentication with the App Service managed identity.
+> Set `sqlAzureAdAdminLogin` and `sqlAzureAdAdminSid` in `bicep/main.bicepparam` instead of using
+> SQL username/password credentials. Get the SID with: `az ad user show --id <UPN> --query id -o tsv`
+
+### Step 3: Validate Policy Compliance (Recommended)
+
+Before provisioning, run the pre-deployment validator to catch any Azure Policy violations and missing parameter values:
+
+```powershell
+.\scripts\validate-policy-compliance.ps1 -ResourceGroup <your-resource-group>
+```
+
+This checks SQL security properties, VNet integration, Azure AD admin parameters, and scans for any active deny policies that would block the deployment. Fix any reported issues before proceeding.
+
 ---
 
-### Step 3: Provision Infrastructure
+### Step 4: Provision Infrastructure
 
 ```bash
 # Provision all Azure resources (Bicep deployment)
@@ -171,7 +183,7 @@ This deploys:
 
 ---
 
-### Step 4: Configure SQL Database (Manual Step)
+### Step 5: Configure SQL Database (Manual Step)
 
 After provisioning, you'll see instructions to configure SQL database access:
 
@@ -184,7 +196,7 @@ ALTER ROLE db_datawriter ADD MEMBER [webapp-myagents-dev];
 
 ---
 
-### Step 5: Deploy Application Code
+### Step 6: Deploy Application Code
 
 ```bash
 # Deploy application to App Service
@@ -201,7 +213,7 @@ This:
 
 ---
 
-### Step 6: Verify Deployment
+### Step 7: Verify Deployment
 
 ```bash
 # Open application in browser
@@ -246,14 +258,15 @@ azd env select staging
 | `AZURE_APP_NAME` | ✅ | Application name prefix |
 | `AZURE_ENVIRONMENT_NAME` | ✅ | Environment (dev/staging/prod) |
 | `AZURE_LOCATION` | ✅ | Azure region |
-| `AZURE_SQL_ADMINISTRATOR_LOGIN` | ✅ | SQL admin username |
-| `AZURE_SQL_ADMINISTRATOR_PASSWORD` | ✅ | SQL admin password |
 | `AZURE_OPENAI_DEPLOY` | ❌ | Deploy new OpenAI (true/false) |
 | `AZURE_OPENAI_ENDPOINT` | ❌ | Existing OpenAI endpoint |
 | `AZURE_OPENAI_API_KEY` | ❌ | Existing OpenAI API key |
 | `AZURE_AI_FOUNDRY_ENDPOINT` | ❌ | AI Foundry endpoint |
 | `AZURE_FABRIC_CAPACITY_ID` | ❌ | Fabric capacity ID |
 | `AZURE_POWERBI_WORKSPACE_ID` | ❌ | Power BI workspace ID |
+
+> **SQL Admin:** Set `sqlAzureAdAdminLogin` and `sqlAzureAdAdminSid` directly in `bicep/main.bicepparam`.
+> The template uses Azure AD-only SQL authentication — no SQL password is required.
 
 ---
 
@@ -543,8 +556,9 @@ azd env get-values
 
 # Set missing variables
 azd env set AZURE_APP_NAME "myagents"
-azd env set AZURE_SQL_ADMINISTRATOR_LOGIN "sqladmin"
-azd env set AZURE_SQL_ADMINISTRATOR_PASSWORD "SecurePassword123!"
+# SQL admin is set in bicep/main.bicepparam (not an azd env var):
+#   param sqlAzureAdAdminLogin = 'admin@yourdomain.com'
+#   param sqlAzureAdAdminSid   = '<Azure AD Object ID GUID>'
 ```
 
 ---

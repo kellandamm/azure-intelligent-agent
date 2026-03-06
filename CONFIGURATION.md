@@ -7,7 +7,7 @@ This guide explains how to configure the Azure Intelligent Agent application bef
 - [Prerequisites](#prerequisites)
 - [Required Configuration](#required-configuration)
 - [Optional Configuration](#optional-configuration)
-- [Network Architecture (MCAPS Compliance)](#network-architecture-mcaps-compliance)
+- [Network Architecture (Private Endpoint)](#network-architecture-private-endpoint)
 - [Configuration Files](#configuration-files)
 - [Security Best Practices](#security-best-practices)
 - [Validation](#validation)
@@ -80,8 +80,7 @@ AZURE_OPENAI_API_VERSION=2024-08-01-preview
 
 ### 4. Database Configuration
 
-SQL Server is deployed **without public network access** (required by MCAPS deny policy).
-Connectivity from the App Service is routed through an Azure Virtual Network via a private endpoint.
+SQL Server is deployed **without public network access** — connectivity from the App Service is routed through an Azure Virtual Network via a private endpoint.
 
 Configure your SQL connection in `.env`:
 
@@ -182,10 +181,9 @@ FABRIC_SQL_USE_AZURE_AUTH=true
 
 ---
 
-## Network Architecture (MCAPS Compliance)
+## Network Architecture (Private Endpoint)
 
-An MCAPS subscription-level deny policy blocks the creation of SQL servers with `publicNetworkAccess = Enabled`.
-This project addresses that policy by deploying a private network topology:
+Azure Policy requires SQL servers to have `publicNetworkAccess` disabled. This template deploys a private network topology to satisfy that requirement:
 
 ```
  Azure Virtual Network (10.100.0.0/16)
@@ -209,12 +207,12 @@ This project addresses that policy by deploying a private network topology:
 
 ```bicep
 // In bicep/main.bicepparam — controls all four resources above:
-param enableVnetIntegration = true   // Set false only in non-MCAPS environments
+param enableVnetIntegration = true   // Set false only in sandbox environments without policy restrictions
 ```
 
 > **Warning:** Setting `enableVnetIntegration = false` re-enables `publicNetworkAccess` on the SQL server
-> and removes the VNet/private-endpoint infrastructure. Only do this in sandbox environments where
-> the MCAPS deny policy is not applied.
+> and removes the VNet + private endpoint infrastructure. Only do this in sandbox environments where
+> Azure Policy restrictions are not enforced.
 
 ---
 

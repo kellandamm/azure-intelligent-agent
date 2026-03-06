@@ -61,9 +61,9 @@ azd env select dev
 # Override auto-generated app name (optional)
 azd env set AZURE_APP_NAME "myagents"
 
-# SQL AD admin credentials (if using Azure AD auth)
-azd env set AZURE_SQL_ADMINISTRATOR_LOGIN "sqladmin"
-azd env set AZURE_SQL_ADMINISTRATOR_PASSWORD "SecurePass123!"
+# SQL admin is configured via Azure AD — set these in bicep/main.bicepparam instead:
+# param sqlAzureAdAdminLogin = 'admin@yourdomain.com'
+# param sqlAzureAdAdminSid   = '<object-id GUID>'  (az ad user show --id <UPN> --query id -o tsv)
 
 # View variables
 azd env get-values
@@ -162,10 +162,10 @@ az deployment group list --resource-group <rg-name>
 az webapp log tail --name <app-name> --resource-group <rg-name>
 ```
 
-### Policy Violation — SQL Server Blocked by MCAPS
+### SQL Server Blocked by Policy
 
 If `azd provision` fails with **"Resource was disallowed by policy"** on the SQL server:
-- This is the MCAPS deny policy blocking `publicNetworkAccess = Enabled`
+- Azure Policy blocks SQL servers with `publicNetworkAccess = Enabled`
 - Ensure `enableVnetIntegration = true` in `bicep/main.bicepparam` (the default)
 - That parameter deploys the VNet + private endpoint and sets `publicNetworkAccess = Disabled`
 
@@ -262,7 +262,7 @@ param sqlAzureAdAdminSid   = '<object-id>'         // Required
 1. **Use azd for simplicity** - One command does everything
 2. **Use PowerShell for control** - See every step
 3. **Create multiple environments** - Test before production
-4. **VNet integration is on by default** - Required for MCAPS compliance; SQL has no public internet access
+4. **VNet integration is on by default** - SQL has no public internet access; connectivity routes through VNet private endpoint
 5. **Monitor with Application Insights** - Included by default
 6. **Use Key Vault for secrets** - Production best practice
 

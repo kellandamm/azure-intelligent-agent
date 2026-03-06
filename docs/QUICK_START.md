@@ -12,16 +12,22 @@
 
 ---
 
-## Step 1: Configure Parameters (5 minutes)
+## Step 1: Initialize and Configure (5 minutes)
 
-1. Open `bicep/main.bicepparam`
-2. Replace these values:
+### Option A: Using azd (Recommended)
+
+```bash
+# Initialize your environment
+azd init
+# When prompted, enter an environment name (e.g. prod, dev)
+
+# Set location
+azd env set AZURE_LOCATION eastus2
+```
+
+Then open `bicep/main.bicepparam` and fill in **only your external service credentials** (`appName` and `sqlServerName` are auto-generated and do not need to be set):
 
 ```bicep
-// REQUIRED - Change these
-param appName = 'mycompany-agents'  // 3-20 chars, unique
-param sqlServerName = 'mycompany-sql'  // globally unique
-
 // Azure OpenAI (from Azure Portal)
 param azureOpenAIEndpoint = 'https://your-openai.openai.azure.com/'
 param azureOpenAIApiKey = '<from Azure Portal → Keys>'
@@ -45,32 +51,26 @@ param powerbiClientId = '<service principal client ID>'
 param powerbiTenantId = '<your tenant ID>'
 param powerbiClientSecret = '<service principal secret>'
 
-// SQL Admin (from Azure AD)
+// SQL AD Admin (get SID with: az ad user show --id <UPN> --query id -o tsv)
 param sqlAzureAdAdminLogin = 'admin@yourdomain.com'
-param sqlAzureAdAdminSid = '<Azure AD object ID>'
+param sqlAzureAdAdminSid = '<Azure AD object ID GUID>'
 ```
 
-3. Save the file
+### Option B: Manual (PowerShell)
+
+Open `bicep/main.bicepparam` and fill in the same values as above.
 
 ---
 
 ## Step 2: Deploy Infrastructure (8 minutes)
 
-### Option A: Automated Script (Recommended)
+### Option A: azd (Recommended)
 
-```powershell
-# PowerShell
-cd scripts
-./deploy.ps1 -ResourceGroupName "rg-myagents-prod" -Location "eastus2"
+```bash
+azd up
 ```
 
-The script will:
-- Create resource group
-- Deploy all Azure resources
-- Configure SQL access
-- Deploy application code
-
-### Option B: Manual Deployment
+### Option B: PowerShell Script
 
 ```bash
 # 1. Create resource group

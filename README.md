@@ -5,7 +5,7 @@
 [![Security](https://img.shields.io/badge/Security-Hardened-green)](SECURITY_REVIEW_REPORT.md)
 [![Score](https://img.shields.io/badge/Security_Score-75%2F100-yellow)](SECURITY_FIXES_APPLIED.md)
 [![Status](https://img.shields.io/badge/Status-Production_Ready-brightgreen)](docs/AZURE_FOUNDRY_MCP_DEPLOYMENT.md)
-[![Version](https://img.shields.io/badge/Version-1.2.0-blue)](docs/CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-1.3.0-blue)](docs/CHANGELOG.md)
 
 This comprehensive starter template enables you to deploy intelligent AI agent applications to Azure using Infrastructure as Code (Bicep) and Azure Developer CLI (azd). Perfect for building production-ready, secure, and scalable AI agent solutions.
 
@@ -17,12 +17,12 @@ Supports **optional Azure OpenAI deployment**! You can deploy Azure OpenAI with 
 
 ## 🆕 What's New in v1.3.0
 
-**M Policy Compliance + Pre-Deployment Validation** - Fixes  deny-policy blocks and adds a pre-flight validation script so policy errors are caught before `azd up` reaches ARM.
+**Azure Policy Compliance + Pre-Deployment Validation** - Addresses Azure subscription policy violations and adds a pre-flight validation script so policy errors are caught before `azd up` reaches ARM.
 
 ✅ **SQL Compliance Fixes** (bicep/modules/sqlServer.bicep):
 - `restrictOutboundNetworkAccess` now defaults to `'Enabled'` (was hardcoded `'Disabled'` — blocked by deny policy)
 - `AllowAllWindowsAzureIps` firewall rule is now conditional on `publicNetworkAccess == 'Enabled'` (removes redundant/flagged rule when private endpoint is used)
-- `administrators` block set **inline** on the SQL server resource — required by policy `AzureSQL_WithoutAzureADOnlyAuthentication_Deny` (SFI-ID4.2.2). Using separate child resources (`/administrators`, `/azureADOnlyAuthentications`) is not evaluated by ARM policy at validation time.
+- `administrators` block set **inline** on the SQL server resource, not as a separate child resource — ARM evaluates Azure AD-only authentication on the server resource itself at validation time, so `/administrators` child resources are not sufficient.
 - `@maxLength(36)` guard on `azureAdAdminSid` prevents placeholder values from reaching ARM and causing `InvalidResourceIdSegment`
 
 🛡️ **New: Pre-Deployment Policy Validator** (scripts/validate-policy-compliance.ps1):
@@ -65,8 +65,8 @@ Supports **optional Azure OpenAI deployment**! You can deploy Azure OpenAI with 
 - ✅ **Audit Logging:** All data access logged for compliance
 - ✅ **No Default Credentials:** Secure admin setup required (see [guide](CREATE_ADMIN_USER.md))
 - ✅ **SQL Private Endpoint:** SQL Server has public network access disabled; App Service connects via VNet private endpoint (policy compliant)
-- ✅ **SQL Outbound Restriction:** `restrictOutboundNetworkAccess: Enabled` on SQL server ( `GovDenyPolicies` compliant)
-- ✅ **Azure AD-only SQL Auth (Inline):** `administrators.azureADOnlyAuthentication` set inline on server resource — satisfies  `AzureSQL_WithoutAzureADOnlyAuthentication_Deny` (SFI-ID4.2.2) at ARM validation time
+- ✅ **SQL Outbound Restriction:** `restrictOutboundNetworkAccess: Enabled` prevents SQL from making arbitrary outbound connections
+- ✅ **Azure AD-only SQL Auth (Inline):** `administrators.azureADOnlyAuthentication` set inline on the SQL server resource, satisfying Azure Policy evaluation at ARM validation time
 - ✅ **AI Content Safety:** RAI policy enforces indirect attack protection and content filters on Azure OpenAI
 - ✅ **Pre-Deployment Validator:** `scripts/validate-policy-compliance.ps1` catches policy violations and bad parameter values before deployment
 
@@ -124,7 +124,7 @@ Before you begin, ensure you have:
    # Run against your target resource group (will be created if it doesn't exist)
    .\scripts\validate-policy-compliance.ps1 -ResourceGroup rg-myagent-prod
    ```
-   Fix any reported issues before proceeding. See [Troubleshooting: Policy Violations](#issue-deployment-blocked-by-mcaps-policy) for common fixes.
+   Fix any reported issues before proceeding. See the [Troubleshooting](#-troubleshooting) section for common policy violation fixes.
 
 6. **Deploy to Azure:**
    ```bash
@@ -238,8 +238,6 @@ $env:AZURE_RESOURCE_GROUP = "rg-myagents-prod"
 ---
 
 ## ⚡ Quick Redeploy (Code Only)
-
-### Using azd:
 
 ### Using azd:
 ```bash
@@ -384,7 +382,7 @@ The application includes four core services for business logic:
 | **Private DNS Zone** | Resolves `*.database.windows.net` to private IP inside VNet | No |
 | **Key Vault** | Secure secrets management | Yes |
 | **Application Insights** | Monitoring, logging, diagnostics | Yes |
-| **Log Analytics Workspace** | Centralised diagnostic logs (App Service, Key Vault) — MCSB required | Yes |
+| **Log Analytics Workspace** | Centralised diagnostic logs (App Service, Key Vault) | Yes |
 | **Container Registry** | Docker image storage (if using containers) | Yes |
 
 ---
@@ -772,11 +770,11 @@ Navigate to the application settings page and configure:
 
 Common violations and fixes:
 
-| Policy | Symptom | Fix |
+| Policy Violation | Symptom | Fix |
 |--------|---------|-----|
-| `AzureSQL_WithoutAzureADOnlyAuthentication_Deny` (SFI-ID4.2.2) | `RequestDisallowedByPolicy` on SQL server | `administrators` block must be **inline** on server resource — child `/administrators` resources are not evaluated at validation time |
-| `GovDenyPolicies` (outbound) | SQL server blocked | `restrictOutboundNetworkAccess: 'Enabled'` in sqlServer params |
-| `GovDenyPolicies` (public network) | SQL server blocked | `publicNetworkAccess: 'Disabled'` + VNet private endpoint required |
+| Azure AD-only authentication required | `RequestDisallowedByPolicy` on SQL server | `administrators` block must be **inline** on the server resource — child `/administrators` resources are not evaluated by policy at ARM validation time |
+| Outbound network access restricted | SQL server creation blocked | Set `restrictOutboundNetworkAccess: 'Enabled'` in sqlServer params |
+| Public network access not allowed | SQL server creation blocked | Set `publicNetworkAccess: 'Disabled'` and deploy VNet + private endpoint (the default) |
 
 #### Issue: `InvalidResourceIdSegment` on `parameters.properties.administrators.sid`
 **Solution**: `sqlAzureAdAdminSid` must be a valid GUID (Azure AD Object ID), not a UPN, email, or placeholder:
