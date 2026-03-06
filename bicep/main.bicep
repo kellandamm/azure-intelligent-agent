@@ -239,6 +239,9 @@ var tags = {
   DeployedDate: substring(deploymentTimestamp, 0, 10)
 }
 
+// azd requires this tag on the Web App resource to locate it during 'azd deploy'
+var webAppTags = union(tags, { 'azd-service-name': 'web' })
+
 // Generate JWT secret if not provided
 var generatedJwtSecret = uniqueString(resourceGroup().id, appName, deploymentTimestamp)
 var finalJwtSecret = empty(jwtSecretKey) ? generatedJwtSecret : jwtSecretKey
@@ -475,7 +478,7 @@ module appServiceModule 'modules/appService.bicep' = {
     appServicePlanName: '${resourceNamePrefix}-plan'
     webAppName: '${resourceNamePrefix}-app'
     location: location
-    tags: tags
+    tags: webAppTags
     appServicePlanSku: appServicePlanSku
     pythonVersion: '3.11'
     alwaysOn: true
