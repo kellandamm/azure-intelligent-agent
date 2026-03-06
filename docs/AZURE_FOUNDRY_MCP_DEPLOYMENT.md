@@ -12,9 +12,10 @@ This guide explains how to deploy the application using **Azure AI Foundry agent
 
 ## Prerequisites
 
-1. Azure AI Foundry project with agents created
-2. Existing Container Apps environment (configure your environment name)
-3. Azure Container Registry (configure your ACR name)
+1. Python 3.10+ installed (`python --version`)
+2. Azure AI Foundry project with agents created
+3. Existing Container Apps environment (configure your environment name)
+4. Azure Container Registry (configure your ACR name)
 
 ## Deployment Options
 

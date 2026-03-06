@@ -76,7 +76,28 @@ azd auth login
 az login
 ```
 
-### 4. Application Code
+### 4. Python 3.10+
+
+**Windows:**
+```powershell
+winget install Python.Python.3.10
+```
+
+**macOS/Linux:**
+```bash
+# macOS
+brew install python@3.10
+
+# Linux (Ubuntu/Debian)
+sudo apt-get install python3.10
+```
+
+**Verify:**
+```bash
+python --version
+```
+
+### 5. Application Code
 
 Ensure your application code is in the `app/` folder with:
 - `main.py`

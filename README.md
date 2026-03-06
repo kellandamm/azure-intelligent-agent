@@ -458,6 +458,7 @@ Client Secret: <create in Certificates & secrets>
 - **Application Administrator** in Azure AD (for service principal creation)
 
 ### 4. Local Tools
+- Python 3.10+ ([Install](https://www.python.org/downloads/)) — required for local development and validation scripts
 - PowerShell 7.0+ (Windows/Mac/Linux) OR Bash 4.0+
 - Git (optional, for cloning)
 

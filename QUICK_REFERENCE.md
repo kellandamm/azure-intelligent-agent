@@ -137,6 +137,9 @@ az group delete --name "rg-myagents-dev" --yes --no-wait
 ### Check Prerequisites:
 
 ```bash
+# Check Python
+python --version
+
 # Check azd
 azd version
 

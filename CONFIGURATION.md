@@ -18,11 +18,12 @@ This guide explains how to configure the Azure Intelligent Agent application bef
 
 Before configuring the application, ensure you have:
 
-1. **Azure Subscription** with appropriate permissions
-2. **Azure CLI** installed and authenticated (`az login`)
-3. **Azure OpenAI Service** deployed (or access to an existing instance)
-4. **Azure SQL Database** or **Microsoft Fabric SQL Database** (for data storage)
-5. **Service Principal** (optional, for Fabric/Power BI integration)
+1. **Python 3.10+** installed ([Install](https://www.python.org/downloads/))
+2. **Azure Subscription** with appropriate permissions
+3. **Azure CLI** installed and authenticated (`az login`)
+4. **Azure OpenAI Service** deployed (or access to an existing instance)
+5. **Azure SQL Database** or **Microsoft Fabric SQL Database** (for data storage)
+6. **Service Principal** (optional, for Fabric/Power BI integration)
 
 ---
 

@@ -6,9 +6,10 @@ For security reasons, the default admin user with password `Admin@123` has been 
 
 ## Prerequisites
 
-1. Database schema deployed (`auth_schema.sql`)
-2. Application running with authentication enabled
-3. Access to the application API
+1. Python 3.10+ installed (`python --version`)
+2. Database schema deployed (`auth_schema.sql`)
+3. Application running with authentication enabled
+4. Access to the application API
 
 ---
 

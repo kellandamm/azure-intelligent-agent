@@ -3,7 +3,9 @@
 ## 🚀 Deploy in 15 Minutes
 
 ### Prerequisites Checklist
+- [ ] Python 3.10+ installed (`python --version`)
 - [ ] Azure CLI installed (`az --version`)
+- [ ] Azure Developer CLI (azd) installed (`azd version`)
 - [ ] Logged in to Azure (`az login`)
 - [ ] Azure OpenAI resource with GPT-4 model deployed
 - [ ] Azure AI Foundry project created
