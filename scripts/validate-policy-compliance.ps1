@@ -97,6 +97,85 @@ if ($rgExists) {
     Write-Info  "Target location: $Location"
 }
 
+# ── 1b. Parameter health checks (catches bad values before hitting ARM) ─────────
+Write-Section 'Parameter health checks'
+
+$paramHealthPass = $true
+
+if ($null -ne $parametersPath) {
+    # Detect .bicepparam files (using keyword) vs JSON
+    $paramRaw = Get-Content $parametersPath -Raw
+
+    # Helper: extract a raw value from either .bicepparam (param x = 'val') or .json parameters
+    function Get-ParamValue ([string]$Content, [string]$ParamName) {
+        # bicepparam: param sqlAzureAdAdminSid = 'xxx'
+        if ($Content -match "param\s+$ParamName\s*=\s*'([^']*)'") { return $Matches[1] }
+        # parameters.json: "sqlAzureAdAdminSid": { "value": "xxx" }
+        # Use -f format so we never embed double-quotes inside a double-quoted string
+        $jsonPattern = '"{0}"\s*:\s*\{{[^}}]*"value"\s*:\s*"([^"]*)"' -f $ParamName
+        if ($Content -match $jsonPattern) { return $Matches[1] }
+        return $null
+    }
+
+    $guidPattern = '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+    $placeholderPattern = '<[^>]+>|REPLACE|YOUR_|<FILL|TODO'
+
+    # --- sqlAzureAdAdminSid ---
+    $sid = Get-ParamValue $paramRaw 'sqlAzureAdAdminSid'
+    if ($null -eq $sid) {
+        Write-Warn 'sqlAzureAdAdminSid not found in parameters file — will use Bicep default (empty)'
+        Write-Info '  If sqlUseAzureAuth=true, Azure AD admin details are required.'
+        Write-Info '  Get the Object ID: az ad user show --id <UPN> --query id -o tsv'
+    } elseif ([string]::IsNullOrWhiteSpace($sid) -or $sid -eq '') {
+        Write-Warn 'sqlAzureAdAdminSid is empty — ARM will reject if Azure AD auth is enabled'
+        Write-Info '  Get the Object ID: az ad user show --id <UPN> --query id -o tsv'
+        $paramHealthPass = $false
+    } elseif ($sid -match $placeholderPattern) {
+        Write-Fail "sqlAzureAdAdminSid is still a placeholder: '$sid'"
+        Write-Info '  This causes: InvalidResourceIdSegment on parameters.properties.administrators.sid'
+        Write-Info '  Fix: replace with real Object ID from Azure AD'
+        Write-Info '  Get it: az ad user show --id <UPN> --query id -o tsv'
+        $paramHealthPass = $false
+        $overallPass = $false
+    } elseif ($sid -notmatch $guidPattern) {
+        Write-Fail "sqlAzureAdAdminSid '$sid' is not a valid GUID (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)"
+        Write-Info '  This causes: InvalidResourceIdSegment on parameters.properties.administrators.sid'
+        Write-Info '  Fix: ensure the value is the Azure AD Object ID, not a UPN/email/display name'
+        Write-Info '  Get it: az ad user show --id <UPN> --query id -o tsv'
+        $paramHealthPass = $false
+        $overallPass = $false
+    } else {
+        Write-Pass "sqlAzureAdAdminSid is a valid GUID: $sid"
+    }
+
+    # --- sqlAzureAdAdminLogin ---
+    $login = Get-ParamValue $paramRaw 'sqlAzureAdAdminLogin'
+    if ($null -ne $login -and $login -match $placeholderPattern) {
+        Write-Fail "sqlAzureAdAdminLogin is still a placeholder: '$login'"
+        $paramHealthPass = $false
+        $overallPass = $false
+    } elseif ($null -ne $login -and -not [string]::IsNullOrWhiteSpace($login)) {
+        Write-Pass "sqlAzureAdAdminLogin: $login"
+    }
+
+    # --- Cross-check: if one is set, both must be set ---
+    $sidSet   = $null -ne $sid   -and -not [string]::IsNullOrWhiteSpace($sid)   -and $sid   -notmatch $placeholderPattern
+    $loginSet = $null -ne $login -and -not [string]::IsNullOrWhiteSpace($login) -and $login -notmatch $placeholderPattern
+    if ($sidSet -xor $loginSet) {
+        Write-Fail 'sqlAzureAdAdminLogin and sqlAzureAdAdminSid must both be set (or both empty)'
+        Write-Info "  Login : $(if ($loginSet) { $login } else { '(missing)' })"
+        Write-Info "  SID   : $(if ($sidSet)   { $sid   } else { '(missing)' })"
+        $paramHealthPass = $false
+        $overallPass = $false
+    }
+
+    if ($paramHealthPass -and -not ($overallPass -eq $false)) {
+        Write-Pass 'Parameter values look healthy'
+    }
+} else {
+    Write-Warn 'No parameters file found — skipping parameter health checks'
+}
+
 # ── 2. Bicep template validation ──────────────────────────────────────────────
 Write-Section 'Bicep template validation  (az deployment group validate)'
 
@@ -290,6 +369,15 @@ $checks += @(
         Name    = "VNet integration is enabled for private endpoint connectivity"
         Pass    = $mainContent -match "param enableVnetIntegration bool = true"
         Fix     = "Set enableVnetIntegration default to true in main.bicep"
+    }
+    @{
+        # ARM returns InvalidResourceIdSegment when the SID is not a valid GUID.
+        # The @maxLength(36) constraint on the parameter prevents oversized/placeholder values
+        # from reaching ARM; combined with the parameter health check above this catches the
+        # common 'still a placeholder' mistake at script time rather than deploy time.
+        Name    = 'SQL azureAdAdminSid has @maxLength(36) guard (prevents placeholder reaching ARM)'
+        Pass    = $sqlContent -match '@maxLength\(36\)' -and $sqlContent -match 'param azureAdAdminSid'
+        Fix     = "Add '@maxLength(36)' decorator on param azureAdAdminSid in sqlServer.bicep"
     }
 )
 

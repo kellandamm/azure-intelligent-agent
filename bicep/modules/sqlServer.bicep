@@ -19,10 +19,15 @@ param administratorLogin string = ''
 @secure()
 param administratorLoginPassword string = ''
 
-@description('Azure AD admin login name')
+@description('Azure AD admin login name (UPN or display name, e.g. admin@contoso.com)')
 param azureAdAdminLogin string = ''
 
-@description('Azure AD admin object ID (SID)')
+@description('''Azure AD admin Object ID - MUST be a valid GUID (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx).
+Get it with: az ad user show --id <UPN> --query id -o tsv
+Leave empty to skip inline AD admin configuration.
+WARNING: An invalid value (placeholder, email, empty path segment) causes ARM error
+InvalidResourceIdSegment on parameters.properties.administrators.sid.''')
+@maxLength(36)
 param azureAdAdminSid string = ''
 
 @description('Enable Azure AD-only authentication')

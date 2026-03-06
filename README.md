@@ -15,7 +15,24 @@ Supports **optional Azure OpenAI deployment**! You can deploy Azure OpenAI with 
 
 ---
 
-## 🆕 What's New in v1.2.0
+## 🆕 What's New in v1.3.0
+
+**M Policy Compliance + Pre-Deployment Validation** - Fixes  deny-policy blocks and adds a pre-flight validation script so policy errors are caught before `azd up` reaches ARM.
+
+✅ **SQL Compliance Fixes** (bicep/modules/sqlServer.bicep):
+- `restrictOutboundNetworkAccess` now defaults to `'Enabled'` (was hardcoded `'Disabled'` — blocked by deny policy)
+- `AllowAllWindowsAzureIps` firewall rule is now conditional on `publicNetworkAccess == 'Enabled'` (removes redundant/flagged rule when private endpoint is used)
+- `administrators` block set **inline** on the SQL server resource — required by policy `AzureSQL_WithoutAzureADOnlyAuthentication_Deny` (SFI-ID4.2.2). Using separate child resources (`/administrators`, `/azureADOnlyAuthentications`) is not evaluated by ARM policy at validation time.
+- `@maxLength(36)` guard on `azureAdAdminSid` prevents placeholder values from reaching ARM and causing `InvalidResourceIdSegment`
+
+🛡️ **New: Pre-Deployment Policy Validator** (scripts/validate-policy-compliance.ps1):
+- **Parameter health checks** — catches unfilled placeholders, empty GUID fields, and mismatched login/SID pairs *before* hitting ARM
+- **Bicep template validation** — `az bicep build` (new RG) or `az deployment group validate` (existing RG), surfaces policy violation details
+- **What-if preview** — `az deployment group what-if` shows resource diffs and any policy blocks
+- **Active deny-policy audit** — lists enforced policy assignments and flags SQL/network/auth-related ones
+- **Static property checks** — 9 template property checks with exact fix instructions
+
+## Previous: v1.2.0
 
 **Three-Factor Architecture Implementation** - Major architectural improvement for maintainability and testability!
 
@@ -24,12 +41,6 @@ Supports **optional Azure OpenAI deployment**! You can deploy Azure OpenAI with 
 - `ChatService` - Chat processing with RLS context
 - `AdminService` - Configuration & health checks
 - `AnalyticsService` - Metrics & insights
-
-✨ **New Route Modules**:
-- `routes_pages.py` - HTML page routes
-- `routes_chat.py` - Chat API endpoints
-- `routes_admin_api.py` - Admin API endpoints
-- `routes_analytics_api.py` - Analytics API endpoints
 
 ✨ **Testing & Quality**:
 - 14 unit tests for services layer
@@ -53,9 +64,11 @@ Supports **optional Azure OpenAI deployment**! You can deploy Azure OpenAI with 
 - ✅ **RLS Infrastructure:** Database-level Row-Level Security ready to activate
 - ✅ **Audit Logging:** All data access logged for compliance
 - ✅ **No Default Credentials:** Secure admin setup required (see [guide](CREATE_ADMIN_USER.md))
-- ✅ **SQL Private Endpoint:** SQL Server has public network access disabled; App Service connects via VNet private endpoint (MCAPS policy compliant)
-- ✅ **Azure AD-only SQL Auth:** SQL Server uses managed identity — no SQL username/password in-transit
+- ✅ **SQL Private Endpoint:** SQL Server has public network access disabled; App Service connects via VNet private endpoint (policy compliant)
+- ✅ **SQL Outbound Restriction:** `restrictOutboundNetworkAccess: Enabled` on SQL server ( `GovDenyPolicies` compliant)
+- ✅ **Azure AD-only SQL Auth (Inline):** `administrators.azureADOnlyAuthentication` set inline on server resource — satisfies  `AzureSQL_WithoutAzureADOnlyAuthentication_Deny` (SFI-ID4.2.2) at ARM validation time
 - ✅ **AI Content Safety:** RAI policy enforces indirect attack protection and content filters on Azure OpenAI
+- ✅ **Pre-Deployment Validator:** `scripts/validate-policy-compliance.ps1` catches policy violations and bad parameter values before deployment
 
 ### 📋 Before Production Deployment
 - [ ] Generate unique `JWT_SECRET` - never use defaults!
@@ -88,30 +101,32 @@ Before you begin, ensure you have:
    cd azure-intelligent-agent
    ```
 
-2. **Configure your environment:**
+2. **Initialize the azd environment:**
    ```bash
-   # Copy environment template
-   cd app
-   cp .env.example .env
-   
-   # Edit .env with your Azure resource details
-   # See CONFIGURATION.md for detailed instructions
+   azd init
+   ```
+   This creates a `.azure/` folder and prompts for an environment name (e.g. `prod`, `dev`).  
+   Resource names are auto-generated — you do not need to specify them.
+
+3. **Set your target subscription and location:**
+   ```bash
+   azd env set AZURE_LOCATION eastus2
+   # Optional — defaults to your current az CLI subscription:
+   azd env set AZURE_SUBSCRIPTION_ID <your-subscription-id>
    ```
 
-3. **Set deployment variables** (only resource group is required — resource names are auto-generated):
+4. **Configure external service credentials** in `bicep/main.bicepparam`:
+   - Replace all `<REPLACE_WITH_*>` placeholders (Azure OpenAI, Fabric, Power BI)
+   - Set `sqlAzureAdAdminLogin` and `sqlAzureAdAdminSid` (get the SID with `az ad user show --id <UPN> --query id -o tsv`)
+
+5. **Validate policy compliance before deploying:**
    ```powershell
-   # PowerShell
-   $env:AZURE_RESOURCE_GROUP = "rg-myagent-prod"
-   # appName and sqlServerName are auto-generated from the resource group ID
-   # Optional: uncomment param appName in bicep/main.bicepparam to use a custom name
+   # Run against your target resource group (will be created if it doesn't exist)
+   .\scripts\validate-policy-compliance.ps1 -ResourceGroup rg-myagent-prod
    ```
-   
-   ```bash
-   # Bash/Linux
-   export AZURE_RESOURCE_GROUP="rg-myagent-prod"
-   ```
+   Fix any reported issues before proceeding. See [Troubleshooting: Policy Violations](#issue-deployment-blocked-by-mcaps-policy) for common fixes.
 
-4. **Deploy to Azure:**
+6. **Deploy to Azure:**
    ```bash
    azd up
    ```
@@ -143,17 +158,28 @@ Choose your preferred deployment method:
 **The simplest way to deploy** — resource names are auto-generated, just provide your external service credentials:
 
 ```bash
-# 1. Fill in external service credentials in bicep/main.bicepparam
+# 1. Initialize environment (first time only)
+azd init
+# Prompts for environment name (e.g. dev, prod) and creates .azure/ config folder
+
+# 2. Set target location
+azd env set AZURE_LOCATION eastus2
+
+# 3. Fill in external service credentials in bicep/main.bicepparam
 #    (appName and sqlServerName are auto-generated — no manual editing needed)
 
-# 2. One command deploys everything!
+# 4. Validate policy compliance (recommended before every deploy)
+.\scripts\validate-policy-compliance.ps1 -ResourceGroup <your-resource-group>
+
+# 5. Deploy everything!
 azd up
 ```
 
-- ✅ **Simplest** - Just `azd up`
+- ✅ **Simplest** - `azd init` once, then `azd up`
 - ✅ **Environment management** - Easy dev/staging/prod workflows
 - ✅ **Cross-platform** - Windows, macOS, Linux
 - ✅ **Built-in monitoring** - `azd monitor`
+- ✅ **Pre-flight validation** - Catch policy blocks before they fail a real deploy
 
 📖 **[Full azd Guide](docs/AZD_DEPLOYMENT_GUIDE.md)**
 
@@ -235,7 +261,7 @@ azd deploy  # 3 minutes
   - Azure Key Vault for secrets management
   - Managed identities for Azure AD authentication
   - HTTPS-only endpoints with TLS 1.2+
-  - SQL Server private endpoint (no public network access) — MCAPS compliant
+  - SQL Server private endpoint (no public network access) — compliant
   - Row-Level Security (RLS) for SQL
 - **Production Ready**: Application Insights monitoring, health checks, auto-scaling support
 - **Flexible Configuration**: Support for dev/staging/prod environments
@@ -351,10 +377,14 @@ The application includes four core services for business logic:
 |----------|---------|----------|
 | **App Service Plan** | Hosts the web application (Linux, Python 3.11) | No |
 | **App Service** | FastAPI application with Agent Framework | No |
-| **SQL Server** | Stores application data with RLS | No |
+| **Virtual Network** | Isolates SQL behind private endpoint; routes App Service outbound traffic (required) | No |
+| **SQL Server** | Stores application data with RLS — public network access disabled, Entra-only auth | No |
 | **SQL Database** | Agent data, user authentication, analytics | No |
+| **SQL Private Endpoint** | Private IP connectivity from App Service to SQL via VNet (no public internet) | No |
+| **Private DNS Zone** | Resolves `*.database.windows.net` to private IP inside VNet | No |
 | **Key Vault** | Secure secrets management | Yes |
 | **Application Insights** | Monitoring, logging, diagnostics | Yes |
+| **Log Analytics Workspace** | Centralised diagnostic logs (App Service, Key Vault) — MCSB required | Yes |
 | **Container Registry** | Docker image storage (if using containers) | Yes |
 
 ---
@@ -733,6 +763,30 @@ Navigate to the application settings page and configure:
 ## 🐛 Troubleshooting
 
 ### Common Issues
+
+#### Issue: Deployment blocked by policy (`RequestDisallowedByPolicy`)
+**Solution**: Run the pre-deployment validator to identify the exact policy and fix:
+```powershell
+.\scripts\validate-policy-compliance.ps1 -ResourceGroup <your-rg>
+```
+
+Common violations and fixes:
+
+| Policy | Symptom | Fix |
+|--------|---------|-----|
+| `AzureSQL_WithoutAzureADOnlyAuthentication_Deny` (SFI-ID4.2.2) | `RequestDisallowedByPolicy` on SQL server | `administrators` block must be **inline** on server resource — child `/administrators` resources are not evaluated at validation time |
+| `GovDenyPolicies` (outbound) | SQL server blocked | `restrictOutboundNetworkAccess: 'Enabled'` in sqlServer params |
+| `GovDenyPolicies` (public network) | SQL server blocked | `publicNetworkAccess: 'Disabled'` + VNet private endpoint required |
+
+#### Issue: `InvalidResourceIdSegment` on `parameters.properties.administrators.sid`
+**Solution**: `sqlAzureAdAdminSid` must be a valid GUID (Azure AD Object ID), not a UPN, email, or placeholder:
+```powershell
+# Get the correct GUID
+az ad user show --id admin@yourdomain.com --query id -o tsv
+# Then set it in bicep/main.bicepparam:
+# param sqlAzureAdAdminSid = '<paste-guid-here>'
+```
+The validator catches this automatically under **Parameter health checks**.
 
 #### Issue: Deployment fails with "SQL Server name already exists"
 **Solution**: Change `sqlServerName` parameter to a globally unique value

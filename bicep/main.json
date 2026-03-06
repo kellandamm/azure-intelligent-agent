@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.38.33.27573",
-      "templateHash": "10283523611579425708"
+      "templateHash": "5291870106567639283"
     }
   },
   "parameters": {
@@ -1619,7 +1619,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.38.33.27573",
-              "templateHash": "16702976963622539216"
+              "templateHash": "4267627716555504970"
             }
           },
           "parameters": {
@@ -1660,14 +1660,15 @@
               "type": "string",
               "defaultValue": "",
               "metadata": {
-                "description": "Azure AD admin login name"
+                "description": "Azure AD admin login name (UPN or display name, e.g. admin@contoso.com)"
               }
             },
             "azureAdAdminSid": {
               "type": "string",
               "defaultValue": "",
+              "maxLength": 36,
               "metadata": {
-                "description": "Azure AD admin object ID (SID)"
+                "description": "Azure AD admin Object ID - MUST be a valid GUID (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx).\nGet it with: az ad user show --id <UPN> --query id -o tsv\nLeave empty to skip inline AD admin configuration.\nWARNING: An invalid value (placeholder, email, empty path segment) causes ARM error\nInvalidResourceIdSegment on parameters.properties.administrators.sid."
               }
             },
             "azureADOnlyAuthentication": {
