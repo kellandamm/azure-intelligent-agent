@@ -149,6 +149,8 @@ azd init
 ### Step 2: Configure Environment Variables
 
 ```bash
+Set these only if you want to customize otherwise follow the note:
+
 # Set required variables
 azd env set AZURE_APP_NAME "myagents"
 
@@ -158,7 +160,7 @@ azd env set AZURE_OPENAI_MODEL_NAME "gpt-4o"
 
 # Or: Use existing Azure OpenAI
 azd env set AZURE_OPENAI_ENDPOINT "https://your-openai.openai.azure.com/"
-azd env set AZURE_OPENAI_DEPLOYMENT_NAME "gpt-4o"
+azd env set AZURE_OPENAI_DEPLOYMENT_NAME "gpt-5.2"
 azd env set AZURE_OPENAI_API_KEY "your-api-key"
 
 # Azure AI Foundry (if using)
