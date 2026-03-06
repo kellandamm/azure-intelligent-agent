@@ -61,6 +61,13 @@ param minimalTlsVersion string = '1.2'
 ])
 param publicNetworkAccess string = 'Disabled'
 
+@description('Restrict outbound network access for SQL server. Set Enabled for MCAPS compliance — prevents SQL from making arbitrary outbound connections outside allowed resources.')
+@allowed([
+  'Enabled'
+  'Disabled'
+])
+param restrictOutboundNetworkAccess string = 'Enabled'
+
 // ========================================
 // Resources
 // ========================================
@@ -77,36 +84,29 @@ resource sqlServer 'Microsoft.Sql/servers@2023-05-01-preview' = {
     administratorLoginPassword: azureADOnlyAuthentication ? null : administratorLoginPassword
     minimalTlsVersion: minimalTlsVersion
     publicNetworkAccess: publicNetworkAccess
-    restrictOutboundNetworkAccess: 'Disabled'
+    restrictOutboundNetworkAccess: restrictOutboundNetworkAccess
+    // Inline administrators block — REQUIRED by MCAPS deny policy:
+    // AzureSQL_WithoutAzureADOnlyAuthentication_Deny (SFI-ID4.2.2 SQL DB - Safe Secrets Standard).
+    //
+    // The policy evaluates properties.administrators.azureADOnlyAuthentication on the
+    // Microsoft.Sql/servers resource itself at ARM validation time, BEFORE any child
+    // resources (/administrators, /azureADOnlyAuthentications) are deployed. Using a
+    // separate child resource means the server-level property is absent during validation
+    // and the deny policy fires. Setting it inline here ensures the check is satisfied.
+    administrators: (!empty(azureAdAdminLogin) && !empty(azureAdAdminSid)) ? {
+      administratorType: 'ActiveDirectory'
+      login: azureAdAdminLogin
+      sid: azureAdAdminSid
+      tenantId: subscription().tenantId
+      azureADOnlyAuthentication: azureADOnlyAuthentication
+    } : null
   }
 }
 
-// Azure AD Administrator
-resource sqlServerAzureAdAdmin 'Microsoft.Sql/servers/administrators@2023-05-01-preview' = if (!empty(azureAdAdminLogin) && !empty(azureAdAdminSid)) {
-  parent: sqlServer
-  name: 'ActiveDirectory'
-  properties: {
-    administratorType: 'ActiveDirectory'
-    login: azureAdAdminLogin
-    sid: azureAdAdminSid
-    tenantId: subscription().tenantId
-  }
-}
-
-// Azure AD-only authentication (separate resource)
-resource azureAdOnlyAuth 'Microsoft.Sql/servers/azureADOnlyAuthentications@2023-05-01-preview' = if (azureADOnlyAuthentication && !empty(azureAdAdminLogin)) {
-  parent: sqlServer
-  name: 'Default'
-  properties: {
-    azureADOnlyAuthentication: true
-  }
-  dependsOn: [
-    sqlServerAzureAdAdmin
-  ]
-}
-
-// Allow Azure services firewall rule
-resource allowAzureServices 'Microsoft.Sql/servers/firewallRules@2023-05-01-preview' = {
+// Allow Azure services firewall rule — only relevant when public network access is Enabled.
+// When publicNetworkAccess is Disabled, SQL is reachable only via private endpoint and
+// this rule has no effect; omitting it reduces attack surface and avoids policy flags.
+resource allowAzureServices 'Microsoft.Sql/servers/firewallRules@2023-05-01-preview' = if (publicNetworkAccess == 'Enabled') {
   parent: sqlServer
   name: 'AllowAllWindowsAzureIps'
   properties: {

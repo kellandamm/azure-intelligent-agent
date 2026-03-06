@@ -440,8 +440,10 @@ module sqlServerModule 'modules/sqlServer.bicep' = {
     enableAudit: true
     enableThreatDetection: true
     enableVulnerabilityAssessment: enableSqlVulnerabilityAssessment
-    // Set Disabled to comply with MCAPS deny policy; connectivity goes through private endpoint
+    // MCAPS deny policy: SQL public network access must be Disabled; use private endpoint for connectivity.
     publicNetworkAccess: 'Disabled'
+    // MCAPS deny policy: SQL outbound network access must be restricted.
+    restrictOutboundNetworkAccess: 'Enabled'
   }
 }
 
