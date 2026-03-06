@@ -223,8 +223,8 @@ After provisioning, you'll see instructions to configure SQL database access:
 ```sql
 -- Run these commands in Azure Portal → SQL Database → Query editor:
 CREATE USER [change-to-appservice-name] FROM EXTERNAL PROVIDER;
-ALTER ROLE db_datareader ADD MEMBER [webapp-myagents-dev];
-ALTER ROLE db_datawriter ADD MEMBER [webapp-myagents-dev];
+ALTER ROLE db_datareader ADD MEMBER [change-to-appservice-name];
+ALTER ROLE db_datawriter ADD MEMBER [change-to-appservice-name];
 ```
 
 ---
