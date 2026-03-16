@@ -272,6 +272,19 @@ BEGIN
 END;
 GO
 
+-- Clear user context at session end (CRITICAL: prevents context leaking across pooled connections)
+CREATE OR ALTER PROCEDURE Security.sp_ClearUserContext
+AS
+BEGIN
+    SET NOCOUNT ON;
+    EXEC sp_set_session_context @key = N'UserId',    @value = NULL;
+    EXEC sp_set_session_context @key = N'Username',  @value = NULL;
+    EXEC sp_set_session_context @key = N'UserEmail', @value = NULL;
+    EXEC sp_set_session_context @key = N'UserRoles', @value = NULL;
+    EXEC sp_set_session_context @key = N'UserRegion', @value = NULL;
+END;
+GO
+
 -- Log data access
 CREATE OR ALTER PROCEDURE Security.usp_LogDataAccess
     @UserID INT,

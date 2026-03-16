@@ -169,7 +169,9 @@ AI Foundry agents cannot be provisioned via Bicep — they must be created in th
 
 The script sets all App Settings and restarts the app automatically. Re-run it at any time to add or update IDs.
 
-### Power BI service principal
+### Power BI service principal _(optional)_
+
+> Skip this section if you don't need Power BI report embedding.
 
 The Power BI **service principal** (Azure AD app registration) can be created automatically:
 
@@ -188,6 +190,17 @@ The script prints exactly where to go for each step.
 ---
 
 ## Phase 4 — Enable Authentication
+
+### Deploy the security schema
+
+Before creating any users, run these two SQL files in order via **Azure Portal → SQL Database → Query Editor** (authenticate with your Azure AD account):
+
+1. `app/Fabric/auth_schema.sql` — creates Users, Roles, Permissions tables and stored procedures
+2. `app/Fabric/rls_security_policies.sql` — creates the Security schema, session context stored procs, and RLS predicate functions
+
+Both scripts are safe to re-run (they drop and recreate objects).
+
+For full details on roles, RLS, and territory assignments see [SECURITY_SETUP.md](SECURITY_SETUP.md).
 
 ### JWT secret — automated
 
@@ -213,13 +226,17 @@ Quick path via Azure Portal → SQL Database → Query Editor:
 
 ```sql
 -- Generate the bcrypt hash first (run locally):
--- python -c "import bcrypt; print(bcrypt.hashpw(b'Admin@123', bcrypt.gensalt()).decode())"
+-- py -c "import bcrypt; print(bcrypt.hashpw(b'YourPassword123!', bcrypt.gensalt()).decode())"
 
-INSERT INTO users (username, password_hash, role, is_active)
-VALUES ('admin', '<bcrypt-hash>', 'admin', 1);
+INSERT INTO dbo.Users (Username, Email, PasswordHash, FirstName, LastName)
+VALUES ('admin', 'admin@yourcompany.com', '<bcrypt-hash>', 'Admin', 'User');
+
+-- Assign SuperAdmin role (RoleID = 1)
+INSERT INTO dbo.UserRoles (UserID, RoleID)
+VALUES (SCOPE_IDENTITY(), 1);
 ```
 
-> Default password `Admin@123` — change immediately after first login via Settings → Change Password.
+> Change the password immediately after first login via Settings → Change Password.
 
 ---
 
@@ -264,7 +281,7 @@ All three must be in place for the App Service to reach SQL through the private 
 
 ---
 
-## Phase 6 — Fabric (Optional)
+## Phase 6 — Fabric 
 
 Microsoft Fabric is a SaaS service that cannot be provisioned via Bicep. All setup is done in the Fabric portal.
 
@@ -347,6 +364,6 @@ Ensure `enableVnetIntegration = true` in `main.bicepparam` (this is the default)
 
 Verify `AZURE_OPENAI_ENDPOINT` is set and the model deployment name (`AZURE_OPENAI_DEPLOYMENT`) matches what's deployed in Azure OpenAI.
 
-**Power BI not loading**
+**Power BI not loading** _(optional integration)_
 
 Verify the service principal (`powerbiClientId`) has at least Member access to the Power BI workspace, and that "Service principals can use Power BI APIs" is enabled in the Power BI Admin portal → Tenant settings.

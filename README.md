@@ -66,6 +66,7 @@ For the full step-by-step guide including AI services, authentication, Fabric, a
 | [docs/QUICK_START.md](docs/QUICK_START.md) | Full deployment walkthrough — infra → AI services → auth → SQL → Fabric → smoke tests |
 | [CONFIGURATION.md](CONFIGURATION.md) | All Bicep parameters and environment variables reference |
 | [CREATE_ADMIN_USER.md](CREATE_ADMIN_USER.md) | Create the first admin user after deployment |
+| [docs/SECURITY_SETUP.md](docs/SECURITY_SETUP.md) | Security schema, RLS, roles/permissions, and territory assignments |
 | [docs/AZD_DEPLOYMENT_GUIDE.md](docs/AZD_DEPLOYMENT_GUIDE.md) | Azure Developer CLI commands and environment management |
 | [docs/AZURE_FOUNDRY_MCP_DEPLOYMENT.md](docs/AZURE_FOUNDRY_MCP_DEPLOYMENT.md) | Alternative: AI Foundry + MCP server architecture |
 | [docs/FABRIC_DEPLOYMENT.md](docs/FABRIC_DEPLOYMENT.md) | Optional: Fabric workspace, synthetic data, and Azure Functions |
