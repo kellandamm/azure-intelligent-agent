@@ -115,6 +115,7 @@ try {
 } catch {
     Write-Warning-Custom "Not logged in to Azure. Running 'az login'..."
     az login
+    $account = az account show --output json | ConvertFrom-Json
 }
 
 # Check if Bicep template exists
@@ -206,22 +207,18 @@ if (-not $SkipInfrastructure) {
 # ========================================
 
 if (-not $SkipInfrastructure) {
-    Write-Step "Step 3: Configure SQL Database Access"
-    
-    Write-Warning-Custom "Manual step required!"
-    Write-Info "Grant the Web App managed identity access to SQL Database:"
-    Write-Host @"
+    Write-Step "Step 3: SQL Database Access"
 
-    1. Open Azure Portal → SQL Database → Query Editor
-    2. Run these SQL commands:
-    
-       CREATE USER [$($script:webAppName)] FROM EXTERNAL PROVIDER;
-       ALTER ROLE db_owner ADD MEMBER [$($script:webAppName)];
-    
-    3. Press Enter when done...
-"@ -ForegroundColor Yellow
-    
-    Read-Host "Press Enter to continue"
+    Write-Success "Automated — no manual action required"
+    Write-Info "The application grants its own managed identity database access on first startup."
+    Write-Info "Watch for this in the startup log:"
+    Write-Host "   ✅ Managed identity user [$($script:webAppName)] created and roles granted" -ForegroundColor DarkGray
+    Write-Host ""
+    Write-Info "If auto-grant fails (e.g. insufficient permissions on first boot), run this manually:"
+    Write-Host "   Azure Portal → SQL Database → Query Editor, then:" -ForegroundColor DarkGray
+    Write-Host "   CREATE USER [$($script:webAppName)] FROM EXTERNAL PROVIDER;" -ForegroundColor DarkGray
+    Write-Host "   ALTER ROLE db_owner ADD MEMBER [$($script:webAppName)];" -ForegroundColor DarkGray
+    Write-Host "   (See scripts/setup-sql-access.ps1 for a scriptable alternative)" -ForegroundColor DarkGray
 }
 
 # ========================================
@@ -304,7 +301,7 @@ Write-Host @"
 
 3. Monitor your application:
    - View logs: az webapp log tail --name $($script:webAppName) -g $ResourceGroupName
-   - App Service: https://portal.azure.com/#resource/subscriptions/.../resourceGroups/$ResourceGroupName/providers/Microsoft.Web/sites/$($script:webAppName)
+   - App Service: https://portal.azure.com/#resource/subscriptions/$($account.id)/resourceGroups/$ResourceGroupName/providers/Microsoft.Web/sites/$($script:webAppName)
 
 4. Troubleshooting:
    - Check deployment logs in Azure Portal

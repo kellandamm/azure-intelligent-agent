@@ -58,7 +58,7 @@ param azureOpenAIModelCapacity int = 10
 param azureOpenAISku string = 'S0'
 
 @description('Azure OpenAI service endpoint URL (required when deployAzureOpenAI=false)')
-param azureOpenAIEndpoint string = deployAzureOpenAI ? '' : ''
+param azureOpenAIEndpoint string = ''
 
 @description('Azure OpenAI deployment/model name (e.g., gpt-4o, gpt-35-turbo)')
 param azureOpenAIDeployment string = 'gpt-4o'
@@ -302,6 +302,7 @@ var baseAppSettings = [
   // Azure deployment settings
   { name: 'SCM_DO_BUILD_DURING_DEPLOYMENT', value: 'true' }
   { name: 'ENABLE_ORYX_BUILD', value: 'true' }
+  { name: 'WEBSITES_CONTAINER_START_TIME_LIMIT', value: '1800' }
   { name: 'WEBSITE_HTTPLOGGING_RETENTION_DAYS', value: '7' }
 ]
 
@@ -506,15 +507,9 @@ module keyVaultRoleAssignment 'modules/roleAssignment.bicep' = if (enableKeyVaul
   }
 }
 
-// Grant Web App access to SQL Database
-module sqlRoleAssignment 'modules/roleAssignment.bicep' = if (sqlUseAzureAuth) {
-  name: 'sql-roleAssignment'
-  params: {
-    principalId: appServiceModule.outputs.managedIdentityPrincipalId
-    roleDefinitionId: '00000000-0000-0000-0000-000000000000' // Placeholder - SQL roles handled separately
-    targetResourceId: sqlServerModule.outputs.resourceId
-  }
-}
+// NOTE: SQL managed identity user creation (CREATE USER ... FROM EXTERNAL PROVIDER)
+// is an in-database DDL operation and cannot be done through an ARM/Bicep role assignment.
+// It is handled automatically by setup_mi_user.py on first application startup.
 
 // ========================================
 // Outputs

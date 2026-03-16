@@ -95,6 +95,8 @@ For service principal setup instructions see [docs/QUICK_START.md](docs/QUICK_ST
 
 > ⚠️ `sqlAzureAdAdminLogin` and `sqlAzureAdAdminSid` **cannot be empty**. Azure Policy blocks deployment if the inline `administrators` block is missing from the SQL server resource.
 
+> The App Service managed identity is granted database access (`CREATE USER ... FROM EXTERNAL PROVIDER`) **automatically on first startup** — no manual SQL step required. If auto-grant fails, see Phase 5 of [docs/QUICK_START.md](docs/QUICK_START.md#phase-5--sql-access) for the fallback manual steps.
+
 ---
 
 ### Authentication & Security
@@ -102,11 +104,11 @@ For service principal setup instructions see [docs/QUICK_START.md](docs/QUICK_ST
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
 | `enableAuthentication` | No | `true` | Enable JWT auth and Row-Level Security |
-| `jwtSecretKey` | No | Auto-generated | JWT signing secret (provide your own for production) |
+| `jwtSecretKey` | No | **Auto-generated** | JWT signing secret — Bicep generates `uniqueString(...)` if left blank; stored in Key Vault automatically |
 | `jwtAlgorithm` | No | `HS256` | JWT algorithm (`HS256`, `HS384`, `HS512`) |
 | `jwtExpirationMinutes` | No | `43200` (30 days) | Token lifetime (60=1h, 1440=1d, 10080=7d) |
 
-Generate a strong secret: `python -c "import secrets; print(secrets.token_urlsafe(32))"`
+To use your own secret instead of the auto-generated one: `param jwtSecretKey = '<openssl rand -base64 32>'`
 
 ---
 

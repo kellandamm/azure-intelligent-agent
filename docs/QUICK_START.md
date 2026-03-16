@@ -11,7 +11,7 @@ Have these ready before starting:
 - [ ] **Azure CLI** installed and logged in (`az login`)
 - [ ] **Python 3.11+** installed
 - [ ] **Azure subscription** with Contributor access to a resource group
-- [ ] **Azure OpenAI** resource with a GPT-4o model deployed
+- [ ] **Microsoft Foundry** resource with a GPT-5.X model deployed
   - _Or set `deployAzureOpenAI = true` in parameters to deploy one as part of the Bicep template_
 - [ ] Your **Azure AD UPN**: `az ad signed-in-user show --query userPrincipalName -o tsv`
 - [ ] Your **Azure AD object ID**: `az ad signed-in-user show --query id -o tsv`
@@ -155,63 +155,64 @@ az keyvault secret show \
 
 ### Azure AI Foundry agents
 
-AI Foundry agents cannot be provisioned via Bicep. Create them manually:
+AI Foundry agents cannot be provisioned via Bicep — they must be created in the AI Foundry portal.
 
 1. Open [https://ai.azure.com](https://ai.azure.com) and navigate to your project
 2. Go to **Agents** → **+ New agent**
 3. Create one agent for each role: Orchestrator, Sales, Operations, Analytics, Financial, Support
 4. Copy each agent ID (`asst_xxx...`)
-5. Apply the IDs as App Settings:
+5. Run the helper script — it prompts for each ID and applies them all in one step:
 
 ```powershell
-az webapp config appsettings set \
-  --name <app-name> --resource-group rg-myagents-prod \
-  --settings \
-    FABRIC_ORCHESTRATOR_AGENT_ID="asst_..." \
-    FABRIC_SALES_AGENT_ID="asst_..." \
-    FABRIC_REALTIME_AGENT_ID="asst_..."
+.\scripts\set-agent-ids.ps1 -ResourceGroupName "rg-myagents-prod" -AppName "<app-name>"
 ```
 
-6. Restart the app:
+The script sets all App Settings and restarts the app automatically. Re-run it at any time to add or update IDs.
+
+### Power BI service principal
+
+The Power BI **service principal** (Azure AD app registration) can be created automatically:
 
 ```powershell
-az webapp restart --name <app-name> --resource-group rg-myagents-prod
+# Creates the app registration + secret, prints all values, optionally applies them to App Service
+.\scripts\setup-powerbi.ps1 -ResourceGroupName "rg-myagents-prod" -AppName "<app-name>"
 ```
+
+Two steps remain in the portal after the script completes (they require tenant admin access):
+
+1. **Power BI Admin portal** → Tenant settings → Developer settings → Enable _"Service principals can use Power BI APIs"_ → add the service principal
+2. **Your Power BI workspace** → Access → add the service principal as **Member**
+
+The script prints exactly where to go for each step.
 
 ---
 
 ## Phase 4 — Enable Authentication
 
-### Generate a JWT secret
+### JWT secret — automated
 
-```bash
-# Python
-python -c "import secrets; print(secrets.token_urlsafe(32))"
+The Bicep template auto-generates a strong JWT secret if you leave `jwtSecretKey` blank in `main.bicepparam` (the default). The secret is stored in Key Vault and injected into App Settings as `JWT_SECRET` automatically. **No manual action required.**
+
+To use your own secret instead, set it before deploying:
+
+```bicep
+param jwtSecretKey = '<openssl rand -base64 32>'
 ```
 
-```powershell
-# PowerShell
--join ((65..90) + (97..122) + (48..57) | Get-Random -Count 32 | ForEach-Object {[char]$_})
-```
+Authentication is enabled by default (`enableAuthentication = true`). To disable it for a development environment:
 
-### Apply authentication settings
-
-```powershell
-az webapp config appsettings set \
-  --name <app-name> --resource-group rg-myagents-prod \
-  --settings \
-    JWT_SECRET="<your-generated-secret>" \
-    ENABLE_AUTHENTICATION="true"
+```bicep
+param enableAuthentication = false
 ```
 
 ### Create the first admin user
 
-See [CREATE_ADMIN_USER.md](../CREATE_ADMIN_USER.md) for full instructions.
+With authentication on, you need an initial admin account. See [CREATE_ADMIN_USER.md](../CREATE_ADMIN_USER.md) for full options.
 
 Quick path via Azure Portal → SQL Database → Query Editor:
 
 ```sql
--- Generate the bcrypt hash first:
+-- Generate the bcrypt hash first (run locally):
 -- python -c "import bcrypt; print(bcrypt.hashpw(b'Admin@123', bcrypt.gensalt()).decode())"
 
 INSERT INTO users (username, password_hash, role, is_active)
@@ -224,16 +225,30 @@ VALUES ('admin', '<bcrypt-hash>', 'admin', 1);
 
 ## Phase 5 — SQL Access
 
-The App Service connects to SQL using its managed identity. You must grant that identity access to the database.
+### Automated — runs on first startup
+
+The application grants its own managed identity database access (`CREATE USER ... FROM EXTERNAL PROVIDER`) on first startup. Watch for this in the startup log:
+
+```
+✅ Managed identity user [<app-name>] created and roles granted
+```
+
+**No manual action is required for a standard deployment.**
+
+### Fallback (if auto-grant fails)
+
+The auto-grant requires an Azure AD SQL administrator to already be configured on the server — set via `sqlAzureAdAdminLogin` and `sqlAzureAdAdminSid` in `main.bicepparam`. If the startup log shows a database access warning instead, grant access manually:
 
 1. Open **Azure Portal → SQL Database → Query Editor**
 2. Authenticate with your Azure AD account
-3. Run the following, replacing `<your-webapp-name>` with the actual app name:
+3. Run (replace `<webapp-name>` with the actual App Service name):
 
 ```sql
-CREATE USER [<your-webapp-name>] FROM EXTERNAL PROVIDER;
-ALTER ROLE db_owner ADD MEMBER [<your-webapp-name>];
+CREATE USER [<webapp-name>] FROM EXTERNAL PROVIDER;
+ALTER ROLE db_owner ADD MEMBER [<webapp-name>];
 ```
+
+4. Restart: `az webapp restart --name <webapp-name> -g rg-myagents-prod`
 
 ### Verify VNet connectivity
 
@@ -258,21 +273,15 @@ Microsoft Fabric is a SaaS service that cannot be provisioned via Bicep. All set
 3. Get the **workspace ID**: Settings → Properties → Workspace ID
 4. Create **agents**: Data Science → + Create Agent (one per required role)
 5. Copy each agent ID (`asst_xxx...`)
-6. Set the workspace ID in App Settings:
+6. Apply all IDs using the helper script (prompts for anything not passed as a flag):
 
 ```powershell
-az webapp config appsettings set \
-  --name <app-name> --resource-group rg-myagents-prod \
-  --settings FABRIC_WORKSPACE_ID="<workspace-GUID>"
+.\scripts\set-agent-ids.ps1 -ResourceGroupName "rg-myagents-prod" `
+                             -AppName "<app-name>" `
+                             -FabricWorkspaceId "<workspace-GUID>"
 ```
 
-7. If you added Fabric parameters to `main.bicepparam`, redeploy to apply them:
-
-```powershell
-.\scripts\deploy.ps1 -ResourceGroupName "rg-myagents-prod" `
-                     -AppName "<app-name>" `
-                     -SkipInfrastructure
-```
+The script applies all settings and restarts the app. Re-run it at any time to add remaining agent IDs.
 
 For Fabric SQL analytics and synthetic data generation see [FABRIC_DEPLOYMENT.md](FABRIC_DEPLOYMENT.md).
 
