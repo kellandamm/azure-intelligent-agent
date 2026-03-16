@@ -1,13 +1,16 @@
 #!/bin/bash
-# Azure App Service startup script for Python application
-# - Installs ODBC Driver 18 for SQL Server (system-level, once per container image)
-# - Uses a persistent virtual environment under /home/site/wwwroot/antenv
-#   so pip install only runs on first start (or after a fresh Oryx build).
+# Azure App Service startup script
+#
+# When Oryx builds are enabled (SCM_DO_BUILD_DURING_DEPLOYMENT=true), Oryx:
+#   - Installs dependencies into antenv at build time
+#   - Packages antenv into output.tar.zst
+#   - Extracts to /tmp/<hash>/ at runtime and activates the venv BEFORE calling this script
+#
+# So we must NOT unset PYTHONPATH or try to manage the venv ourselves.
+# We only need to: install ODBC (system-level), append wwwroot to PYTHONPATH,
+# then launch gunicorn.
 
 set -e
-
-VENV_DIR="/home/site/wwwroot/antenv"
-APP_DIR="/home/site/wwwroot"
 
 # ── Install ODBC Driver 18 (system-level, needed by pyodbc) ──────────────────
 if ! dpkg -l msodbcsql18 >/dev/null 2>&1; then
@@ -27,29 +30,16 @@ else
     echo "ODBC Driver 18 already installed."
 fi
 
-# ── Python virtual environment ────────────────────────────────────────────────
-cd "$APP_DIR"
+# ── PYTHONPATH: Add wwwroot for local module imports ─────────────────────────
+# Oryx has already activated the venv and set PYTHONPATH to the antenv site-packages.
+# Append /home/site/wwwroot so gunicorn workers can import local modules
+# (config, utils, app, etc.) on the forked subprocesses.
+export PYTHONPATH="${PYTHONPATH:+${PYTHONPATH}:}/home/site/wwwroot"
 
-# Clear any inherited PYTHONPATH that may conflict with local modules
-unset PYTHONPATH
-
-if [ -d "$VENV_DIR" ] && [ -f "$VENV_DIR/bin/activate" ]; then
-    echo "Activating existing virtual environment..."
-    source "$VENV_DIR/bin/activate"
-else
-    echo "No virtual environment found — creating and installing dependencies..."
-    python -m venv "$VENV_DIR"
-    source "$VENV_DIR/bin/activate"
-    pip install --upgrade pip
-    pip install --no-cache-dir -r requirements.txt
-    echo "Dependencies installed successfully."
-fi
-
-# Set PYTHONPATH so gunicorn workers can find local modules (config, utils, app, etc.)
-export PYTHONPATH=/home/site/wwwroot
+cd /home/site/wwwroot
 
 # ── Start application ─────────────────────────────────────────────────────────
-echo "Starting Gunicorn..."
+echo "Starting Gunicorn with PYTHONPATH=${PYTHONPATH}"
 exec gunicorn --bind=0.0.0.0:${PORT:-8000} \
               --workers=4 \
               --worker-class=uvicorn.workers.UvicornWorker \
