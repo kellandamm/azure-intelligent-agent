@@ -1,111 +1,137 @@
-# Azure AI Foundry + MCP Server Deployment Guide
+# Azure AI Foundry + MCP Server Deployment
 
-## Overview
+> **Alternative architecture.** This deploys the application to **Azure Container Apps** instead of Azure App Service. Use this path if you want native Azure AI Foundry agents with a dedicated MCP (Model Context Protocol) server for centralized function calling. If you just need to connect Foundry agent IDs to an App Service deployment, use the `set-agent-ids.ps1` script from [QUICK_START.md](QUICK_START.md) instead.
 
-This guide explains how to deploy the application using **Azure AI Foundry agents** with an **MCP (Model Context Protocol) server** architecture instead of the Agent Framework.
+---
 
 ## Architecture
 
-- **Main App**: FastAPI application using Azure AI Foundry native agents
-- **MCP Server**: Centralized function calling service (internal only)
-- **Deployment**: Azure Container Apps (reuses existing infrastructure)
+```
+Browser / API clients
+        │
+        ▼
+Azure Container Apps — Main App (FastAPI)
+        │
+        ├── Azure AI Foundry (agents via AIProjectClient)
+        │
+        └── MCP Server (Container App, internal only)
+             ├── POST /tools/sales/query
+             ├── POST /tools/deals/detail
+             ├── POST /tools/fabric/query
+             └── POST /tools/user/scope
+```
+
+**Key files:**
+
+| File | Purpose |
+|------|---------|
+| `app/app/azure_foundry_agent_manager.py` | Azure AI Foundry agent client |
+| `app/mcp_server_app.py` | MCP server — exposes tool endpoints to agents |
+| `app/Dockerfile.mcp` | Container image for MCP server |
+| `bicep/main-foundry-mcp.bicep` | Infrastructure template (Container Apps) |
+
+---
 
 ## Prerequisites
 
-1. Python 3.10+ installed (`python --version`)
-2. Azure AI Foundry project with agents created
-3. Existing Container Apps environment (configure your environment name)
-4. Azure Container Registry (configure your ACR name)
+- Azure AI Foundry project with agents created at [ai.azure.com](https://ai.azure.com)
+- Existing Azure Container Apps environment and Container Registry
+  _(or set `createNewEnvironment = true` in `main-foundry-mcp.bicep` to create new ones — ~$80/month vs ~$30/month reusing existing)_
+- `azd` CLI installed
 
-## Deployment Options
+---
 
-### Option 1: Reuse Existing Infrastructure (Recommended)
+## Deploy
 
-Uses your existing Container Apps environment and Container Registry.
+**1. Create agents in Azure AI Foundry portal**
 
-**Bicep Template**: `bicep/main-foundry-mcp.bicep`
+Navigate to [ai.azure.com](https://ai.azure.com) → your project → Agents → + New agent. Create one per required role and copy each agent ID (`asst_xxx...`).
 
-**Cost**: ~$30/month (only 2 new container apps)
+**2. Configure the azd environment**
 
-### Option 2: New Infrastructure
+```powershell
+azd env new production
+azd env set AZURE_LOCATION eastus2
+azd env set PROJECT_ENDPOINT            "<your-foundry-endpoint>"
+azd env set PROJECT_CONNECTION_STRING   "<your-connection-string>"
 
-Creates new resource group with all new resources.
+# Agent IDs
+azd env set FABRIC_ORCHESTRATOR_AGENT_ID    "asst_..."
+azd env set FABRIC_SALES_AGENT_ID           "asst_..."
+azd env set FABRIC_REALTIME_AGENT_ID        "asst_..."
+azd env set FABRIC_ANALYTICS_AGENT_ID       "asst_..."
+azd env set FABRIC_FINANCIAL_AGENT_ID       "asst_..."
+azd env set FABRIC_SUPPORT_AGENT_ID         "asst_..."
+azd env set FABRIC_OPERATIONS_AGENT_ID      "asst_..."
+```
 
-**Cost**: ~$80/month
+**3. Deploy**
 
-## Quick Deployment
+```powershell
+azd up
+```
 
-1. **Create agents in Azure AI Foundry portal** (ai.azure.com)
-2. **Configure environment**:
-   ```powershell
-   cd <your-repo-path>
-   azd env new production
-   azd env set AZURE_LOCATION eastus2
-   azd env set PROJECT_ENDPOINT "<your-foundry-endpoint>"
-   azd env set PROJECT_CONNECTION_STRING "<your-connection-string>"
-   azd env set FABRIC_ORCHESTRATOR_AGENT_ID "<agent-id>"
-   # ... set other agent IDs
-   ```
+---
 
-3. **Deploy**:
-   ```powershell
-   azd up
-   ```
+## Configuration reference
 
-## Key Files
-
-- `app/app/azure_foundry_agent_manager.py` - Azure AI Foundry agent manager
-- `app/mcp_server_app.py` - MCP server for function calling
-- `app/app/config.py` - Configuration with MCP settings
-- `app/Dockerfile.mcp` - MCP server container definition
-- `bicep/main-foundry-mcp.bicep` - Infrastructure template
-
-## Configuration
-
-Add to your `.env` or Azure App Settings:
+All can be set as Azure App Settings or in `.env`:
 
 ```env
 # Azure AI Foundry
 PROJECT_ENDPOINT=https://your-project.services.ai.azure.com/api/projects/your-project
-PROJECT_CONNECTION_STRING=your-connection-string
+PROJECT_CONNECTION_STRING=<your-connection-string>
 
-# MCP Server
+# MCP Server (defaults — override only if needed)
 ENABLE_MCP=true
 MCP_SERVER_HOST=mcp-server
 MCP_SERVER_PORT=3000
-
-# Agent IDs (from Azure AI Foundry portal)
-FABRIC_ORCHESTRATOR_AGENT_ID=asst_xxxxx
-FABRIC_SALES_AGENT_ID=asst_xxxxx
-FABRIC_REALTIME_AGENT_ID=asst_xxxxx
 ```
 
-## Benefits vs Agent Framework
+The MCP server defaults (`host=localhost`, `port=3000`, `enable_mcp=true`) work out of the box in the Container Apps environment where the MCP server is registered as an internal service named `mcp-server`.
 
-1. ✅ Native Azure AI Foundry integration
-2. ✅ Centralized function calling via MCP
-3. ✅ Better scalability and monitoring
-4. ✅ Simplified agent management
-5. ✅ Lower latency for tool execution
+---
 
-## Migration
+## Verify the deployment
 
-See the agentsdemos folder for complete migration guide from Agent Framework to Azure AI Foundry + MCP.
+Check the MCP server is responding:
 
-## Monitoring
+```powershell
+# Get the main app URL from the deployment output, then:
+curl https://<app-url>/health
 
-- Application Insights (reused from existing)
-- Container App logs: `azd logs`
-- Azure Portal: Monitor both container apps
+# MCP server is internal-only — test via the app's agent call
+# or tail Container App logs:
+azd logs
+azd logs mcp-server
+```
+
+---
 
 ## Troubleshooting
 
-### MCP Server Not Responding
-- Check internal DNS resolution
-- Verify MCP container is running
-- Check logs: `azd logs mcp-server`
+**MCP server not responding**
 
-### Agents Not Working
-- Verify agent IDs in configuration
-- Check PROJECT_CONNECTION_STRING is set
-- Ensure agents exist in Azure AI Foundry portal
+```powershell
+# Check container is running
+az containerapp show -n mcp-server -g <rg-name> --query "properties.runningStatus"
+
+# Tail logs
+azd logs mcp-server
+```
+
+Common causes: incorrect `MCP_SERVER_HOST` (must match the Container App name), or the MCP container failed to start (check for missing env vars).
+
+**Agents not working**
+
+- Verify agent IDs — copy from AI Foundry portal → Agents → select agent → ID field
+- Confirm `PROJECT_CONNECTION_STRING` is set (required for `AIProjectClient` to authenticate)
+- Ensure the managed identity has `Azure AI Developer` role on the AI Foundry project
+
+**Container App won't start**
+
+```powershell
+az containerapp logs show -n <app-name> -g <rg-name> --follow
+```
+
+Check that the Container Registry is accessible and the image was pushed successfully during `azd up`.
