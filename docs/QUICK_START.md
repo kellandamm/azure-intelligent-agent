@@ -1,248 +1,343 @@
-# Quick Deployment Guide
+# Deployment Guide
 
-## 🚀 Deploy in 15 Minutes
-
-### Prerequisites Checklist
-- [ ] Python 3.10+ installed (`python --version`)
-- [ ] Azure CLI installed (`az --version`)
-- [ ] Azure Developer CLI (azd) installed (`azd version`)
-- [ ] Logged in to Azure (`az login`)
-- [ ] Azure OpenAI resource with GPT-4 model deployed
-- [ ] Azure AI Foundry project created
-- [ ] Microsoft Fabric workspace with agents
-- [ ] Power BI service principal configured
+Deploy the Azure Intelligent Agent from zero to running in approximately 20 minutes.
 
 ---
 
-## Step 1: Initialize and Configure (5 minutes)
+## Prerequisites
 
-### Option A: Using azd (Recommended)
+Have these ready before starting:
 
-```bash
-# Initialize your environment
-azd init
-# When prompted, enter an environment name (e.g. prod, dev)
+- [ ] **Azure CLI** installed and logged in (`az login`)
+- [ ] **Python 3.11+** installed
+- [ ] **Azure subscription** with Contributor access to a resource group
+- [ ] **Azure OpenAI** resource with a GPT-4o model deployed
+  - _Or set `deployAzureOpenAI = true` in parameters to deploy one as part of the Bicep template_
+- [ ] Your **Azure AD UPN**: `az ad signed-in-user show --query userPrincipalName -o tsv`
+- [ ] Your **Azure AD object ID**: `az ad signed-in-user show --query id -o tsv`
 
-# Set location
-azd env set AZURE_LOCATION eastus2
-```
+---
 
-Then open `bicep/main.bicepparam` and fill in **only your external service credentials** (`appName` and `sqlServerName` are auto-generated and do not need to be set):
+## Phase 1 — Configure Parameters (5 min)
+
+Open `bicep/main.bicepparam` and fill in your values. Most fields are optional — start with the required ones.
+
+### Required fields
 
 ```bicep
-// Azure OpenAI (from Azure Portal)
+using './main.bicep'
+
+// Azure OpenAI — Azure Portal → AI Services → Keys and Endpoint
 param azureOpenAIEndpoint = 'https://your-openai.openai.azure.com/'
-param azureOpenAIApiKey = '<from Azure Portal → Keys>'
+param azureOpenAIApiKey   = '<your-api-key>'
 
-// AI Foundry (from AI Foundry Portal)
-param projectEndpoint = '<from project settings>'
-
-// Fabric (from Fabric Workspace)
-param fabricWorkspaceId = '<workspace GUID>'
-param fabricOrchestratorAgentId = '<asst_xxx...>'
-param fabricDocumentAgentId = '<asst_xxx...>'
-param fabricPowerBiAgentId = '<asst_xxx...>'
-param fabricChartAgentId = '<asst_xxx...>'
-param fabricSalesAgentId = '<asst_xxx...>'
-param fabricRealtimeAgentId = '<asst_xxx...>'
-
-// Power BI (from Power BI Portal)
-param powerbiWorkspaceId = '<workspace GUID>'
-param powerbiReportId = '<report GUID>'
-param powerbiClientId = '<service principal client ID>'
-param powerbiTenantId = '<your tenant ID>'
-param powerbiClientSecret = '<service principal secret>'
-
-// SQL AD Admin — REQUIRED, cannot be left empty
-// Azure Policy blocks deployment if these are blank or placeholder strings
-// Get your values:
-//   az ad signed-in-user show --query userPrincipalName -o tsv  → login
-//   az ad signed-in-user show --query id -o tsv                 → sid (GUID)
-param sqlAzureAdAdminLogin = 'admin@yourdomain.com'
-param sqlAzureAdAdminSid = '<Azure AD object ID GUID>'
+// SQL Azure AD admin — cannot be blank (Azure Policy enforces this)
+param sqlAzureAdAdminLogin = 'admin@yourcompany.com'   // az ad signed-in-user show --query userPrincipalName -o tsv
+param sqlAzureAdAdminSid   = '<your-object-id>'        // az ad signed-in-user show --query id -o tsv
 ```
 
-### Option B: Manual (PowerShell)
+### Deploy a new Azure OpenAI instead (optional)
 
-Open `bicep/main.bicepparam` and fill in the same values as above.
+If you do not have an existing Azure OpenAI resource, let Bicep deploy one:
+
+```bicep
+param deployAzureOpenAI        = true
+param azureOpenAIModelName     = 'gpt-4o'
+param azureOpenAIModelVersion  = '2024-11-20'
+param azureOpenAIModelCapacity = 10   // tokens per minute (thousands)
+```
+
+Remove the `azureOpenAIEndpoint` and `azureOpenAIApiKey` lines — the endpoint and key are injected into App Settings automatically after deployment.
+
+### Optional integrations
+
+Fill these in now if you have them, or return to add them in Phase 3 (AI Foundry) and Phase 6 (Fabric):
+
+```bicep
+// Azure AI Foundry — AI Foundry Portal → Project → Settings → Endpoint
+param projectEndpoint = 'https://<project>.<region>.api.azureml.ms/agents/v1.0/...'
+
+// Microsoft Fabric
+param fabricWorkspaceId         = '<workspace-GUID>'
+param fabricOrchestratorAgentId = 'asst_...'
+param fabricSalesAgentId        = 'asst_...'
+param fabricRealtimeAgentId     = 'asst_...'
+
+// Power BI embedding
+param powerbiWorkspaceId    = '<GUID>'
+param powerbiReportId       = '<GUID>'
+param powerbiClientId       = '<GUID>'
+param powerbiTenantId       = '<GUID>'
+param powerbiClientSecret   = '<secret>'
+```
+
+> ⚠️ Never commit `bicep/main.bicepparam` to git — it contains secrets. It is already in `.gitignore`.
+
+See [CONFIGURATION.md](../CONFIGURATION.md) for a complete reference of every parameter.
 
 ---
 
-## Step 2: Deploy Infrastructure (8 minutes)
+## Phase 2 — Deploy Infrastructure (8–15 min)
 
-### Option A: azd (Recommended)
+Choose **one** method:
+
+### Option A: PowerShell (recommended)
+
+```powershell
+# Create resource group
+az group create --name rg-myagents-prod --location eastus2
+
+# Deploy infrastructure + app code
+.\scripts\deploy.ps1 -ResourceGroupName "rg-myagents-prod"
+```
+
+To update only the app code after changes (no infra rebuild):
+
+```powershell
+.\scripts\deploy.ps1 -ResourceGroupName "rg-myagents-prod" `
+                     -AppName "<your-app-name>" `
+                     -SkipInfrastructure
+```
+
+### Option B: Azure Developer CLI
 
 ```bash
+# Install azd if needed: https://learn.microsoft.com/azure/developer/azure-developer-cli/install-azd
+azd init
+azd env set AZURE_LOCATION eastus2
 azd up
 ```
 
-### Option B: PowerShell Script
+For full azd details see [AZD_DEPLOYMENT_GUIDE.md](AZD_DEPLOYMENT_GUIDE.md).
 
-```bash
-# 1. Create resource group
-az group create --name rg-myagents-prod --location eastus2
+### Confirm a healthy start
 
-# 2. Deploy infrastructure
-cd bicep
-az deployment group create \
-  --name agent-deployment \
-  --resource-group rg-myagents-prod \
-  --template-file main.bicep \
-  --parameters main.bicepparam
+Note your app name from the deployment output (e.g. `agentjo5a6tek-prod-app`), then tail the startup logs:
 
-# 3. Get outputs
-az deployment group show \
-  --name agent-deployment \
-  --resource-group rg-myagents-prod \
-  --query properties.outputs
+```powershell
+az webapp log tail --name <app-name> --resource-group rg-myagents-prod
+```
+
+A healthy start looks like:
+
+```
+[INFO] Listening at: http://0.0.0.0:8000
+[INFO] Booting worker with pid: ...
+Application startup complete.
+```
+
+If you see errors, jump to [Troubleshooting](#troubleshooting) below.
+
+---
+
+## Phase 3 — Configure AI Services
+
+### Using an existing Azure OpenAI
+
+If you set `azureOpenAIEndpoint` and `azureOpenAIApiKey` in Phase 1, the Bicep template pushes those into App Settings automatically. Verify:
+
+```powershell
+az webapp config appsettings list \
+  --name <app-name> --resource-group rg-myagents-prod \
+  --query "[?name=='AZURE_OPENAI_ENDPOINT'].value" -o tsv
+```
+
+### Deploying a new Azure OpenAI (`deployAzureOpenAI = true`)
+
+The endpoint is wired up automatically. The API key is written to Key Vault and referenced by App Settings. To retrieve the key if needed:
+
+```powershell
+az keyvault secret show \
+  --vault-name <keyvault-name> \
+  --name azureOpenAIApiKey \
+  --query value -o tsv
+```
+
+### Azure AI Foundry agents
+
+AI Foundry agents cannot be provisioned via Bicep. Create them manually:
+
+1. Open [https://ai.azure.com](https://ai.azure.com) and navigate to your project
+2. Go to **Agents** → **+ New agent**
+3. Create one agent for each role: Orchestrator, Sales, Operations, Analytics, Financial, Support
+4. Copy each agent ID (`asst_xxx...`)
+5. Apply the IDs as App Settings:
+
+```powershell
+az webapp config appsettings set \
+  --name <app-name> --resource-group rg-myagents-prod \
+  --settings \
+    FABRIC_ORCHESTRATOR_AGENT_ID="asst_..." \
+    FABRIC_SALES_AGENT_ID="asst_..." \
+    FABRIC_REALTIME_AGENT_ID="asst_..."
+```
+
+6. Restart the app:
+
+```powershell
+az webapp restart --name <app-name> --resource-group rg-myagents-prod
 ```
 
 ---
 
-## Step 3: Configure SQL Database (2 minutes)
+## Phase 4 — Enable Authentication
+
+### Generate a JWT secret
 
 ```bash
-# Get web app name
-$webAppName = "<from deployment outputs>"
-
-# Open Azure Portal → SQL Database → Query Editor
-# Run these commands:
+# Python
+python -c "import secrets; print(secrets.token_urlsafe(32))"
 ```
+
+```powershell
+# PowerShell
+-join ((65..90) + (97..122) + (48..57) | Get-Random -Count 32 | ForEach-Object {[char]$_})
+```
+
+### Apply authentication settings
+
+```powershell
+az webapp config appsettings set \
+  --name <app-name> --resource-group rg-myagents-prod \
+  --settings \
+    JWT_SECRET="<your-generated-secret>" \
+    ENABLE_AUTHENTICATION="true"
+```
+
+### Create the first admin user
+
+See [CREATE_ADMIN_USER.md](../CREATE_ADMIN_USER.md) for full instructions.
+
+Quick path via Azure Portal → SQL Database → Query Editor:
+
+```sql
+-- Generate the bcrypt hash first:
+-- python -c "import bcrypt; print(bcrypt.hashpw(b'Admin@123', bcrypt.gensalt()).decode())"
+
+INSERT INTO users (username, password_hash, role, is_active)
+VALUES ('admin', '<bcrypt-hash>', 'admin', 1);
+```
+
+> Default password `Admin@123` — change immediately after first login via Settings → Change Password.
+
+---
+
+## Phase 5 — SQL Access
+
+The App Service connects to SQL using its managed identity. You must grant that identity access to the database.
+
+1. Open **Azure Portal → SQL Database → Query Editor**
+2. Authenticate with your Azure AD account
+3. Run the following, replacing `<your-webapp-name>` with the actual app name:
 
 ```sql
 CREATE USER [<your-webapp-name>] FROM EXTERNAL PROVIDER;
 ALTER ROLE db_owner ADD MEMBER [<your-webapp-name>];
 ```
 
----
+### Verify VNet connectivity
 
-## Step 4: Verify Deployment (2 minutes)
+If SQL connections fail after granting access, check the private network path:
 
-1. **Open Application**:
-   ```
-   https://<your-webapp-name>.azurewebsites.net
-   ```
+| Check | Where to look |
+|-------|--------------|
+| VNet integration active | Portal → App Service → Networking → VNet Integration |
+| Private endpoint provisioned | Portal → SQL Server → Private endpoint connections |
+| DNS zone linked | Portal → Private DNS zone `privatelink.database.windows.net` → Virtual network links |
 
-2. **Login** (if authentication enabled):
-   - Username: `admin`
-   - Password: `Admin@123`
-
-3. **Change Password**: Navigate to Settings → Change Password
-
-4. **Test Features**:
-   - [ ] Create a chat session
-   - [ ] Upload a document
-   - [ ] View Power BI reports
-   - [ ] Check agent responses
+All three must be in place for the App Service to reach SQL through the private endpoint.
 
 ---
 
-## ✅ Deployment Complete!
+## Phase 6 — Fabric (Optional)
 
-### Next Steps:
+Microsoft Fabric is a SaaS service that cannot be provisioned via Bicep. All setup is done in the Fabric portal.
 
-1. **Monitor Application**:
-   ```bash
-   az webapp log tail --name <webapp-name> -g rg-myagents-prod
-   ```
+1. Navigate to [app.fabric.microsoft.com](https://app.fabric.microsoft.com)
+2. Create a **workspace**: Workspaces → + New workspace
+3. Get the **workspace ID**: Settings → Properties → Workspace ID
+4. Create **agents**: Data Science → + Create Agent (one per required role)
+5. Copy each agent ID (`asst_xxx...`)
+6. Set the workspace ID in App Settings:
 
-2. **View Metrics**:
-   - Azure Portal → Application Insights → Live Metrics
+```powershell
+az webapp config appsettings set \
+  --name <app-name> --resource-group rg-myagents-prod \
+  --settings FABRIC_WORKSPACE_ID="<workspace-GUID>"
+```
 
-3. **Configure Users** (if RLS enabled):
-   - Add users via application UI or SQL
-   - Assign roles and permissions
+7. If you added Fabric parameters to `main.bicepparam`, redeploy to apply them:
 
-4. **Customize**:
-   - Modify agent prompts in Fabric
-   - Update Power BI reports
-   - Add custom routes/endpoints
+```powershell
+.\scripts\deploy.ps1 -ResourceGroupName "rg-myagents-prod" `
+                     -AppName "<app-name>" `
+                     -SkipInfrastructure
+```
 
----
-
-## 🐛 Common Issues
-
-**Issue**: Web app shows error page  
-**Fix**: Check logs with `az webapp log tail`
-
-**Issue**: Power BI not loading  
-**Fix**: Verify service principal has workspace access
-
-**Issue**: SQL connection failed  
-**Fix**: Ensure managed identity was granted access (Step 3)
-
-**Issue**: Agents not responding  
-**Fix**: Verify Fabric agent IDs and workspace ID
+For Fabric SQL analytics and synthetic data generation see [FABRIC_DEPLOYMENT.md](FABRIC_DEPLOYMENT.md).
 
 ---
 
-## 📞 Need Help?
-
-- Review full [README.md](README.md) for detailed documentation
-- Check [Troubleshooting section](README.md#-troubleshooting)
-- Review Azure Portal → Resource Health
-- Check Application Insights for errors
-
----
-
-## 💰 Estimated Costs
-
-**Development**: ~$21/month (B1 App Service + Basic SQL)  
-**Production**: ~$276/month (P1v2 App Service + S2 SQL)
-
-*Excludes Azure OpenAI, Fabric, and Power BI usage costs*
-
----
-
-**Deployment Time**: 15 minutes total  
-**Complexity**: Medium (requires Azure services pre-setup)  
-**Skill Level**: Intermediate Azure knowledge
-
----
-
-## 📖 Next Steps
-
-After successful deployment:
-
-1. **Test Your Agents** - Try the [Enterprise Use Cases](DEMO_QUESTIONS.md)
-   - Executive dashboards and strategic analysis
-   - Sales operations and pipeline forecasting
-   - Financial planning and budget analysis
-   - Customer success and retention scenarios
-
-2. **Run Smoke Tests** - Verify deployment health
-   ```powershell
-   .\tests\smoke-test.ps1 -ResourceGroupName "rg-myagents-prod"
-   ```
-
-3. **Review Documentation**
-   - [Documentation Index](DOCUMENTATION_INDEX.md) - Complete guide
-   - [Troubleshooting Guide](TROUBLESHOOTING.md) - Common issues
-
----
-
-## 🎯 Quick Commands Reference
+## Phase 7 — Smoke Tests
 
 ```bash
-# Deploy
-./scripts/deploy.ps1 -ResourceGroupName "rg-name" -Location "eastus2"
+# Run from the repo root
+python tests/smoke_test.py \
+  --url https://<your-app-name>.azurewebsites.net \
+  --skip-auth
+```
 
-# Check status
-az webapp show --name <app-name> -g <rg-name>
+A healthy run shows all endpoints returning 2xx. Open the browser to confirm the UI loads:
 
-# View logs
-az webapp log tail --name <app-name> -g <rg-name>
-
-# Restart app
-az webapp restart --name <app-name> -g <rg-name>
-
-# Update settings
-az webapp config appsettings set --name <app-name> -g <rg-name> --settings KEY=VALUE
-
-# Delete deployment
-az group delete --name <rg-name> --yes --no-wait
+```
+https://<your-app-name>.azurewebsites.net
 ```
 
 ---
 
-**Ready to deploy?** → Run `./scripts/deploy.ps1` 🚀
+## Common Commands
+
+| Action | PowerShell / Azure CLI | azd |
+|--------|------------------------|-----|
+| Full deploy | `.\scripts\deploy.ps1 -ResourceGroupName rg-name` | `azd up` |
+| Code only | `.\scripts\deploy.ps1 -ResourceGroupName rg-name -AppName app-name -SkipInfrastructure` | `azd deploy` |
+| Tail logs | `az webapp log tail --name app-name -g rg-name` | `azd monitor --logs --follow` |
+| View app status | `az webapp show --name app-name -g rg-name` | `azd show` |
+| Restart app | `az webapp restart --name app-name -g rg-name` | — |
+| Set app setting | `az webapp config appsettings set --name app-name -g rg-name --settings KEY=VALUE` | `azd env set KEY VALUE` then `azd deploy` |
+| Delete everything | `az group delete --name rg-name --yes --no-wait` | `azd down` |
+
+---
+
+## Troubleshooting
+
+**App crashes on startup**
+
+```powershell
+az webapp log tail --name <app-name> -g rg-name
+```
+
+Look for Python tracebacks. Common causes:
+
+| Error | Fix |
+|-------|-----|
+| `ModuleNotFoundError` | Redeploy — Oryx build may not have run. Confirm `SCM_DO_BUILD_DURING_DEPLOYMENT=true` is in App Settings. |
+| `pydantic ValidationError` | A required config field has no env var. Check `AZURE_OPENAI_ENDPOINT` is set. |
+| `RuntimeError: Azure OpenAI endpoint is required` | Set `AZURE_OPENAI_ENDPOINT` in App Settings (Phase 3). |
+| Container still starting after 5 min | Check `WEBSITES_CONTAINER_START_TIME_LIMIT=1800` is in App Settings. |
+
+**SQL connection fails**
+
+Verify all three network components (VNet integration, private endpoint, DNS zone) as described in Phase 5.
+
+**Azure Policy blocks SQL deployment**
+
+Ensure `enableVnetIntegration = true` in `main.bicepparam` (this is the default). The private endpoint satisfies the `publicNetworkAccess = Disabled` policy requirement. Do not set this to `false` in policy-enforced subscriptions.
+
+**Chat returns 500 errors**
+
+Verify `AZURE_OPENAI_ENDPOINT` is set and the model deployment name (`AZURE_OPENAI_DEPLOYMENT`) matches what's deployed in Azure OpenAI.
+
+**Power BI not loading**
+
+Verify the service principal (`powerbiClientId`) has at least Member access to the Power BI workspace, and that "Service principals can use Power BI APIs" is enabled in the Power BI Admin portal → Tenant settings.
