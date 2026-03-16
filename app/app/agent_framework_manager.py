@@ -50,12 +50,19 @@ class AgentFrameworkManager:
 
     def __init__(self, cache_manager=None) -> None:
         self.credential = self._create_credential()
-        self.client = AzureOpenAIChatClient(
-            endpoint=settings.azure_openai_endpoint,
-            deployment_name=settings.azure_openai_deployment,
-            credential=self.credential,
-            api_version=settings.azure_openai_api_version,
-        )
+        if settings.azure_openai_endpoint:
+            self.client = AzureOpenAIChatClient(
+                endpoint=settings.azure_openai_endpoint,
+                deployment_name=settings.azure_openai_deployment,
+                credential=self.credential,
+                api_version=settings.azure_openai_api_version,
+            )
+        else:
+            logger.warning(
+                "⚠️  AZURE_OPENAI_ENDPOINT not configured — "
+                "chat functionality unavailable until the env var is set"
+            )
+            self.client = None
 
         # Initialize Phase 3 enhancements with error handling
         try:
@@ -899,5 +906,14 @@ class AgentFrameworkManager:
         return assistant_message
 
 
-agent_framework_manager = AgentFrameworkManager()
+try:
+    agent_framework_manager = AgentFrameworkManager()
+except Exception as _e:
+    import logging as _logging
+    _logging.getLogger(__name__).warning(
+        "⚠️  AgentFrameworkManager failed to initialize: %s — "
+        "set AZURE_OPENAI_ENDPOINT to enable chat functionality",
+        _e,
+    )
+    agent_framework_manager = None
 """Singleton manager used by FastAPI endpoints."""

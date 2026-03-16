@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     )
     
     # Azure OpenAI Configuration
-    azure_openai_endpoint: str
+    azure_openai_endpoint: Optional[str] = None
     azure_openai_deployment: str = "gpt-4o"
     azure_openai_api_version: str = "2024-08-01-preview"
     
@@ -25,11 +25,11 @@ class Settings(BaseSettings):
     model_deployment_name: str = "gpt-4o"
     
     # Microsoft Fabric Configuration
-    fabric_workspace_id: str
-    fabric_orchestrator_agent_id: str  # RetailAssistantOrchestrator
+    fabric_workspace_id: Optional[str] = None
+    fabric_orchestrator_agent_id: Optional[str] = None  # RetailAssistantOrchestrator
     fabric_orchestrator_agent_name: str = "RetailAssistantOrchestrator"
-    fabric_sales_agent_id: str
-    fabric_realtime_agent_id: str
+    fabric_sales_agent_id: Optional[str] = None
+    fabric_realtime_agent_id: Optional[str] = None
     fabric_analytics_agent_id: Optional[str] = None
     fabric_financial_agent_id: Optional[str] = None
     fabric_support_agent_id: Optional[str] = None
@@ -46,12 +46,12 @@ class Settings(BaseSettings):
     enable_data_agents: bool = False  # Enable Data Agents for querying Fabric (default: False until configured)
     
     # Power BI Integration Configuration
-    powerbi_workspace_id: str
+    powerbi_workspace_id: Optional[str] = None
     powerbi_workspace_name: Optional[str] = None
     powerbi_report_id: Optional[str] = None
     powerbi_client_id: Optional[str] = None
     powerbi_client_secret: Optional[str] = None
-    powerbi_tenant_id: str
+    powerbi_tenant_id: Optional[str] = None
     powerbi_connection_url: Optional[str] = None
     
     # Azure AI Content Safety (optional - for advanced prompt injection detection)
@@ -165,13 +165,17 @@ class Settings(BaseSettings):
         return True
     
     @property
-    def fabric_sales_agent_endpoint(self) -> str:
+    def fabric_sales_agent_endpoint(self) -> Optional[str]:
         """Generate Fabric Sales Agent endpoint URL."""
+        if not self.fabric_workspace_id or not self.fabric_sales_agent_id:
+            return None
         return f"https://fabric.microsoft.com/groups/{self.fabric_workspace_id}/aiskills/{self.fabric_sales_agent_id}"
-    
+
     @property
-    def fabric_realtime_agent_endpoint(self) -> str:
+    def fabric_realtime_agent_endpoint(self) -> Optional[str]:
         """Generate Fabric Realtime Agent endpoint URL."""
+        if not self.fabric_workspace_id or not self.fabric_realtime_agent_id:
+            return None
         return f"https://fabric.microsoft.com/groups/{self.fabric_workspace_id}/aiskills/{self.fabric_realtime_agent_id}"
     
     @property

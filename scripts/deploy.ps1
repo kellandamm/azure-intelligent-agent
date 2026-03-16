@@ -34,16 +34,19 @@
 param(
     [Parameter(Mandatory = $true)]
     [string]$ResourceGroupName,
-    
+
     [Parameter(Mandatory = $false)]
     [string]$Location = "eastus2",
-    
+
     [Parameter(Mandatory = $false)]
     [string]$ParametersFile = "main.bicepparam",
-    
+
+    [Parameter(Mandatory = $false)]
+    [string]$AppName,
+
     [Parameter(Mandatory = $false)]
     [switch]$SkipInfrastructure,
-    
+
     [Parameter(Mandatory = $false)]
     [switch]$SkipAppCode
 )
@@ -223,27 +226,30 @@ if (-not $SkipInfrastructure) {
 
 # ========================================
 # Step 4: Deploy Application Code
-// ========================================
+# ========================================
 
 if (-not $SkipAppCode) {
     Write-Step "Step 4: Deploy Application Code"
     
     # Get web app name if not already set
     if (-not $script:webAppName) {
-        Write-Info "Retrieving web app name from deployment..."
-        $deployments = az deployment group list `
-            --resource-group $ResourceGroupName `
-            --query "[?contains(name, 'intelligent-agent')].properties.outputs.webAppName.value" `
-            --output json | ConvertFrom-Json
-        
-        if ($deployments.Count -eq 0) {
-            Write-Error-Custom "No deployments found. Please deploy infrastructure first."
-            exit 1
+        if ($AppName) {
+            $script:webAppName = $AppName
+        } else {
+            Write-Info "Retrieving web app name from deployment..."
+            $deployments = az deployment group list `
+                --resource-group $ResourceGroupName `
+                --query "[?contains(name, 'intelligent-agent')].properties.outputs.webAppName.value" `
+                --output json | ConvertFrom-Json
+
+            if ($deployments.Count -eq 0) {
+                Write-Error-Custom "No deployments found. Pass -AppName or deploy infrastructure first."
+                exit 1
+            }
+
+            $script:webAppName = $deployments[0]
         }
-        
-        $script:webAppName = $deployments[0]
     }
-    
     Write-Info "Deploying to: $($script:webAppName)"
     
     # Check if app directory exists
@@ -281,7 +287,7 @@ if (-not $SkipAppCode) {
 
 # ========================================
 # Summary
-// ========================================
+# ========================================
 
 Write-Host "`n"
 Write-Step "🎉 Deployment Complete!"
