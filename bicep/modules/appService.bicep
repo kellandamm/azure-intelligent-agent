@@ -41,7 +41,7 @@ param enableSystemManagedIdentity bool = true
 param healthCheckPath string = '/health'
 
 @description('App command line (startup script)')
-param appCommandLine string = 'gunicorn -w 4 -k uvicorn.workers.UvicornWorker main:app --bind 0.0.0.0:8000 --timeout 600'
+param appCommandLine string = 'bash startup.sh'
 
 @description('Log Analytics Workspace resource ID for diagnostic settings. Leave empty to skip.')
 param logAnalyticsWorkspaceId string = ''

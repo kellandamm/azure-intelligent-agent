@@ -301,6 +301,7 @@ var baseAppSettings = [
   
   // Azure deployment settings
   { name: 'SCM_DO_BUILD_DURING_DEPLOYMENT', value: 'true' }
+  { name: 'ENABLE_ORYX_BUILD', value: 'true' }
   { name: 'WEBSITE_HTTPLOGGING_RETENTION_DAYS', value: '7' }
 ]
 
