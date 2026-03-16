@@ -30,16 +30,17 @@ else
     echo "ODBC Driver 18 already installed."
 fi
 
-# ── PYTHONPATH: Add wwwroot for local module imports ─────────────────────────
+# ── PYTHONPATH: Add app root for local module imports ────────────────────────
 # Oryx has already activated the venv and set PYTHONPATH to the antenv site-packages.
-# Append /home/site/wwwroot so gunicorn workers can import local modules
-# (config, utils, app, etc.) on the forked subprocesses.
-export PYTHONPATH="${PYTHONPATH:+${PYTHONPATH}:}/home/site/wwwroot"
+# The app may run from /home/site/wwwroot (classic zip) or /tmp/<hash> (Oryx artifact).
+# Detect the correct root from this script's own location.
+APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export PYTHONPATH="${PYTHONPATH:+${PYTHONPATH}:}${APP_DIR}"
 
-cd /home/site/wwwroot
+cd "$APP_DIR"
 
 # ── Start application ─────────────────────────────────────────────────────────
-echo "Starting Gunicorn with PYTHONPATH=${PYTHONPATH}"
+echo "Starting Gunicorn from ${APP_DIR} with PYTHONPATH=${PYTHONPATH}"
 exec gunicorn --bind=0.0.0.0:${PORT:-8000} \
               --workers=4 \
               --worker-class=uvicorn.workers.UvicornWorker \
