@@ -218,6 +218,28 @@ Authentication is enabled by default (`enableAuthentication = true`). To disable
 param enableAuthentication = false
 ```
 
+### Assign Managed Identity for Webapp to Azure OpenAI Resource
+
+# Get the App Service principal ID
+$principalId = az webapp identity show \
+  --name <app-name> \
+  --resource-group <resource-group> \
+  --query principalId -o tsv
+
+# Get the OpenAI resource ID
+$openaiId = az cognitiveservices account show \
+  --name <your-openai-resource-name> \
+  --resource-group <resource-group> \
+  --query id -o tsv
+
+# Assign Cognitive Services OpenAI User role
+az role assignment create \
+  --assignee $principalId \
+  --role "Cognitive Services OpenAI User" \
+  --scope $openaiId
+
+
+
 ### Create the first admin user
 
 With authentication on, you need an initial admin account. See [CREATE_ADMIN_USER.md](../CREATE_ADMIN_USER.md) for full options.
