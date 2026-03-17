@@ -191,16 +191,19 @@ The script prints exactly where to go for each step.
 
 ## Phase 4 — Enable Authentication
 
-### Deploy the security schema
+### Deploy the security schema and seed data
 
-Before creating any users, run these two SQL files in order via **Azure Portal → SQL Database → Query Editor** (authenticate with your Azure AD account):
+Run these three SQL files **in order** via **Azure Portal → SQL Database → Query Editor**
+(authenticate with your Azure AD account):
 
 1. `app/Fabric/auth_schema.sql` — creates Users, Roles, Permissions tables and stored procedures
 2. `app/Fabric/rls_security_policies.sql` — creates the Security schema, session context stored procs, and RLS predicate functions
+3. `app/Fabric/synthetic_data.sql` — seeds all business data: operational tables, star-schema, and 9 Gold analytics tables used by the AI agents and dashboards
 
-Both scripts are safe to re-run (they drop and recreate objects).
+All three scripts are safe to re-run.
 
 For full details on roles, RLS, and territory assignments see [SECURITY_SETUP.md](SECURITY_SETUP.md).
+For the full list of tables created by `synthetic_data.sql` see [app/Fabric/QUICK_REFERENCE.md](../app/Fabric/QUICK_REFERENCE.md).
 
 ### JWT secret — automated
 
@@ -317,14 +320,9 @@ synthetic data. Choose the path that fits your needs:
 
 ### Option A — No Fabric (quick demo, SQL only)
 
-Load the complete synthetic dataset directly into Azure SQL using the portal Query Editor:
+`app/Fabric/synthetic_data.sql` was already run in Phase 4 — no further action needed.
 
-1. **Azure Portal → SQL Database → Query Editor** (authenticate with your Azure AD account)
-2. Open and run `app/Fabric/synthetic_data.sql`
-   This creates and seeds all required tables: operational tables, star-schema tables, and 9 Gold analytics tables.
-3. **No environment variable changes needed** — the app automatically falls back to the main SQL database when `FABRIC_SQL_SERVER` is not set.
-
-The AI agents, Analytics dashboard, and Sales dashboard will all query these tables.
+The AI agents, Analytics dashboard, and Sales dashboard will all query those Gold tables directly against Azure SQL. No environment variable changes are required.
 
 ---
 
