@@ -223,19 +223,20 @@ param enableAuthentication = false
 
 ### Assign Managed Identity for Webapp to Azure OpenAI Resource
 
-# Get the App Service principal ID
+### Get the App Service principal ID
 $principalId = az webapp identity show \
+  
   --name <app-name> \
   --resource-group <resource-group> \
   --query principalId -o tsv
 
-# Get the OpenAI resource ID
+### Get the OpenAI resource ID
 $openaiId = az cognitiveservices account show \
   --name <your-openai-resource-name> \
   --resource-group <resource-group> \
   --query id -o tsv
 
-# Assign Cognitive Services OpenAI User role
+### Assign Cognitive Services OpenAI User role
 az role assignment create \
   --assignee $principalId \
   --role "Cognitive Services OpenAI User" \
