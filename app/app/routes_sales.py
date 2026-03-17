@@ -12,7 +12,6 @@ from pydantic import BaseModel
 from utils.auth import get_current_user
 from utils.db_connection import DatabaseConnection
 from config import settings
-from app.mock_data import generate_mock_deals, generate_mock_top_products_sales
 
 logger = logging.getLogger(__name__)
 
@@ -201,9 +200,13 @@ async def get_sales_metrics(
 
             deals_change = int(current_metrics[1] - prev_metrics[1])
 
-            # Calculate win rate (assuming 70% based on business metrics)
-            win_rate = 70.0
-            win_rate_change = 2.5
+            # Win rate from gold_sales_performance
+            cursor.execute(
+                "SELECT TOP 1 metric_value FROM dbo.gold_sales_performance WHERE metric_name = 'Win Rate'"
+            )
+            win_rate_row = cursor.fetchone()
+            win_rate = float(win_rate_row[0]) if win_rate_row else 0.0
+            win_rate_change = 0.0
 
             cursor.close()
 
@@ -252,7 +255,7 @@ async def get_recent_deals(
             region_filter = ""
             query_params = []
             if user_region:
-                region_filter = " WHERE c.Region = ?"
+                region_filter = " WHERE c.State = ?"
                 query_params.append(user_region)
 
             # Query recent upsell opportunities with customer details and RLS
@@ -292,19 +295,14 @@ async def get_recent_deals(
 
             cursor.close()
 
-            # If no deals found, return mock data
-            if not deals or len(deals) == 0:
-                logger.info("No deals found in database, using mock data")
-                mock_deals = generate_mock_deals(limit)
-                return [Deal(**deal) for deal in mock_deals]
-
             return deals
 
     except Exception as e:
-        logger.error(f"Error fetching recent deals: {e}, using mock data")
-        # Return mock data on error
-        mock_deals = generate_mock_deals(limit)
-        return [Deal(**deal) for deal in mock_deals]
+        logger.error(f"Error fetching recent deals: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch recent deals: {str(e)}",
+        )
 
 
 @router.get("/products", response_model=List[Product])
@@ -334,41 +332,23 @@ async def get_top_products(
             start_date = end_date - timedelta(days=30)
             prev_start = start_date - timedelta(days=30)
 
-            # Build RLS filter
-            region_filter = ""
             query_params = [
-                start_date,
-                end_date,
-                start_date,
-                end_date,
-                prev_start,
-                start_date,
-                start_date,
-                end_date,
+                start_date, end_date,
+                start_date, end_date,
+                prev_start, start_date,
+                start_date, end_date,
             ]
 
-            if user_region:
-                region_filter = " AND s.Region = ?"
-                # Add region parameter for each query section that uses sales data
-                query_params.extend(
-                    [user_region, user_region, user_region, user_region]
-                )
-
-            # Query top products by revenue from sales data with RLS
             query = f"""
                 SELECT TOP {limit}
                     p.ProductName,
-                    ISNULL(SUM(CASE WHEN s.OrderDate >= ? AND s.OrderDate <= ? {region_filter if user_region else ""}
-                        THEN s.daily_revenue / 10 ELSE 0 END), 0) as revenue,
-                    ISNULL(COUNT(DISTINCT CASE WHEN s.OrderDate >= ? AND s.OrderDate <= ? {region_filter if user_region else ""}
-                        THEN s.OrderDate ELSE NULL END), 0) as deals,
-                    ISNULL(SUM(CASE WHEN s.OrderDate >= ? AND s.OrderDate < ? {region_filter if user_region else ""}
-                        THEN s.daily_revenue / 10 ELSE 0 END), 0) as prev_revenue
-                FROM dbo.dim_product p
-                LEFT JOIN dbo.gold_sales_time_series s ON 1=1
-                GROUP BY p.ProductName
-                HAVING SUM(CASE WHEN s.OrderDate >= ? AND s.OrderDate <= ? {region_filter if user_region else ""}
-                    THEN s.daily_revenue / 10 ELSE 0 END) > 0
+                    ISNULL(SUM(CASE WHEN s.OrderDate >= ? AND s.OrderDate <= ? THEN s.TotalAmount ELSE 0 END), 0) as revenue,
+                    ISNULL(COUNT(DISTINCT CASE WHEN s.OrderDate >= ? AND s.OrderDate <= ? THEN s.OrderID ELSE NULL END), 0) as deals,
+                    ISNULL(SUM(CASE WHEN s.OrderDate >= ? AND s.OrderDate < ? THEN s.TotalAmount ELSE 0 END), 0) as prev_revenue
+                FROM dbo.ProductDim p
+                LEFT JOIN dbo.SalesFact s ON p.ProductID = s.ProductID
+                GROUP BY p.ProductID, p.ProductName
+                HAVING SUM(CASE WHEN s.OrderDate >= ? AND s.OrderDate <= ? THEN s.TotalAmount ELSE 0 END) > 0
                 ORDER BY revenue DESC
             """
 
@@ -396,19 +376,14 @@ async def get_top_products(
 
             cursor.close()
 
-            # If no products found, return mock data
-            if not products or len(products) == 0:
-                logger.info("No top products found in database, using mock data")
-                mock_products = generate_mock_top_products_sales(limit)
-                return [Product(**product) for product in mock_products]
-
             return products
 
     except Exception as e:
-        logger.error(f"Error fetching top products: {e}, using mock data")
-        # Return mock data on error
-        mock_products = generate_mock_top_products_sales(limit)
-        return [Product(**product) for product in mock_products]
+        logger.error(f"Error fetching top products: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch top products: {str(e)}",
+        )
 
 
 @router.get("/goals", response_model=Goal)
@@ -529,7 +504,7 @@ async def get_deal_details(
             region_filter = ""
             query_params = [customer, product]
             if user_region:
-                region_filter = " AND c.Region = ?"
+                region_filter = " AND c.State = ?"
                 query_params.append(user_region)
 
             # Query deal and customer data
@@ -538,11 +513,11 @@ async def get_deal_details(
                     c.CustomerID,
                     c.FirstName + ' ' + c.LastName as customer_name,
                     c.Email,
-                    c.Phone,
-                    c.Region,
+                    NULL as Phone,
+                    c.State as Region,
                     c.customer_segment,
                     c.lifetime_value,
-                    DATEDIFF(day, c.first_purchase_date, GETDATE()) as account_age,
+                    DATEDIFF(day, c.first_order_date, GETDATE()) as account_age,
                     u.recommended_action as product,
                     u.upsell_score * 1000 as value,
                     CASE
@@ -602,7 +577,7 @@ async def get_deal_details(
                 INNER JOIN dbo.gold_customer_360 c ON u.CustomerID = c.CustomerID
                 WHERE u.CustomerID = ?
                   AND u.recommended_action != ?
-                  {region_filter}
+                  {"AND c.State = ?" if user_region else ""}
                 ORDER BY u.upsell_score DESC
             """,
                 tuple(related_query_params),

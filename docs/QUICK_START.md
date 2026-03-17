@@ -310,9 +310,29 @@ All three must be in place for the App Service to reach SQL through the private 
 
 ---
 
-## Phase 6 — Fabric 
+## Phase 6 — Fabric
 
-Microsoft Fabric is a SaaS service that cannot be provisioned via Bicep. All setup is done in the Fabric portal.
+Microsoft Fabric is optional. The app works fully against Azure SQL alone using the included
+synthetic data. Choose the path that fits your needs:
+
+### Option A — No Fabric (quick demo, SQL only)
+
+Load the complete synthetic dataset directly into Azure SQL using the portal Query Editor:
+
+1. **Azure Portal → SQL Database → Query Editor** (authenticate with your Azure AD account)
+2. Open and run `app/Fabric/synthetic_data.sql`
+   This creates and seeds all required tables: operational tables, star-schema tables, and 9 Gold analytics tables.
+3. **No environment variable changes needed** — the app automatically falls back to the main SQL database when `FABRIC_SQL_SERVER` is not set.
+
+The AI agents, Analytics dashboard, and Sales dashboard will all query these tables.
+
+---
+
+### Option B — Full Fabric (mirroring + medallion architecture)
+
+Microsoft Fabric is a SaaS service that cannot be provisioned via Bicep — all setup is done in the Fabric portal.
+
+**Step 1 — Workspace and agents**
 
 1. Navigate to [app.fabric.microsoft.com](https://app.fabric.microsoft.com)
 2. Create a **workspace**: Workspaces → + New workspace
@@ -327,9 +347,16 @@ Microsoft Fabric is a SaaS service that cannot be provisioned via Bicep. All set
                              -FabricWorkspaceId "<workspace-GUID>"
 ```
 
-The script applies all settings and restarts the app. Re-run it at any time to add remaining agent IDs.
+The script applies all settings and restarts the app.
 
-For Fabric SQL analytics and synthetic data generation see [FABRIC_DEPLOYMENT.md](FABRIC_DEPLOYMENT.md).
+**Step 2 — Mirror SQL → Fabric and build medallion architecture**
+
+See **[FABRIC_DEPLOYMENT.md](FABRIC_DEPLOYMENT.md)** for the complete guide covering:
+- Enabling Change Tracking on Azure SQL
+- Creating a Mirrored Database in Fabric (Bronze layer)
+- Building Silver and Gold layers using Notebooks
+- Scheduling a daily Pipeline
+- Connecting the app to the Fabric SQL Analytics Endpoint
 
 ---
 

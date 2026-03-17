@@ -5,22 +5,14 @@ Provides advanced analytics endpoints for Admin and Data Analyst roles
 
 import logging
 import os
-import random
 from typing import Optional, List, Dict, Any
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
-import json
 
 from utils.auth import get_current_user
 from utils.db_connection import DatabaseConnection
 from config import settings
-from app.mock_data import (
-    generate_mock_products,
-    generate_mock_sales_reps,
-    generate_mock_data_quality,
-    generate_mock_customer_segments,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -309,7 +301,7 @@ async def get_timeseries_data(
             cursor.execute(query, (days, days))
             rows = cursor.fetchall()
 
-            result = [
+            return [
                 TimeSeriesData(
                     date=row[0].strftime("%Y-%m-%d") if row[0] else "",
                     revenue=float(row[1] or 0),
@@ -318,30 +310,6 @@ async def get_timeseries_data(
                 )
                 for row in rows
             ]
-            
-            # If no data, return mock data for demo purposes
-            if not result:
-                logger.info("No timeseries data in database, returning mock data")
-                
-                base_date = date.today() - timedelta(days=days)
-                result = []
-                base_revenue = 400000
-                base_deals = 35
-                
-                for i in range(days):
-                    current_date = base_date + timedelta(days=i)
-                    # Add some variation to make it look realistic
-                    revenue_variation = random.uniform(0.85, 1.15)
-                    deals_variation = random.randint(-8, 12)
-                    
-                    result.append(TimeSeriesData(
-                        date=current_date.strftime("%Y-%m-%d"),
-                        revenue=base_revenue * revenue_variation,
-                        deals=base_deals + deals_variation,
-                        customers=random.randint(20, 45)
-                    ))
-                
-            return result
 
     except Exception as e:
         logger.error(f"Error fetching timeseries data: {e}")
@@ -484,10 +452,11 @@ async def get_data_quality_metrics(
             ]
 
     except Exception as e:
-        logger.error(f"Error fetching data quality metrics: {e}, using mock data")
-        # Return mock data on error
-        mock_quality = generate_mock_data_quality()
-        return [DataQualityMetrics(**metric) for metric in mock_quality]
+        logger.error(f"Error fetching data quality metrics: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch data quality metrics: {str(e)}",
+        )
 
 
 @router.get("/products", response_model=List[ProductAnalytics])
@@ -554,10 +523,11 @@ async def get_product_analytics(
             ]
 
     except Exception as e:
-        logger.error(f"Error fetching product analytics: {e}, using mock data")
-        # Return mock data on error
-        mock_products = generate_mock_products(20)
-        return [ProductAnalytics(**product) for product in mock_products]
+        logger.error(f"Error fetching product analytics: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch product analytics: {str(e)}",
+        )
 
 
 @router.get("/customer-segments", response_model=List[CustomerSegment])
@@ -630,10 +600,11 @@ async def get_customer_segments(
             ]
 
     except Exception as e:
-        logger.error(f"Error fetching customer segments: {e}, using mock data")
-        # Return mock data on error
-        mock_segments = generate_mock_customer_segments()
-        return [CustomerSegment(**segment) for segment in mock_segments]
+        logger.error(f"Error fetching customer segments: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch customer segments: {str(e)}",
+        )
 
 
 @router.get("/sales-rep-performance", response_model=List[SalesRepPerformance])
@@ -696,10 +667,11 @@ async def get_sales_rep_performance(
             ]
 
     except Exception as e:
-        logger.error(f"Error fetching sales rep performance: {e}, using mock data")
-        # Return mock data on error
-        mock_reps = generate_mock_sales_reps(15)
-        return [SalesRepPerformance(**rep) for rep in mock_reps]
+        logger.error(f"Error fetching sales rep performance: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch sales rep performance: {str(e)}",
+        )
 
 
 @router.get("/predictive-insights", response_model=List[PredictiveInsight])
@@ -739,6 +711,29 @@ async def get_predictive_insights(
             growth_rate = (current_revenue - prev_revenue) / max(prev_revenue, 1)
             predicted_revenue = current_revenue * (1 + growth_rate)
 
+            # Deal close rate from gold_sales_performance
+            cursor.execute("""
+                SELECT TOP 1 metric_value
+                FROM dbo.gold_sales_performance
+                WHERE metric_name = 'Conversion Rate'
+            """)
+            close_row = cursor.fetchone()
+            close_rate = float(close_row[0]) if close_row else 0.0
+            close_rate_predicted = round(close_rate * 1.05, 1)
+
+            # Customer acquisition: new customers this month vs last month
+            cursor.execute("""
+                SELECT
+                    SUM(CASE WHEN MONTH(CreatedDate) = MONTH(GETDATE()) AND YEAR(CreatedDate) = YEAR(GETDATE()) THEN 1 ELSE 0 END),
+                    SUM(CASE WHEN MONTH(CreatedDate) = MONTH(DATEADD(MONTH,-1,GETDATE())) AND YEAR(CreatedDate) = YEAR(DATEADD(MONTH,-1,GETDATE())) THEN 1 ELSE 0 END)
+                FROM dbo.CustomerDim
+            """)
+            acq_row = cursor.fetchone()
+            acq_current = float(acq_row[0] or 0)
+            acq_prev = float(acq_row[1] or 0)
+            acq_growth = (acq_current - acq_prev) / max(acq_prev, 1)
+            acq_predicted = round(acq_current * (1 + acq_growth), 1)
+
             insights = [
                 PredictiveInsight(
                     metric="Monthly Revenue",
@@ -753,17 +748,17 @@ async def get_predictive_insights(
                 ),
                 PredictiveInsight(
                     metric="Deal Close Rate",
-                    current_value=35.0,
-                    predicted_value=38.5,
+                    current_value=close_rate,
+                    predicted_value=close_rate_predicted,
                     confidence=0.68,
-                    trend="up",
+                    trend="up" if close_rate > 30 else "stable",
                 ),
                 PredictiveInsight(
                     metric="Customer Acquisition",
-                    current_value=25.0,
-                    predicted_value=28.0,
+                    current_value=acq_current,
+                    predicted_value=acq_predicted,
                     confidence=0.72,
-                    trend="up",
+                    trend="up" if acq_growth > 0 else "down" if acq_growth < 0 else "stable",
                 ),
             ]
 
