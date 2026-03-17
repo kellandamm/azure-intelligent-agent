@@ -1,7 +1,7 @@
 """
 API key management for programmatic access
 """
-from fastapi import HTTPException, Header, Depends
+from fastapi import HTTPException, Header, Depends, Request
 from typing import Optional
 import secrets
 import hashlib
@@ -293,11 +293,12 @@ api_key_manager = APIKeyManager()
 
 
 async def get_current_user_or_api_key(
+    request: Request,
     authorization: Optional[str] = Header(None)
 ) -> dict:
     """
     Support both JWT tokens and API keys for authentication
-    
+
     Usage:
         @app.post("/api/chat")
         async def chat(
@@ -309,12 +310,21 @@ async def get_current_user_or_api_key(
     """
     if not authorization:
         raise HTTPException(status_code=401, detail="Missing authorization header")
-    
+
     if authorization.startswith("Bearer "):
-        # JWT token authentication
+        # JWT token authentication — delegate to AuthManager stored in app state
         token = authorization.replace("Bearer ", "")
-        from app.routes_auth import verify_jwt_token
-        return await verify_jwt_token(token)
+        auth_manager = getattr(getattr(request.app, "state", None), "auth_manager", None)
+        if auth_manager is None:
+            raise HTTPException(status_code=503, detail="Authentication system not initialized")
+        user_data = auth_manager.verify_jwt_token(token)
+        if not user_data:
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid authentication credentials",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        return user_data
         
     elif authorization.startswith("ApiKey "):
         # API key authentication

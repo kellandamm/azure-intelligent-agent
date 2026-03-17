@@ -21,12 +21,46 @@ END
 GO
 
 -- ========================================
+-- Step 1b: Drop existing predicate functions and policies
+-- (schema-bound TVFs must be dropped before altering the helper
+--  scalar functions they reference; policies must drop first)
+-- ========================================
+
+-- Drop security policies first (they reference predicate TVFs)
+IF EXISTS (SELECT * FROM sys.security_policies WHERE name = 'SalesRegionSecurityPolicy' AND schema_id = SCHEMA_ID('Security'))
+    DROP SECURITY POLICY Security.SalesRegionSecurityPolicy;
+
+IF EXISTS (SELECT * FROM sys.security_policies WHERE name = 'CustomerSecurityPolicy' AND schema_id = SCHEMA_ID('Security'))
+    DROP SECURITY POLICY Security.CustomerSecurityPolicy;
+
+IF EXISTS (SELECT * FROM sys.security_policies WHERE name = 'OrderSecurityPolicy' AND schema_id = SCHEMA_ID('Security'))
+    DROP SECURITY POLICY Security.OrderSecurityPolicy;
+
+-- Drop predicate TVFs (they reference helper scalar functions)
+IF EXISTS (SELECT * FROM sys.objects WHERE name = 'fn_SalesRegionPredicate' AND schema_id = SCHEMA_ID('Security'))
+    DROP FUNCTION Security.fn_SalesRegionPredicate;
+
+IF EXISTS (SELECT * FROM sys.objects WHERE name = 'fn_CustomerAccessPredicate' AND schema_id = SCHEMA_ID('Security'))
+    DROP FUNCTION Security.fn_CustomerAccessPredicate;
+
+IF EXISTS (SELECT * FROM sys.objects WHERE name = 'fn_EmployeeAccessPredicate' AND schema_id = SCHEMA_ID('Security'))
+    DROP FUNCTION Security.fn_EmployeeAccessPredicate;
+
+-- Drop fn_IsAdmin scalar (references fn_GetCurrentUserRoles, so must drop before altering it)
+IF EXISTS (SELECT * FROM sys.objects WHERE name = 'fn_IsAdmin' AND schema_id = SCHEMA_ID('Security'))
+    DROP FUNCTION Security.fn_IsAdmin;
+
+PRINT '✅ Existing predicate functions and policies dropped (if present)';
+GO
+
+-- ========================================
 -- Step 2: Create Security Context Functions
 -- ========================================
 
 -- Function to get current user's ID from SESSION_CONTEXT
 CREATE OR ALTER FUNCTION Security.fn_GetCurrentUserId()
 RETURNS INT
+WITH SCHEMABINDING
 AS
 BEGIN
     RETURN CAST(SESSION_CONTEXT(N'UserId') AS INT);
@@ -36,6 +70,7 @@ GO
 -- Function to get current user's region(s) from SESSION_CONTEXT
 CREATE OR ALTER FUNCTION Security.fn_GetCurrentUserRegion()
 RETURNS NVARCHAR(MAX)
+WITH SCHEMABINDING
 AS
 BEGIN
     RETURN CAST(SESSION_CONTEXT(N'UserRegion') AS NVARCHAR(MAX));
@@ -45,6 +80,7 @@ GO
 -- Function to get current user's roles from SESSION_CONTEXT
 CREATE OR ALTER FUNCTION Security.fn_GetCurrentUserRoles()
 RETURNS NVARCHAR(MAX)
+WITH SCHEMABINDING
 AS
 BEGIN
     RETURN CAST(SESSION_CONTEXT(N'UserRoles') AS NVARCHAR(MAX));
@@ -54,21 +90,116 @@ GO
 -- Function to check if user is admin
 CREATE OR ALTER FUNCTION Security.fn_IsAdmin()
 RETURNS BIT
+WITH SCHEMABINDING
 AS
 BEGIN
     DECLARE @Roles NVARCHAR(MAX) = Security.fn_GetCurrentUserRoles();
     IF @Roles IS NULL RETURN 0;
-    
+
     -- Check if user has Admin or SuperAdmin role
     IF @Roles LIKE '%Admin%' OR @Roles LIKE '%SuperAdmin%'
         RETURN 1;
-    
+
     RETURN 0;
 END;
 GO
 
 -- ========================================
--- Step 3: Create RLS Predicate Functions
+-- Step 3: Create Supporting Tables for RLS
+-- (must exist before predicate functions that reference them)
+-- ========================================
+
+-- User Territory Assignments
+IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'UserTerritories' AND schema_id = SCHEMA_ID('Security'))
+BEGIN
+    CREATE TABLE Security.UserTerritories (
+        UserTerritoryID INT IDENTITY(1,1) PRIMARY KEY,
+        UserID INT NOT NULL,
+        Territory NVARCHAR(50) NOT NULL,
+        Region NVARCHAR(50) NOT NULL,
+        IsActive BIT DEFAULT 1,
+        AssignedDate DATETIME2 DEFAULT GETUTCDATE(),
+        AssignedBy INT,
+        CONSTRAINT FK_UserTerritories_User FOREIGN KEY (UserID) REFERENCES dbo.Users(UserID)
+    );
+
+    CREATE INDEX IX_UserTerritories_UserID ON Security.UserTerritories(UserID);
+    CREATE INDEX IX_UserTerritories_Territory ON Security.UserTerritories(Territory);
+
+    PRINT '✅ UserTerritories table created';
+END
+GO
+
+-- User Customer Assignments
+IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'UserCustomerAssignments' AND schema_id = SCHEMA_ID('Security'))
+BEGIN
+    CREATE TABLE Security.UserCustomerAssignments (
+        AssignmentID INT IDENTITY(1,1) PRIMARY KEY,
+        UserID INT NOT NULL,
+        CustomerID INT NOT NULL,
+        IsActive BIT DEFAULT 1,
+        AssignedDate DATETIME2 DEFAULT GETUTCDATE(),
+        AssignedBy INT,
+        CONSTRAINT FK_UserCustomerAssignments_User FOREIGN KEY (UserID) REFERENCES dbo.Users(UserID)
+    );
+
+    CREATE INDEX IX_UserCustomerAssignments_UserID ON Security.UserCustomerAssignments(UserID);
+    CREATE INDEX IX_UserCustomerAssignments_CustomerID ON Security.UserCustomerAssignments(CustomerID);
+
+    PRINT '✅ UserCustomerAssignments table created';
+END
+GO
+
+-- Organization Hierarchy
+IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'OrganizationHierarchy' AND schema_id = SCHEMA_ID('Security'))
+BEGIN
+    CREATE TABLE Security.OrganizationHierarchy (
+        HierarchyID INT IDENTITY(1,1) PRIMARY KEY,
+        EmployeeID INT NOT NULL,
+        ManagerID INT NOT NULL,
+        Level INT DEFAULT 1,
+        IsActive BIT DEFAULT 1,
+        EffectiveDate DATETIME2 DEFAULT GETUTCDATE(),
+        CONSTRAINT FK_OrganizationHierarchy_Employee FOREIGN KEY (EmployeeID) REFERENCES dbo.Users(UserID),
+        CONSTRAINT FK_OrganizationHierarchy_Manager FOREIGN KEY (ManagerID) REFERENCES dbo.Users(UserID)
+    );
+
+    CREATE INDEX IX_OrganizationHierarchy_EmployeeID ON Security.OrganizationHierarchy(EmployeeID);
+    CREATE INDEX IX_OrganizationHierarchy_ManagerID ON Security.OrganizationHierarchy(ManagerID);
+
+    PRINT '✅ OrganizationHierarchy table created';
+END
+GO
+
+-- Data Access Audit Log
+IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'DataAccessLog' AND schema_id = SCHEMA_ID('Security'))
+BEGIN
+    CREATE TABLE Security.DataAccessLog (
+        LogID INT IDENTITY(1,1) PRIMARY KEY,
+        UserID INT NOT NULL,
+        Username NVARCHAR(100),
+        AccessType NVARCHAR(50) NOT NULL, -- 'Query', 'Chat', 'PowerBI', 'API'
+        TableAccessed NVARCHAR(100),
+        QueryText NVARCHAR(MAX),
+        RowsReturned INT,
+        SessionID NVARCHAR(100),
+        ClientIP NVARCHAR(50),
+        UserAgent NVARCHAR(500),
+        Timestamp DATETIME2 DEFAULT GETUTCDATE(),
+        RLSFilterApplied NVARCHAR(500)
+    );
+
+    CREATE INDEX IX_DataAccessLog_UserID ON Security.DataAccessLog(UserID);
+    CREATE INDEX IX_DataAccessLog_Timestamp ON Security.DataAccessLog(Timestamp);
+    CREATE INDEX IX_DataAccessLog_AccessType ON Security.DataAccessLog(AccessType);
+
+    PRINT '✅ DataAccessLog table created';
+END
+GO
+
+-- ========================================
+-- Step 4: Create RLS Predicate Functions
+-- (tables must exist first due to SCHEMABINDING)
 -- ========================================
 
 -- Predicate for Sales data filtering by region
@@ -78,7 +209,7 @@ WITH SCHEMABINDING
 AS
 RETURN
     SELECT 1 AS AccessGranted
-    WHERE 
+    WHERE
         -- Grant access if user is admin
         Security.fn_IsAdmin() = 1
         OR
@@ -105,7 +236,7 @@ RETURN
         OR
         -- Users see customers in their assigned territories
         EXISTS (
-            SELECT 1 
+            SELECT 1
             FROM Security.UserCustomerAssignments uca
             WHERE uca.UserID = Security.fn_GetCurrentUserId()
                 AND uca.CustomerID = @CustomerID
@@ -144,98 +275,6 @@ RETURN
 GO
 
 -- ========================================
--- Step 4: Create Supporting Tables for RLS
--- ========================================
-
--- User Territory Assignments
-IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'UserTerritories' AND schema_id = SCHEMA_ID('Security'))
-BEGIN
-    CREATE TABLE Security.UserTerritories (
-        UserTerritoryID INT IDENTITY(1,1) PRIMARY KEY,
-        UserID INT NOT NULL,
-        Territory NVARCHAR(50) NOT NULL,
-        Region NVARCHAR(50) NOT NULL,
-        IsActive BIT DEFAULT 1,
-        AssignedDate DATETIME2 DEFAULT GETUTCDATE(),
-        AssignedBy INT,
-        CONSTRAINT FK_UserTerritories_User FOREIGN KEY (UserID) REFERENCES dbo.Users(UserID)
-    );
-    
-    CREATE INDEX IX_UserTerritories_UserID ON Security.UserTerritories(UserID);
-    CREATE INDEX IX_UserTerritories_Territory ON Security.UserTerritories(Territory);
-    
-    PRINT '✅ UserTerritories table created';
-END
-GO
-
--- User Customer Assignments
-IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'UserCustomerAssignments' AND schema_id = SCHEMA_ID('Security'))
-BEGIN
-    CREATE TABLE Security.UserCustomerAssignments (
-        AssignmentID INT IDENTITY(1,1) PRIMARY KEY,
-        UserID INT NOT NULL,
-        CustomerID INT NOT NULL,
-        IsActive BIT DEFAULT 1,
-        AssignedDate DATETIME2 DEFAULT GETUTCDATE(),
-        AssignedBy INT,
-        CONSTRAINT FK_UserCustomerAssignments_User FOREIGN KEY (UserID) REFERENCES dbo.Users(UserID)
-    );
-    
-    CREATE INDEX IX_UserCustomerAssignments_UserID ON Security.UserCustomerAssignments(UserID);
-    CREATE INDEX IX_UserCustomerAssignments_CustomerID ON Security.UserCustomerAssignments(CustomerID);
-    
-    PRINT '✅ UserCustomerAssignments table created';
-END
-GO
-
--- Organization Hierarchy
-IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'OrganizationHierarchy' AND schema_id = SCHEMA_ID('Security'))
-BEGIN
-    CREATE TABLE Security.OrganizationHierarchy (
-        HierarchyID INT IDENTITY(1,1) PRIMARY KEY,
-        EmployeeID INT NOT NULL,
-        ManagerID INT NOT NULL,
-        Level INT DEFAULT 1,
-        IsActive BIT DEFAULT 1,
-        EffectiveDate DATETIME2 DEFAULT GETUTCDATE(),
-        CONSTRAINT FK_OrganizationHierarchy_Employee FOREIGN KEY (EmployeeID) REFERENCES dbo.Users(UserID),
-        CONSTRAINT FK_OrganizationHierarchy_Manager FOREIGN KEY (ManagerID) REFERENCES dbo.Users(UserID)
-    );
-    
-    CREATE INDEX IX_OrganizationHierarchy_EmployeeID ON Security.OrganizationHierarchy(EmployeeID);
-    CREATE INDEX IX_OrganizationHierarchy_ManagerID ON Security.OrganizationHierarchy(ManagerID);
-    
-    PRINT '✅ OrganizationHierarchy table created';
-END
-GO
-
--- Data Access Audit Log
-IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'DataAccessLog' AND schema_id = SCHEMA_ID('Security'))
-BEGIN
-    CREATE TABLE Security.DataAccessLog (
-        LogID INT IDENTITY(1,1) PRIMARY KEY,
-        UserID INT NOT NULL,
-        Username NVARCHAR(100),
-        AccessType NVARCHAR(50) NOT NULL, -- 'Query', 'Chat', 'PowerBI', 'API'
-        TableAccessed NVARCHAR(100),
-        QueryText NVARCHAR(MAX),
-        RowsReturned INT,
-        SessionID NVARCHAR(100),
-        ClientIP NVARCHAR(50),
-        UserAgent NVARCHAR(500),
-        Timestamp DATETIME2 DEFAULT GETUTCDATE(),
-        RLSFilterApplied NVARCHAR(500)
-    );
-    
-    CREATE INDEX IX_DataAccessLog_UserID ON Security.DataAccessLog(UserID);
-    CREATE INDEX IX_DataAccessLog_Timestamp ON Security.DataAccessLog(Timestamp);
-    CREATE INDEX IX_DataAccessLog_AccessType ON Security.DataAccessLog(AccessType);
-    
-    PRINT '✅ DataAccessLog table created';
-END
-GO
-
--- ========================================
 -- Step 5: Create Stored Procedures for Session Context
 -- ========================================
 
@@ -244,18 +283,19 @@ CREATE OR ALTER PROCEDURE Security.usp_SetUserContext
     @UserId INT,
     @Username NVARCHAR(100),
     @UserEmail NVARCHAR(255),
-    @UserRoles NVARCHAR(MAX),
+    @UserRoles NVARCHAR(4000),
     @UserRegion NVARCHAR(50) = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
-    
+    DECLARE @sv sql_variant;
+
     -- Set session context variables (available for RLS predicates)
-    EXEC sp_set_session_context @key = N'UserId', @value = @UserId;
-    EXEC sp_set_session_context @key = N'Username', @value = @Username;
-    EXEC sp_set_session_context @key = N'UserEmail', @value = @UserEmail;
-    EXEC sp_set_session_context @key = N'UserRoles', @value = @UserRoles;
-    
+    SET @sv = @UserId;    EXEC sp_set_session_context @key = N'UserId',    @value = @sv;
+    SET @sv = @Username;  EXEC sp_set_session_context @key = N'Username',  @value = @sv;
+    SET @sv = @UserEmail; EXEC sp_set_session_context @key = N'UserEmail', @value = @sv;
+    SET @sv = @UserRoles; EXEC sp_set_session_context @key = N'UserRoles', @value = @sv;
+
     -- Get user's primary region if not provided
     IF @UserRegion IS NULL
     BEGIN
@@ -264,9 +304,9 @@ BEGIN
         WHERE UserID = @UserId AND IsActive = 1
         ORDER BY AssignedDate DESC;
     END
-    
-    EXEC sp_set_session_context @key = N'UserRegion', @value = @UserRegion;
-    
+
+    SET @sv = @UserRegion; EXEC sp_set_session_context @key = N'UserRegion', @value = @sv;
+
     -- Log context setting
     PRINT '✅ Session context set for user: ' + @Username + ' (Region: ' + ISNULL(@UserRegion, 'None') + ')';
 END;

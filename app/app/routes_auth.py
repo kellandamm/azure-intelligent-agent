@@ -206,8 +206,11 @@ async def register(request: Request, register_data: RegisterRequest):
             detail="Username or email already exists",
         )
 
-    # Assign default "User" role (RoleID = 4)
-    auth_manager.assign_role(user_id, 4)
+    # Assign default "User" role — look up by name to avoid hardcoding the RoleID
+    roles = auth_manager.get_all_roles()
+    default_role = next((r for r in roles if r.get("RoleName") == "User"), None)
+    if default_role:
+        auth_manager.assign_role(user_id, default_role["RoleID"])
 
     return {
         "message": "User registered successfully",

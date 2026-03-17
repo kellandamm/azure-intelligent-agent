@@ -3,11 +3,12 @@ Admin routes for Agent Management and System Monitoring.
 Provides dashboard, agent configuration, and system analytics.
 """
 from typing import Optional, List, Dict, Any
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, HTTPException, status, Depends, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field
 import json
+import logging
 import os
 
 from utils.auth import (
@@ -19,6 +20,8 @@ from utils.auth import (
 from utils.db_connection import DatabaseConnection
 from config import settings
 from app.agents.admin_config_agent import AdminConfigAgent
+
+logger = logging.getLogger(__name__)
 
 # Create router
 admin_agent_router = APIRouter(prefix="/api/admin/agents", tags=["Agent Management"])
@@ -67,19 +70,20 @@ class DashboardStatsResponse(BaseModel):
 # Helper Functions
 # ========================================
 
+_AGENT_CONFIGS_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "agent_configs.json")
+
+
 def load_agent_configs() -> Dict[str, Any]:
     """Load agent configurations from file."""
-    config_path = "agent_configs.json"
-    if os.path.exists(config_path):
-        with open(config_path, "r") as f:
+    if os.path.exists(_AGENT_CONFIGS_PATH):
+        with open(_AGENT_CONFIGS_PATH, "r") as f:
             return json.load(f)
     return {}
 
 
 def save_agent_configs(configs: Dict[str, Any]) -> None:
     """Save agent configurations to file."""
-    config_path = "agent_configs.json"
-    with open(config_path, "w") as f:
+    with open(_AGENT_CONFIGS_PATH, "w") as f:
         json.dump(configs, f, indent=2)
 
 
@@ -228,6 +232,7 @@ async def get_agent(agent_key: str, current_user: dict = Depends(get_current_use
 async def update_agent(
     agent_key: str,
     agent_config: AgentConfigModel,
+    request: Request,
     current_user: dict = Depends(get_current_user)
 ):
     """
@@ -255,35 +260,34 @@ async def update_agent(
         "is_active": agent_config.is_active,
         "model": agent_config.model,
         "modified_by": current_user["user_id"],
-        "modified_date": datetime.utcnow().isoformat(),
+        "modified_date": datetime.now(timezone.utc).isoformat(),
     })
     
     save_agent_configs(configs)
-    
-    # Log the change
-    async with DatabaseConnection() as conn:
-        await conn.execute(
-            """
-            IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'AgentConfigChanges')
-            BEGIN
-                CREATE TABLE AgentConfigChanges (
-                    ChangeID INT IDENTITY(1,1) PRIMARY KEY,
-                    AgentKey NVARCHAR(50) NOT NULL,
-                    Changes NVARCHAR(MAX),
-                    ModifiedBy INT,
-                    ModifiedDate DATETIME2 DEFAULT GETUTCDATE()
-                );
-            END
-            
-            INSERT INTO AgentConfigChanges (AgentKey, Changes, ModifiedBy)
-            VALUES (@AgentKey, @Changes, @ModifiedBy)
-            """,
-            {
-                "AgentKey": agent_key,
-                "Changes": json.dumps(agent_config.dict()),
-                "ModifiedBy": current_user["user_id"],
-            },
-        )
+
+    # Log the change to database (best-effort — skip if db not available)
+    db_connection = getattr(getattr(request.app, "state", None), "db_connection", None)
+    if db_connection:
+        try:
+            db_connection.execute_query("""
+                IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'AgentConfigChanges')
+                BEGIN
+                    CREATE TABLE AgentConfigChanges (
+                        ChangeID INT IDENTITY(1,1) PRIMARY KEY,
+                        AgentKey NVARCHAR(50) NOT NULL,
+                        Changes NVARCHAR(MAX),
+                        ModifiedBy INT,
+                        ModifiedDate DATETIME2 DEFAULT GETUTCDATE()
+                    );
+                END
+            """, fetch=False)
+            db_connection.execute_query(
+                "INSERT INTO AgentConfigChanges (AgentKey, Changes, ModifiedBy) VALUES (?, ?, ?)",
+                (agent_key, json.dumps(agent_config.dict()), current_user["user_id"]),
+                fetch=False,
+            )
+        except Exception as e:
+            logger.warning(f"Failed to log agent config change to database: {e}")
     
     return {
         "message": f"Agent '{agent_key}' updated successfully",
@@ -313,15 +317,15 @@ async def test_agent(
     
     try:
         # Create a test session
-        session_id = f"test_{current_user['user_id']}_{datetime.utcnow().timestamp()}"
+        session_id = f"test_{current_user['user_id']}_{datetime.now(timezone.utc).timestamp()}"
         
         # Send test message
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc)
         response_text, history, usage = await manager._run_specialist(
             test_request.agent_key,
             test_request.test_message
         )
-        end_time = datetime.utcnow()
+        end_time = datetime.now(timezone.utc)
         
         response_time = (end_time - start_time).total_seconds()
         
@@ -402,7 +406,7 @@ async def get_dashboard_stats(
                 "errors_last_24h": 0,
                 "top_agents": [],
                 "recent_activity": [],
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.now(timezone.utc).isoformat()
             }
         
         db = request.app.state.db_connection
@@ -522,7 +526,7 @@ async def get_dashboard_stats(
             "errors_last_24h": errors_24h,
             "top_agents": top_agents,
             "recent_activity": recent_activity,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
     except Exception as e:
         logger.error(f"Dashboard stats error: {e}", exc_info=True)
@@ -646,7 +650,7 @@ async def get_system_health(current_user: dict = Depends(get_current_user)):
     """
     health_data = {
         "status": "healthy",
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "components": {}
     }
     

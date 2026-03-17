@@ -198,7 +198,7 @@ async def get_analytics_metrics(
 
             # Total customers from CustomerDim (Fabric lakehouse)
             cursor.execute(
-                "SELECT COUNT(DISTINCT CustomerID) FROM CustomerDim WHERE YEAR(CreatedDate) = 2026 OR CreatedDate IS NULL"
+                "SELECT COUNT(DISTINCT CustomerID) FROM CustomerDim WHERE YEAR(CreatedDate) = YEAR(GETDATE()) OR CreatedDate IS NULL"
             )
             total_customers = cursor.fetchone()[0] or 0
 
@@ -213,7 +213,7 @@ async def get_analytics_metrics(
                         ELSE 0 
                     END as avg_order_value
                 FROM SalesFact
-                WHERE YEAR(OrderDate) = 2026
+                WHERE YEAR(OrderDate) = YEAR(GETDATE())
             """)
             row = cursor.fetchone()
             total_revenue = float(row[0] or 0)
@@ -224,8 +224,8 @@ async def get_analytics_metrics(
             cursor.execute("""
                 SELECT COUNT(DISTINCT CustomerID) 
                 FROM SalesFact 
-                WHERE YEAR(OrderDate) = 2026 
-                  AND TotalAmount > (SELECT AVG(TotalAmount) * 1.5 FROM SalesFact WHERE YEAR(OrderDate) = 2026)
+                WHERE YEAR(OrderDate) = YEAR(GETDATE()) 
+                  AND TotalAmount > (SELECT AVG(TotalAmount) * 1.5 FROM SalesFact WHERE YEAR(OrderDate) = YEAR(GETDATE()))
             """)
             total_opportunities = cursor.fetchone()[0] or 0
 
@@ -234,7 +234,7 @@ async def get_analytics_metrics(
                 WITH CustomerOrders AS (
                     SELECT CustomerID, COUNT(DISTINCT OrderID) as order_count
                     FROM SalesFact
-                    WHERE YEAR(OrderDate) = 2026
+                    WHERE YEAR(OrderDate) = YEAR(GETDATE())
                     GROUP BY CustomerID
                 )
                 SELECT 
@@ -252,7 +252,7 @@ async def get_analytics_metrics(
                         MAX(OrderDate) as LastOrder,
                         COUNT(DISTINCT OrderID) as OrderCount
                     FROM SalesFact
-                    WHERE YEAR(OrderDate) = 2026
+                    WHERE YEAR(OrderDate) = YEAR(GETDATE())
                     GROUP BY CustomerID
                     HAVING COUNT(DISTINCT OrderID) > 1
                 )
@@ -515,7 +515,7 @@ async def get_product_analytics(
                     ISNULL(AVG(s.UnitPrice), 0) as avg_price,
                     CASE 
                         WHEN SUM(s.Quantity) > 0 
-                        THEN (SUM(s.TotalAmount) * 100.0 / NULLIF((SELECT SUM(TotalAmount) FROM SalesFact WHERE YEAR(OrderDate) = 2026), 0))
+                        THEN (SUM(s.TotalAmount) * 100.0 / NULLIF((SELECT SUM(TotalAmount) FROM SalesFact WHERE YEAR(OrderDate) = YEAR(GETDATE())), 0))
                         ELSE 0 
                     END as market_share,
                     CASE 
@@ -527,7 +527,7 @@ async def get_product_analytics(
                     END as growth_rate
                 FROM ProductDim p
                 INNER JOIN SalesFact s ON p.ProductID = s.ProductID
-                WHERE YEAR(s.OrderDate) = 2026
+                WHERE YEAR(s.OrderDate) = YEAR(GETDATE())
                 GROUP BY p.ProductID, p.ProductName
                 HAVING SUM(s.TotalAmount) > 0
                 ORDER BY SUM(s.TotalAmount) DESC
@@ -596,7 +596,7 @@ async def get_customer_segments(
                         DATEDIFF(DAY, MAX(s.OrderDate), GETDATE()) as DaysSinceLastOrder
                     FROM CustomerDim c
                     INNER JOIN SalesFact s ON c.CustomerID = s.CustomerID
-                    WHERE YEAR(s.OrderDate) = 2026
+                    WHERE YEAR(s.OrderDate) = YEAR(GETDATE())
                     GROUP BY c.CustomerID
                 ) AS CustomerStats
                 GROUP BY CASE 
@@ -668,7 +668,7 @@ async def get_sales_rep_performance(
                     END as quota_attainment
                 FROM CustomerDim c
                 INNER JOIN SalesFact s ON c.CustomerID = s.CustomerID
-                WHERE YEAR(s.OrderDate) = 2026
+                WHERE YEAR(s.OrderDate) = YEAR(GETDATE())
                   AND c.Region IS NOT NULL
                 GROUP BY c.Region
                 HAVING SUM(s.TotalAmount) > 0

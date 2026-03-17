@@ -3,7 +3,7 @@ Authentication and authorization module for Agent Framework.
 Handles user authentication, JWT tokens, and permission checking.
 """
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Dict, Any
 import bcrypt
 import jwt
@@ -47,7 +47,7 @@ class AuthManager:
         logger.info(f"🔐 AuthManager initialized")
         logger.info(f"🔑 JWT Algorithm: {jwt_algorithm}")
         logger.info(f"🔑 JWT Expiry: {jwt_expiry_hours} hours")
-        logger.info(f"🔑 JWT Secret configured (length: {len(jwt_secret)}, first 10 chars: {jwt_secret[:10]}...)")
+        logger.info(f"🔑 JWT Secret configured (length: {len(jwt_secret)})")
     
     def verify_password(self, password: str, hashed_password: str) -> bool:
         """
@@ -79,7 +79,7 @@ class AuthManager:
         Returns:
             str: JWT token
         """
-        expiry = datetime.utcnow() + timedelta(hours=self.jwt_expiry_hours)
+        expiry = datetime.now(timezone.utc) + timedelta(hours=self.jwt_expiry_hours)
         
         payload = {
             "user_id": user_data["UserID"],
@@ -88,11 +88,10 @@ class AuthManager:
             "roles": user_data.get("Roles", "").split(",") if user_data.get("Roles") else [],
             "permissions": user_data.get("Permissions", "").split(",") if user_data.get("Permissions") else [],
             "exp": expiry,
-            "iat": datetime.utcnow()
+            "iat": datetime.now(timezone.utc)
         }
         
         logger.info(f"🔑 Creating JWT token for user: {user_data['Username']}")
-        logger.debug(f"🔑 JWT Secret (first 10 chars): {self.jwt_secret[:10]}...")
         logger.debug(f"🔑 JWT Algorithm: {self.jwt_algorithm}")
         logger.debug(f"🔑 Token expiry: {expiry}")
         
@@ -112,7 +111,6 @@ class AuthManager:
         """
         try:
             logger.info(f"🔍 Verifying JWT token (length: {len(token)})")
-            logger.debug(f"🔑 Using JWT Secret (first 10 chars): {self.jwt_secret[:10]}...")
             logger.debug(f"🔑 Using JWT Algorithm: {self.jwt_algorithm}")
             logger.debug(f"🔑 Token preview: {token[:50]}...")
             
@@ -167,7 +165,7 @@ class AuthManager:
             
             # Check if account is locked
             if user.get("AccountLockedUntil"):
-                if user["AccountLockedUntil"] > datetime.utcnow():
+                if user["AccountLockedUntil"] > datetime.now(timezone.utc):
                     logger.warning(f"Account locked: {username}")
                     return None
             

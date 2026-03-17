@@ -106,8 +106,6 @@ async def lifespan(app: FastAPI):
                 
                 # Initialize AuthManager with debug logging
                 logger.info("🔧 Initializing AuthManager...")
-                logger.debug(f"🔑 JWT_SECRET length: {len(settings.jwt_secret)}")
-                logger.debug(f"🔑 JWT_SECRET first 10 chars: {settings.jwt_secret[:10]}...")
                 logger.debug(f"🔑 JWT_ALGORITHM: {settings.jwt_algorithm}")
                 logger.debug(f"⏱️  JWT_EXPIRY_HOURS: {settings.jwt_expiry_hours}")
                 
@@ -159,16 +157,20 @@ app = FastAPI(
 # Add observability middleware FIRST (to track all requests)
 app.add_middleware(ObservabilityMiddleware)
 
-# Add CORS middleware - SECURITY: Restrict to specific domains in production
+# Add CORS middleware — allowed origins are the localhost defaults plus any
+# production domains listed in the APP_ALLOWED_ORIGINS env var (comma-separated).
+# Example: APP_ALLOWED_ORIGINS=https://myapp.azurewebsites.net,https://myapp.com
+_default_origins = ["http://localhost:8080", "http://127.0.0.1:8080"]
+_extra_origins = [
+    o.strip()
+    for o in os.environ.get("APP_ALLOWED_ORIGINS", "").split(",")
+    if o.strip()
+]
+_allowed_origins = _default_origins + _extra_origins
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:8080",
-        "http://127.0.0.1:8080",
-        # Add your production domains here:
-        # "https://yourdomain.com",
-        # "https://app.yourdomain.com",
-    ],
+    allow_origins=_allowed_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE"],
     allow_headers=["Authorization", "Content-Type", "X-Correlation-ID"],
