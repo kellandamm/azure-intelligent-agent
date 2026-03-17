@@ -9,7 +9,6 @@ Deploy the Azure Intelligent Agent from zero to running in approximately 20 minu
 Have these ready before starting:
 
 - [ ] **Azure CLI** installed and logged in (`az login`)
-- [ ] **Azure Developer** installed and logged in (`azd`)
 - [ ] **Python 3.11+** installed
 - [ ] **Azure subscription** with Contributor access to a resource group
 - [ ] **Microsoft Foundry** resource with a GPT-5.X model deployed
@@ -37,13 +36,13 @@ param sqlAzureAdAdminLogin = 'admin@yourcompany.com'   // az ad signed-in-user s
 param sqlAzureAdAdminSid   = '<your-object-id>'        // az ad signed-in-user show --query id -o tsv
 ```
 
-### Deploy a new Microsoft Foundry project (optional)
+### Deploy a new Azure OpenAI instead (optional)
 
-If you do not have an existing Microsoft Foundry resource, let Bicep deploy one:
+If you do not have an existing Azure OpenAI resource, let Bicep deploy one:
 
 ```bicep
 param deployAzureOpenAI        = true
-param azureOpenAIModelName     = 'gpt-5.2'
+param azureOpenAIModelName     = 'gpt-4o'
 param azureOpenAIModelVersion  = '2024-11-20'
 param azureOpenAIModelCapacity = 10   // tokens per minute (thousands)
 ```
@@ -86,16 +85,16 @@ Choose **one** method:
 
 ```powershell
 # Create resource group
-az group create --name <resource-group> --location eastus2
+az group create --name rg-myagents-prod --location eastus2
 
 # Deploy infrastructure + app code
-.\scripts\deploy.ps1 -ResourceGroupName "<resource-group>"
+.\scripts\deploy.ps1 -ResourceGroupName "rg-myagents-prod"
 ```
 
 To update only the app code after changes (no infra rebuild):
 
 ```powershell
-.\scripts\deploy.ps1 -ResourceGroupName "<resource-group>" `
+.\scripts\deploy.ps1 -ResourceGroupName "rg-myagents-prod" `
                      -AppName "<your-app-name>" `
                      -SkipInfrastructure
 ```
@@ -105,6 +104,7 @@ To update only the app code after changes (no infra rebuild):
 ```bash
 # Install azd if needed: https://learn.microsoft.com/azure/developer/azure-developer-cli/install-azd
 azd init
+azd env set AZURE_LOCATION eastus2
 azd up
 ```
 
@@ -115,7 +115,7 @@ For full azd details see [AZD_DEPLOYMENT_GUIDE.md](AZD_DEPLOYMENT_GUIDE.md).
 Note your app name from the deployment output (e.g. `agentjo5a6tek-prod-app`), then tail the startup logs:
 
 ```powershell
-az webapp log tail --name <app-name> --resource-group <resource-group>
+az webapp log tail --name <app-name> --resource-group rg-myagents-prod
 ```
 
 A healthy start looks like:
@@ -132,7 +132,7 @@ If you see errors, jump to [Troubleshooting](#troubleshooting) below.
 
 ## Phase 3 — Configure AI Services
 
-### Using an existing Microsoft Foundry OpenAI Endpoint ###
+### Using an existing Azure OpenAI
 
 If you set `azureOpenAIEndpoint` and `azureOpenAIApiKey` in Phase 1, the Bicep template pushes those into App Settings automatically. Verify:
 
@@ -142,7 +142,7 @@ az webapp config appsettings list \
   --query "[?name=='AZURE_OPENAI_ENDPOINT'].value" -o tsv
 ```
 
-### Deploying a new Microsoft Foundry OpenAI Endpoint (`deployAzureOpenAI = true`)
+### Deploying a new Azure OpenAI (`deployAzureOpenAI = true`)
 
 The endpoint is wired up automatically. The API key is written to Key Vault and referenced by App Settings. To retrieve the key if needed:
 
@@ -221,6 +221,13 @@ param enableAuthentication = false
 ### Create the first admin user
 
 With authentication on, you need an initial admin account. See [CREATE_ADMIN_USER.md](../CREATE_ADMIN_USER.md) for full options.
+
+In your terminal:
+pip install bcrypt
+Copy the command below and change YourPassword123! to your own password
+py -c "import bcrypt; print(bcrypt.hashpw(b'YourPassword123!', bcrypt.gensalt()).decode())"
+
+Copy the output and copy it too: <bcrypt-hash> in the SQL query below
 
 Quick path via Azure Portal → SQL Database → Query Editor:
 
