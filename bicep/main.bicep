@@ -58,7 +58,7 @@ param azureOpenAIModelCapacity int = 10
 param azureOpenAISku string = 'S0'
 
 @description('Azure OpenAI service endpoint URL (required when deployAzureOpenAI=false)')
-param azureOpenAIEndpoint string = deployAzureOpenAI ? '' : ''
+param azureOpenAIEndpoint string = ''
 
 @description('Azure OpenAI deployment/model name (e.g., gpt-4o, gpt-35-turbo)')
 param azureOpenAIDeployment string = 'gpt-4o'
@@ -215,6 +215,18 @@ param enableKeyVault bool = true
 @description('Enable Container Registry for Docker images')
 param enableContainerRegistry bool = false
 
+@description('Enable Log Analytics Workspace (required for workspace-based App Insights and diagnostic logs). Recommended by MCSB.')
+param enableLogAnalyticsWorkspace bool = true
+
+@description('Enable SQL Vulnerability Assessment (Express configuration). Recommended by MCSB.')
+param enableSqlVulnerabilityAssessment bool = true
+
+@description('Disable API-key (local) auth on Azure OpenAI and require managed identity. Set true for production to comply with MCSB. Only applies when deployAzureOpenAI = true.')
+param disableOpenAILocalAuth bool = false
+
+@description('Enable VNet integration: deploys a VNet, adds App Service outbound integration, and places SQL behind a private endpoint. Required to satisfy the MCAPS deny policy that blocks SQL servers with public network access enabled.')
+param enableVnetIntegration bool = true
+
 // ========================================
 // Variables
 // ========================================
@@ -226,6 +238,9 @@ var tags = {
   ManagedBy: 'Bicep-AVM'
   DeployedDate: substring(deploymentTimestamp, 0, 10)
 }
+
+// azd requires this tag on the Web App resource to locate it during 'azd deploy'
+var webAppTags = union(tags, { 'azd-service-name': 'web' })
 
 // Generate JWT secret if not provided
 var generatedJwtSecret = uniqueString(resourceGroup().id, appName, deploymentTimestamp)
@@ -286,6 +301,8 @@ var baseAppSettings = [
   
   // Azure deployment settings
   { name: 'SCM_DO_BUILD_DURING_DEPLOYMENT', value: 'true' }
+  { name: 'ENABLE_ORYX_BUILD', value: 'true' }
+  { name: 'WEBSITES_CONTAINER_START_TIME_LIMIT', value: '1800' }
   { name: 'WEBSITE_HTTPLOGGING_RETENTION_DAYS', value: '7' }
 ]
 
@@ -304,6 +321,36 @@ module azureOpenAIModule 'modules/azureOpenAI.bicep' = if (deployAzureOpenAI) {
     modelVersion: azureOpenAIModelVersion
     deploymentName: azureOpenAIDeployment
     deploymentCapacity: azureOpenAIModelCapacity
+    disableLocalAuth: disableOpenAILocalAuth
+  }
+}
+
+// ========================================
+// Module: Virtual Network
+// MCAPS compliance: SQL Server public network access must be disabled.
+// A VNet with App Service subnet integration + SQL private endpoint provides
+// secure connectivity without public internet exposure.
+// ========================================
+
+module networkModule 'modules/network.bicep' = if (enableVnetIntegration) {
+  name: 'network-deployment'
+  params: {
+    vnetName: '${resourceNamePrefix}-vnet'
+    location: location
+    tags: tags
+  }
+}
+
+// ========================================
+// Module: Log Analytics Workspace (MCSB: centralised diagnostic logs)
+// ========================================
+
+module logAnalyticsModule 'modules/logAnalyticsWorkspace.bicep' = if (enableLogAnalyticsWorkspace) {
+  name: 'logAnalytics-deployment'
+  params: {
+    name: '${resourceNamePrefix}-law'
+    location: location
+    tags: tags
   }
 }
 
@@ -317,12 +364,14 @@ module appInsightsModule 'modules/appInsights.bicep' = if (enableApplicationInsi
     name: '${resourceNamePrefix}-insights'
     location: location
     tags: tags
+    // Pass workspace ID so App Insights switches to workspace-based mode (MCSB recommended)
+    logAnalyticsWorkspaceId: enableLogAnalyticsWorkspace ? logAnalyticsModule!.outputs.resourceId : ''
   }
 }
 
 // App Insights settings - conditional
 var appInsightsSettings = enableApplicationInsights ? [
-  { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', value: appInsightsModule.outputs.connectionString }
+  { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', value: appInsightsModule!.outputs.connectionString }
   { name: 'ApplicationInsightsAgent_EXTENSION_VERSION', value: '~3' }
 ] : []
 
@@ -395,6 +444,29 @@ module sqlServerModule 'modules/sqlServer.bicep' = {
     databaseSku: sqlDatabaseSku
     enableAudit: true
     enableThreatDetection: true
+    enableVulnerabilityAssessment: enableSqlVulnerabilityAssessment
+    // MCAPS deny policy: SQL public network access must be Disabled; use private endpoint for connectivity.
+    publicNetworkAccess: 'Disabled'
+    // MCAPS deny policy: SQL outbound network access must be restricted.
+    restrictOutboundNetworkAccess: 'Enabled'
+  }
+}
+
+// ========================================
+// Module: SQL Private Endpoint
+// Required when SQL publicNetworkAccess is Disabled—gives App Service a private
+// IP path to SQL through the VNet without traversing the public internet.
+// ========================================
+
+module sqlPrivateEndpointModule 'modules/sqlPrivateEndpoint.bicep' = if (enableVnetIntegration) {
+  name: 'sql-private-endpoint-deployment'
+  params: {
+    privateEndpointName: '${resourceNamePrefix}-sql-pe'
+    sqlServerResourceId: sqlServerModule.outputs.resourceId
+    subnetId: enableVnetIntegration ? networkModule!.outputs.privateEndpointSubnetId : ''
+    vnetId: enableVnetIntegration ? networkModule!.outputs.vnetId : ''
+    location: location
+    tags: tags
   }
 }
 
@@ -408,17 +480,17 @@ module appServiceModule 'modules/appService.bicep' = {
     appServicePlanName: '${resourceNamePrefix}-plan'
     webAppName: '${resourceNamePrefix}-app'
     location: location
-    tags: tags
+    tags: webAppTags
     appServicePlanSku: appServicePlanSku
     pythonVersion: '3.11'
     alwaysOn: true
     appSettings: appSettings
     enableSystemManagedIdentity: true
+    // Pass workspace ID so diagnostic logs are sent to Log Analytics (MCSB)
+    logAnalyticsWorkspaceId: enableLogAnalyticsWorkspace ? logAnalyticsModule!.outputs.resourceId : ''
+    // Route outbound SQL traffic through VNet to reach private endpoint
+    vnetSubnetId: enableVnetIntegration ? networkModule!.outputs.appServiceSubnetId : ''
   }
-  dependsOn: [
-    appInsightsModule
-    sqlServerModule
-  ]
 }
 
 // ========================================
@@ -431,23 +503,13 @@ module keyVaultRoleAssignment 'modules/roleAssignment.bicep' = if (enableKeyVaul
   params: {
     principalId: appServiceModule.outputs.managedIdentityPrincipalId
     roleDefinitionId: '4633458b-17de-408a-b874-0445c86b69e6' // Key Vault Secrets User
-    targetResourceId: enableKeyVault ? keyVaultModule.outputs.resourceId : ''
+    targetResourceId: enableKeyVault ? keyVaultModule!.outputs.resourceId : ''
   }
-  dependsOn: [
-    keyVaultModule
-    appServiceModule
-  ]
 }
 
-// Grant Web App access to SQL Database
-module sqlRoleAssignment 'modules/roleAssignment.bicep' = if (sqlUseAzureAuth) {
-  name: 'sql-roleAssignment'
-  params: {
-    principalId: appServiceModule.outputs.managedIdentityPrincipalId
-    roleDefinitionId: '00000000-0000-0000-0000-000000000000' // Placeholder - SQL roles handled separately
-    targetResourceId: sqlServerModule.outputs.resourceId
-  }
-}
+// NOTE: SQL managed identity user creation (CREATE USER ... FROM EXTERNAL PROVIDER)
+// is an in-database DDL operation and cannot be done through an ARM/Bicep role assignment.
+// It is handled automatically by setup_mi_user.py on first application startup.
 
 // ========================================
 // Outputs
@@ -491,6 +553,15 @@ output containerRegistryLoginServer string = enableContainerRegistry ? container
 
 @description('Application Insights connection string')
 output applicationInsightsConnectionString string = enableApplicationInsights ? appInsightsModule!.outputs.connectionString : ''
+
+@description('Log Analytics Workspace resource ID')
+output logAnalyticsWorkspaceId string = enableLogAnalyticsWorkspace ? logAnalyticsModule!.outputs.resourceId : ''
+
+@description('Log Analytics Workspace name')
+output logAnalyticsWorkspaceName string = enableLogAnalyticsWorkspace ? logAnalyticsModule!.outputs.name : ''
+
+@description('VNet name (deployed when enableVnetIntegration = true)')
+output vnetName string = enableVnetIntegration ? networkModule!.outputs.vnetName : ''
 
 @description('Generated JWT secret (if auto-generated)')
 @secure()

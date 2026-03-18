@@ -132,8 +132,13 @@ class AzureOpenAIChatClient:
         params = {"api-version": self.api_version}
         payload: Dict[str, Any] = {
             "messages": messages,
-            "temperature": temperature,
         }
+        # Reasoning models (o1, o3, o4 series) only accept the default temperature (1).
+        # Omit the parameter entirely for those deployments.
+        _name = (self.deployment_name or "").lower()
+        _is_reasoning = any(_name.startswith(p) or f"-{p}" in _name for p in ("o1", "o3", "o4"))
+        if not _is_reasoning:
+            payload["temperature"] = temperature
         if max_output_tokens:
             payload["max_output_tokens"] = max_output_tokens
         if tools:

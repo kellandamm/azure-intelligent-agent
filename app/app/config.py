@@ -1,5 +1,4 @@
 """Configuration management for Agent Framework with Fabric Integration."""
-import os
 from typing import Optional
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -15,21 +14,21 @@ class Settings(BaseSettings):
     )
     
     # Azure OpenAI Configuration
-    azure_openai_endpoint: str
+    azure_openai_endpoint: Optional[str] = None
     azure_openai_deployment: str = "gpt-4o"
     azure_openai_api_version: str = "2024-08-01-preview"
-    
+
     # Azure AI Foundry Project
-    project_endpoint: str
+    project_endpoint: Optional[str] = None
     project_connection_string: Optional[str] = None
     model_deployment_name: str = "gpt-4o"
-    
+
     # Microsoft Fabric Configuration
-    fabric_workspace_id: str
-    fabric_orchestrator_agent_id: str  # RetailAssistantOrchestrator
+    fabric_workspace_id: Optional[str] = None
+    fabric_orchestrator_agent_id: Optional[str] = None  # RetailAssistantOrchestrator
     fabric_orchestrator_agent_name: str = "RetailAssistantOrchestrator"
-    fabric_sales_agent_id: str
-    fabric_realtime_agent_id: str
+    fabric_sales_agent_id: Optional[str] = None
+    fabric_realtime_agent_id: Optional[str] = None
     fabric_analytics_agent_id: Optional[str] = None
     fabric_financial_agent_id: Optional[str] = None
     fabric_support_agent_id: Optional[str] = None
@@ -39,26 +38,29 @@ class Settings(BaseSettings):
     fabric_connection_id: Optional[str] = None
     
     # Power BI Integration Configuration
-    powerbi_workspace_id: str
+    powerbi_workspace_id: Optional[str] = None
     powerbi_workspace_name: Optional[str] = None
     powerbi_report_id: Optional[str] = None
     powerbi_client_id: Optional[str] = None
     powerbi_client_secret: Optional[str] = None
-    powerbi_tenant_id: str
+    powerbi_tenant_id: Optional[str] = None
     powerbi_connection_url: Optional[str] = None
     
     # Azure Deployment
     azure_subscription_id: Optional[str] = None
-    azure_resource_group: str = os.getenv("AZURE_RESOURCE_GROUP", "")
+    azure_resource_group: str = ""
     azure_location: str = "eastus2"
-    azure_container_registry: str = os.getenv("AZURE_CONTAINER_REGISTRY", "")
+    azure_container_registry: str = ""
     application_insights_name: str = "agentframework-demos"
     
     # Application Configuration
     app_port: int = 8080
     log_level: str = "INFO"
     enable_tracing: bool = True
-    
+
+    # Agent backend selection
+    use_foundry_agents: bool = False  # Set USE_FOUNDRY_AGENTS=true to route chat through Azure AI Foundry
+
     # MCP Server Configuration
     mcp_server_host: str = "localhost"
     mcp_server_port: int = 3000

@@ -64,7 +64,9 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
     enableRbacAuthorization: enableRbacAuthorization
     enableSoftDelete: enableSoftDelete
     softDeleteRetentionInDays: softDeleteRetentionInDays
-    enablePurgeProtection: null
+    // Required by MCSB (SecurityCenterBuiltIn): Key Vault must have purge protection enabled.
+    // NOTE: this is irreversible — once enabled it cannot be disabled.
+    enablePurgeProtection: true
     publicNetworkAccess: 'Enabled'
     networkAcls: {
       defaultAction: 'Allow'

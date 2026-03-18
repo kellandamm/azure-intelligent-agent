@@ -16,6 +16,20 @@ admin_router = APIRouter(prefix="/api/admin", tags=["Administration"])
 
 
 # ========================================
+# Helper Functions
+# ========================================
+
+def get_auth_manager(request: Request) -> AuthManager:
+    """Get auth manager from app state, raising 503 if not available."""
+    if not hasattr(request.app.state, 'auth_manager') or request.app.state.auth_manager is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Authentication is currently disabled. Database connection required.",
+        )
+    return request.app.state.auth_manager
+
+
+# ========================================
 # Pydantic Models
 # ========================================
 
@@ -110,25 +124,33 @@ async def login(request: Request, login_data: LoginRequest):
     Rate limited to prevent brute force attacks.
     """
     from fastapi.responses import JSONResponse
+    from utils.logging_config import logger
+    
+    logger.info(f"🔐 Login attempt for username: {login_data.username}")
+    
+    # Check if authentication is available
+    auth_manager = get_auth_manager(request)
     
     # Enforce rate limiting (5 attempts per minute per IP)
     client_ip = rate_limiter.get_client_ip(request)
     rate_limiter.check_rate_limit(client_ip, "/api/auth/login", max_requests=5, window_seconds=60)
 
-    auth_manager: AuthManager = request.app.state.auth_manager
-
     # Authenticate user
     user = auth_manager.authenticate_user(login_data.username, login_data.password)
 
     if not user:
+        logger.warning(f"❌ Login failed for username: {login_data.username}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    logger.info(f"✅ User authenticated: {user['Username']}, UserID: {user['UserID']}")
+
     # Create JWT token
     token = auth_manager.create_jwt_token(user)
+    logger.info(f"🎫 JWT token created (length: {len(token)})")
 
     # Prepare user data (exclude sensitive info)
     user_data = {
@@ -139,6 +161,8 @@ async def login(request: Request, login_data: LoginRequest):
         "last_name": user.get("LastName"),
         "roles": user.get("Roles", "").split(",") if user.get("Roles") else [],
     }
+    
+    logger.debug(f"👤 User roles: {user_data['roles']}")
 
     # Create response with token in cookie for server-side auth
     response_data = LoginResponse(access_token=token, user=user_data)
@@ -146,13 +170,13 @@ async def login(request: Request, login_data: LoginRequest):
     response = JSONResponse(content=response_data.model_dump())
 
     # Set HTTP-only cookie for server-side authentication checks
-    # This prevents the guest window vulnerability
+    # SECURITY HARDENING: SameSite=Strict for maximum CSRF protection
     response.set_cookie(
         key="auth_token",
         value=token,
         httponly=True,  # Prevents JavaScript access (XSS protection)
         secure=True,  # Only sent over HTTPS
-        samesite="lax",  # CSRF protection
+        samesite="strict",  # CSRF protection (strict = no cross-site cookie transmission)
         max_age=86400,  # 24 hours (matches JWT expiry)
     )
 
@@ -164,7 +188,8 @@ async def register(request: Request, register_data: RegisterRequest):
     """
     Register a new user (public registration - assigns User role by default).
     """
-    auth_manager: AuthManager = request.app.state.auth_manager
+    # Check if authentication is available
+    auth_manager = get_auth_manager(request)
 
     # Create user
     user_id = auth_manager.create_user(
@@ -181,8 +206,11 @@ async def register(request: Request, register_data: RegisterRequest):
             detail="Username or email already exists",
         )
 
-    # Assign default "User" role (RoleID = 4)
-    auth_manager.assign_role(user_id, 4)
+    # Assign default "User" role — look up by name to avoid hardcoding the RoleID
+    roles = auth_manager.get_all_roles()
+    default_role = next((r for r in roles if r.get("RoleName") == "User"), None)
+    if default_role:
+        auth_manager.assign_role(user_id, default_role["RoleID"])
 
     return {
         "message": "User registered successfully",
@@ -227,7 +255,7 @@ async def change_password(
     """
     Change current user's password (requires current password).
     """
-    auth_manager: AuthManager = request.app.state.auth_manager
+    auth_manager = get_auth_manager(request)
 
     success = auth_manager.change_own_password(
         user_id=current_user["user_id"],
@@ -256,7 +284,7 @@ async def get_all_users(request: Request):
     """
     from utils.logging_config import logger
 
-    auth_manager: AuthManager = request.app.state.auth_manager
+    auth_manager = get_auth_manager(request)
     users = auth_manager.get_all_users()
 
     logger.info(f"get_all_users called - found {len(users)} users in database")
@@ -292,7 +320,7 @@ async def get_user(request: Request, user_id: int):
     """
     Get user by ID (admin only).
     """
-    auth_manager: AuthManager = request.app.state.auth_manager
+    auth_manager = get_auth_manager(request)
     user = auth_manager.get_user_by_id(user_id)
 
     if not user:
@@ -329,7 +357,7 @@ async def create_user(
     """
     from utils.logging_config import logger
 
-    auth_manager: AuthManager = request.app.state.auth_manager
+    auth_manager = get_auth_manager(request)
 
     logger.info(f"Creating user: {user_data.username} (email: {user_data.email})")
 
@@ -378,7 +406,7 @@ async def update_user(
     """
     Update user information (admin only).
     """
-    auth_manager: AuthManager = request.app.state.auth_manager
+    auth_manager = get_auth_manager(request)
 
     success = auth_manager.update_user(
         user_id=user_id,
@@ -402,7 +430,7 @@ async def delete_user(request: Request, user_id: int):
     """
     Delete user (soft delete) (admin only).
     """
-    auth_manager: AuthManager = request.app.state.auth_manager
+    auth_manager = get_auth_manager(request)
 
     success = auth_manager.delete_user(user_id)
 
@@ -419,7 +447,7 @@ async def get_all_roles(request: Request):
     """
     Get all available roles (admin only).
     """
-    auth_manager: AuthManager = request.app.state.auth_manager
+    auth_manager = get_auth_manager(request)
     roles = auth_manager.get_all_roles()
 
     return {"roles": roles}
@@ -435,7 +463,7 @@ async def assign_role_to_user(
     """
     Assign a role to a user (admin only).
     """
-    auth_manager: AuthManager = request.app.state.auth_manager
+    auth_manager = get_auth_manager(request)
 
     role_id = role_data.get("role_id")
     if not role_id:
@@ -460,7 +488,7 @@ async def remove_role_from_user(request: Request, user_id: int, role_id: int):
     """
     Remove a role from a user (admin only).
     """
-    auth_manager: AuthManager = request.app.state.auth_manager
+    auth_manager = get_auth_manager(request)
 
     success = auth_manager.remove_user_role(user_id, role_id)
 
@@ -488,7 +516,7 @@ async def reset_user_password(
     requiring the current password. The user's failed login attempts
     will be reset and account will be unlocked if locked.
     """
-    auth_manager: AuthManager = request.app.state.auth_manager
+    auth_manager = get_auth_manager(request)
 
     # Check if target user exists
     target_user = auth_manager.get_user_by_id(user_id)
@@ -532,7 +560,7 @@ async def change_user_password(
     requiring the current password. This is useful for password reset
     scenarios in the admin portal.
     """
-    auth_manager: AuthManager = request.app.state.auth_manager
+    auth_manager = get_auth_manager(request)
 
     # Check if target user exists
     target_user = auth_manager.get_user_by_id(user_id)

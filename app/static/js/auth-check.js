@@ -8,7 +8,7 @@ const AUTH_CONFIG = {
     tokenKey: 'auth_token',
     checkInterval: 60000, // Check every 60 seconds
     loginUrl: '/login',
-    allowGuestMode: false // DISABLED: Always require authentication
+    allowGuestMode: false // Require authentication — unauthenticated users are redirected to login
 };
 
 // Global authentication state

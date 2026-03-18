@@ -4,9 +4,6 @@
 !.azure/.gitignore
 
 # Bicep parameters (may contain secrets)
-bicep/main.bicepparam
-bicep/*.bicepparam
-!bicep/main.bicepparam.template
 *.parameters.json
 
 # Python

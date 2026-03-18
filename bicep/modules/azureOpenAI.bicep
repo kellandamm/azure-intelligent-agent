@@ -56,6 +56,12 @@ param deploymentCapacity int = 10
 ])
 param deploymentSkuName string = 'Standard'
 
+@description('Disable API-key (local) auth and require Entra ID / managed identity. Set true for production environments to comply with MCSB.')
+param disableLocalAuth bool = false
+
+@description('Name to use for the content-filter (RAI) policy applied to this account.')
+param raiPolicyName string = 'agent-content-policy'
+
 // ============================================================================
 // Azure OpenAI Account
 // ============================================================================
@@ -74,11 +80,47 @@ resource azureOpenAI 'Microsoft.CognitiveServices/accounts@2025-06-01' = {
   properties: {
     customSubDomainName: customSubDomainName
     publicNetworkAccess: publicNetworkAccess
-    disableLocalAuth: false
+    disableLocalAuth: disableLocalAuth
     restrictOutboundNetworkAccess: false
     networkAcls: {
       defaultAction: 'Allow'
     }
+  }
+}
+
+// ============================================================================
+// RAI (Responsible AI) Content Filter Policy
+// Required by Security Policy (5207647b-3e83-4e28-b836-c382cb5e2a2e):
+//   - allowedIndirectAttackEnabledForPrompt MUST be ["true"] (enforced)
+//   - raiPolicyMode must be "Default" or "Asynchronous_filter"
+// ============================================================================
+
+resource raiPolicy 'Microsoft.CognitiveServices/accounts/raiPolicies@2024-10-01' = {
+  parent: azureOpenAI
+  name: raiPolicyName
+  properties: {
+    mode: 'Default'
+    contentFilters: [
+      // ── Prompt filters ─────────────────────────────────────────────────────
+      // REQUIRED by policy: indirect attack protection must be enabled on prompts
+      { name: 'indirect_attack', enabled: true, blocking: true, severityThreshold: 'high', source: 'Prompt' }
+      // Jailbreak detection (strongly recommended)
+      { name: 'jailbreak',       enabled: true, blocking: true, severityThreshold: 'high', source: 'Prompt' }
+      // Standard harmful content categories – prompt side
+      { name: 'hate',            enabled: true, blocking: true, severityThreshold: 'high', source: 'Prompt' }
+      { name: 'violence',        enabled: true, blocking: true, severityThreshold: 'high', source: 'Prompt' }
+      { name: 'sexual',          enabled: true, blocking: true, severityThreshold: 'high', source: 'Prompt' }
+      { name: 'selfharm',        enabled: true, blocking: true, severityThreshold: 'high', source: 'Prompt' }
+      { name: 'profanity',       enabled: true, blocking: false, severityThreshold: 'high', source: 'Prompt' }
+      // ── Completion filters ─────────────────────────────────────────────────
+      { name: 'hate',            enabled: true, blocking: true, severityThreshold: 'high', source: 'Completion' }
+      { name: 'violence',        enabled: true, blocking: true, severityThreshold: 'high', source: 'Completion' }
+      { name: 'sexual',          enabled: true, blocking: true, severityThreshold: 'high', source: 'Completion' }
+      { name: 'selfharm',        enabled: true, blocking: true, severityThreshold: 'high', source: 'Completion' }
+      { name: 'profanity',       enabled: true, blocking: false, severityThreshold: 'high', source: 'Completion' }
+      { name: 'protected_material_text', enabled: true, blocking: false, severityThreshold: 'high', source: 'Completion' }
+      { name: 'protected_material_code', enabled: true, blocking: false, severityThreshold: 'high', source: 'Completion' }
+    ]
   }
 }
 
@@ -123,3 +165,6 @@ output principalId string = azureOpenAI.identity.principalId
 
 @description('Location of the resource')
 output location string = azureOpenAI.location
+
+@description('Name of the RAI content-filter policy applied to this account')
+output raiPolicyName string = raiPolicy.name

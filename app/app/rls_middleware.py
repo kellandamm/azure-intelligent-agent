@@ -59,11 +59,12 @@ class RLSMiddleware:
             # Call stored procedure to set context
             cursor = connection.cursor()
             
+            # Note: The database stored procedure parameter name is @Email (not @UserEmail)
             cursor.execute("""
                 EXEC Security.usp_SetUserContext 
                     @UserId = ?,
                     @Username = ?,
-                    @UserEmail = ?,
+                    @Email = ?,
                     @UserRoles = ?
             """, (user_id, username, email, roles))
             
@@ -75,6 +76,33 @@ class RLSMiddleware:
             
         except Exception as e:
             logger.error(f"❌ Failed to set RLS context: {e}")
+            return False
+    
+    async def clear_user_context(self, connection) -> bool:
+        """
+        CRITICAL: Clear SQL Server session context before returning connection to pool.
+        
+        This prevents User B from inheriting User A's RLS context on a reused
+        connection, which would cause a SECURITY BREACH.
+        
+        Args:
+            connection: Active database connection
+            
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            cursor = connection.cursor()
+            cursor.execute("EXEC Security.sp_ClearUserContext")
+            cursor.commit()
+            cursor.close()
+            
+            logger.debug("🔒 RLS context cleared before connection return to pool")
+            return True
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to clear RLS context: {e}")
+            # Even on error, we must close the connection to prevent leakage
             return False
     
     async def get_user_data_scope(self, user_id: int, connection) -> Dict[str, Any]:
@@ -169,7 +197,9 @@ class RLSMiddleware:
                 session_id = request.session.get("session_id") if hasattr(request, "session") else None
             
             # Log to database
-            with self.db.get_connection() as conn:
+            conn = None
+            try:
+                conn = self.db.get_connection()
                 cursor = conn.cursor()
                 cursor.execute("""
                     EXEC Security.usp_LogDataAccess
@@ -188,6 +218,11 @@ class RLSMiddleware:
                 ))
                 cursor.commit()
                 cursor.close()
+            finally:
+                # CRITICAL: Clear RLS context before returning connection to pool
+                if conn:
+                    await self.clear_user_context(conn)
+                    conn.close()
             
             # Log to Purview (if enabled)
             await purview_integration.log_data_access(

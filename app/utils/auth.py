@@ -3,7 +3,7 @@ Authentication and authorization module for Agent Framework.
 Handles user authentication, JWT tokens, and permission checking.
 """
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Dict, Any
 import bcrypt
 import jwt
@@ -43,24 +43,15 @@ class AuthManager:
         self.jwt_secret = jwt_secret
         self.jwt_algorithm = jwt_algorithm
         self.jwt_expiry_hours = jwt_expiry_hours
-    
-    def hash_password(self, password: str) -> str:
-        """
-        Hash a password using bcrypt.
         
-        Args:
-            password: Plain text password
-            
-        Returns:
-            str: Hashed password
-        """
-        salt = bcrypt.gensalt()
-        hashed = bcrypt.hashpw(password.encode('utf-8'), salt)
-        return hashed.decode('utf-8')
+        logger.info(f"🔐 AuthManager initialized")
+        logger.info(f"🔑 JWT Algorithm: {jwt_algorithm}")
+        logger.info(f"🔑 JWT Expiry: {jwt_expiry_hours} hours")
+        logger.info(f"🔑 JWT Secret configured (length: {len(jwt_secret)})")
     
     def verify_password(self, password: str, hashed_password: str) -> bool:
         """
-        Verify a password against its hash.
+        Verify a password against a hashed password.
         
         Args:
             password: Plain text password
@@ -88,7 +79,7 @@ class AuthManager:
         Returns:
             str: JWT token
         """
-        expiry = datetime.utcnow() + timedelta(hours=self.jwt_expiry_hours)
+        expiry = datetime.now(timezone.utc) + timedelta(hours=self.jwt_expiry_hours)
         
         payload = {
             "user_id": user_data["UserID"],
@@ -97,10 +88,15 @@ class AuthManager:
             "roles": user_data.get("Roles", "").split(",") if user_data.get("Roles") else [],
             "permissions": user_data.get("Permissions", "").split(",") if user_data.get("Permissions") else [],
             "exp": expiry,
-            "iat": datetime.utcnow()
+            "iat": datetime.now(timezone.utc)
         }
         
+        logger.info(f"🔑 Creating JWT token for user: {user_data['Username']}")
+        logger.debug(f"🔑 JWT Algorithm: {self.jwt_algorithm}")
+        logger.debug(f"🔑 Token expiry: {expiry}")
+        
         token = jwt.encode(payload, self.jwt_secret, algorithm=self.jwt_algorithm)
+        logger.info(f"✅ JWT token created (length: {len(token)})")
         return token
     
     def verify_jwt_token(self, token: str) -> Optional[Dict[str, Any]]:
@@ -114,14 +110,33 @@ class AuthManager:
             Dict with user data if valid, None otherwise
         """
         try:
+            logger.info(f"🔍 Verifying JWT token (length: {len(token)})")
+            logger.debug(f"🔑 Using JWT Algorithm: {self.jwt_algorithm}")
+            logger.debug(f"🔑 Token preview: {token[:50]}...")
+            
             payload = jwt.decode(
                 token, 
                 self.jwt_secret, 
                 algorithms=[self.jwt_algorithm]
             )
+            
+            logger.info(f"✅ Token verified successfully for user: {payload.get('username')}")
+            logger.debug(f"✅ Payload: user_id={payload.get('user_id')}, roles={payload.get('roles')}")
             return payload
+        except jwt.ExpiredSignatureError as e:
+            logger.warning(f"⚠️  Token expired: {e}")
+            return None
+        except jwt.InvalidSignatureError as e:
+            logger.error(f"❌ Invalid token signature: {e}")
+            logger.error(f"❌ This usually means JWT_SECRET mismatch between creation and verification")
+            return None
         except InvalidTokenError as e:
-            logger.error(f"Invalid token: {e}")
+            logger.error(f"❌ Invalid token error: {e}")
+            logger.error(f"❌ Token type: {type(e).__name__}")
+            return None
+        except Exception as e:
+            logger.error(f"❌ Unexpected error verifying token: {e}")
+            logger.error(f"❌ Exception type: {type(e).__name__}")
             return None
     
     def authenticate_user(self, username: str, password: str) -> Optional[Dict[str, Any]]:
@@ -150,7 +165,7 @@ class AuthManager:
             
             # Check if account is locked
             if user.get("AccountLockedUntil"):
-                if user["AccountLockedUntil"] > datetime.utcnow():
+                if user["AccountLockedUntil"] > datetime.now(timezone.utc):
                     logger.warning(f"Account locked: {username}")
                     return None
             
@@ -595,20 +610,29 @@ async def get_current_user(
     Raises:
         HTTPException: If token is invalid or missing
     """
+    logger.info(f"🔐 get_current_user called for {request.url.path}")
+    
     if not hasattr(request.app.state, 'auth_manager') or request.app.state.auth_manager is None:
+        logger.error("❌ AuthManager not initialized in app.state")
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Authentication system not initialized")
+    
     auth_manager: AuthManager = request.app.state.auth_manager
+    logger.debug(f"✅ AuthManager found: {type(auth_manager).__name__}")
     
     token = credentials.credentials
+    logger.debug(f"🔑 Token received (length: {len(token)})")
+    
     user_data = auth_manager.verify_jwt_token(token)
     
     if not user_data:
+        logger.error("❌ Token verification failed in get_current_user")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid authentication credentials",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
+    logger.info(f"✅ User authenticated: {user_data.get('username')}")
     return user_data
 
 

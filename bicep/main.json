@@ -1,0 +1,2740 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "languageVersion": "2.0",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.38.33.27573",
+      "templateHash": "5291870106567639283"
+    }
+  },
+  "parameters": {
+    "appName": {
+      "type": "string",
+      "defaultValue": "[format('agent{0}', take(uniqueString(resourceGroup().id), 8))]",
+      "minLength": 3,
+      "maxLength": 20,
+      "metadata": {
+        "description": "Name prefix for all resources (e.g., \"myagentapp\"). Resources will be named like {appName}-{resource}-{environment}. Auto-generated from the resource group ID if not provided."
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Azure region for all resources"
+      }
+    },
+    "environment": {
+      "type": "string",
+      "defaultValue": "prod",
+      "allowedValues": [
+        "dev",
+        "staging",
+        "prod"
+      ],
+      "metadata": {
+        "description": "Environment tag (dev, staging, prod)"
+      }
+    },
+    "deploymentTimestamp": {
+      "type": "string",
+      "defaultValue": "[utcNow()]",
+      "metadata": {
+        "description": "Current deployment timestamp"
+      }
+    },
+    "deployAzureOpenAI": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Deploy new Azure OpenAI resource (true) or use existing (false)"
+      }
+    },
+    "azureOpenAIName": {
+      "type": "string",
+      "defaultValue": "[format('{0}-openai-{1}', parameters('appName'), parameters('environment'))]",
+      "metadata": {
+        "description": "Azure OpenAI account name (used when deployAzureOpenAI=true)"
+      }
+    },
+    "azureOpenAIModelName": {
+      "type": "string",
+      "defaultValue": "gpt-4o",
+      "metadata": {
+        "description": "Azure OpenAI model name to deploy (e.g., gpt-4o, gpt-4, gpt-35-turbo)"
+      }
+    },
+    "azureOpenAIModelVersion": {
+      "type": "string",
+      "defaultValue": "2024-11-20",
+      "metadata": {
+        "description": "Azure OpenAI model version"
+      }
+    },
+    "azureOpenAIModelCapacity": {
+      "type": "int",
+      "defaultValue": 10,
+      "minValue": 1,
+      "maxValue": 1000,
+      "metadata": {
+        "description": "Azure OpenAI model deployment capacity (TPM in thousands, 1-1000)"
+      }
+    },
+    "azureOpenAISku": {
+      "type": "string",
+      "defaultValue": "S0",
+      "allowedValues": [
+        "S0",
+        "S1"
+      ],
+      "metadata": {
+        "description": "Azure OpenAI SKU"
+      }
+    },
+    "azureOpenAIEndpoint": {
+      "type": "string",
+      "defaultValue": "[if(parameters('deployAzureOpenAI'), '', '')]",
+      "metadata": {
+        "description": "Azure OpenAI service endpoint URL (required when deployAzureOpenAI=false)"
+      }
+    },
+    "azureOpenAIDeployment": {
+      "type": "string",
+      "defaultValue": "gpt-4o",
+      "metadata": {
+        "description": "Azure OpenAI deployment/model name (e.g., gpt-4o, gpt-35-turbo)"
+      }
+    },
+    "azureOpenAIApiVersion": {
+      "type": "string",
+      "defaultValue": "2024-08-01-preview",
+      "metadata": {
+        "description": "Azure OpenAI API version"
+      }
+    },
+    "azureOpenAIApiKey": {
+      "type": "securestring",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Azure OpenAI API Key (required when deployAzureOpenAI=false, will be retrieved from deployed resource if deployAzureOpenAI=true)"
+      }
+    },
+    "projectEndpoint": {
+      "type": "string",
+      "metadata": {
+        "description": "Azure AI Foundry project endpoint URL"
+      }
+    },
+    "connectionName": {
+      "type": "string",
+      "defaultValue": "aoai-connection",
+      "metadata": {
+        "description": "Azure AI Foundry connection name for OpenAI"
+      }
+    },
+    "modelDeploymentName": {
+      "type": "string",
+      "defaultValue": "gpt-4o",
+      "metadata": {
+        "description": "Model deployment name in AI Foundry"
+      }
+    },
+    "fabricWorkspaceId": {
+      "type": "string",
+      "metadata": {
+        "description": "Microsoft Fabric workspace ID"
+      }
+    },
+    "fabricOrchestratorAgentId": {
+      "type": "string",
+      "metadata": {
+        "description": "Fabric Orchestrator Agent ID"
+      }
+    },
+    "fabricDocumentAgentId": {
+      "type": "string",
+      "metadata": {
+        "description": "Fabric Document Agent ID"
+      }
+    },
+    "fabricPowerBiAgentId": {
+      "type": "string",
+      "metadata": {
+        "description": "Fabric Power BI Agent ID"
+      }
+    },
+    "fabricChartAgentId": {
+      "type": "string",
+      "metadata": {
+        "description": "Fabric Chart Agent ID"
+      }
+    },
+    "fabricSalesAgentId": {
+      "type": "string",
+      "metadata": {
+        "description": "Fabric Sales Agent ID"
+      }
+    },
+    "fabricRealtimeAgentId": {
+      "type": "string",
+      "metadata": {
+        "description": "Fabric Realtime Agent ID"
+      }
+    },
+    "powerbiWorkspaceId": {
+      "type": "string",
+      "metadata": {
+        "description": "Power BI workspace ID (often same as Fabric workspace)"
+      }
+    },
+    "powerbiReportId": {
+      "type": "string",
+      "metadata": {
+        "description": "Power BI report ID to embed"
+      }
+    },
+    "powerbiClientId": {
+      "type": "string",
+      "metadata": {
+        "description": "Power BI service principal client ID"
+      }
+    },
+    "powerbiTenantId": {
+      "type": "string",
+      "metadata": {
+        "description": "Power BI service principal tenant ID"
+      }
+    },
+    "powerbiClientSecret": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Power BI service principal client secret"
+      }
+    },
+    "sqlServerName": {
+      "type": "string",
+      "defaultValue": "[format('{0}-sql', parameters('appName'))]",
+      "minLength": 3,
+      "maxLength": 63,
+      "metadata": {
+        "description": "SQL Server name (must be globally unique). Auto-generated from appName if not provided."
+      }
+    },
+    "sqlDatabaseName": {
+      "type": "string",
+      "defaultValue": "aiagentsdb",
+      "metadata": {
+        "description": "SQL Database name"
+      }
+    },
+    "sqlDatabaseSku": {
+      "type": "string",
+      "defaultValue": "Basic",
+      "metadata": {
+        "description": "SQL Database SKU (Basic, S0, S1, P1, etc.)"
+      }
+    },
+    "sqlUseAzureAuth": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Use Azure AD authentication for SQL (recommended)"
+      }
+    },
+    "sqlAdminUsername": {
+      "type": "string",
+      "defaultValue": "sqladmin",
+      "metadata": {
+        "description": "SQL admin username (required if not using Azure AD only)"
+      }
+    },
+    "sqlAdminPassword": {
+      "type": "securestring",
+      "defaultValue": "",
+      "metadata": {
+        "description": "SQL admin password (required if not using Azure AD only)"
+      }
+    },
+    "sqlAzureAdAdminLogin": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Azure AD admin login name (e.g., admin@domain.com)"
+      }
+    },
+    "sqlAzureAdAdminSid": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Azure AD admin object ID (SID)"
+      }
+    },
+    "enableAuthentication": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Enable JWT authentication for the application"
+      }
+    },
+    "jwtSecretKey": {
+      "type": "securestring",
+      "defaultValue": "",
+      "metadata": {
+        "description": "JWT secret key (leave empty to auto-generate)"
+      }
+    },
+    "jwtAlgorithm": {
+      "type": "string",
+      "defaultValue": "HS256",
+      "allowedValues": [
+        "HS256",
+        "HS384",
+        "HS512"
+      ],
+      "metadata": {
+        "description": "JWT algorithm"
+      }
+    },
+    "jwtExpirationMinutes": {
+      "type": "int",
+      "defaultValue": 43200,
+      "minValue": 30,
+      "maxValue": 43200,
+      "metadata": {
+        "description": "JWT token expiration in minutes"
+      }
+    },
+    "appServicePlanSku": {
+      "type": "string",
+      "defaultValue": "B2",
+      "metadata": {
+        "description": "App Service Plan SKU (B1, B2, S1, P1v2, P2v2, etc.)"
+      }
+    },
+    "enableApplicationInsights": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Enable Application Insights monitoring"
+      }
+    },
+    "appPort": {
+      "type": "int",
+      "defaultValue": 8000,
+      "metadata": {
+        "description": "Application port"
+      }
+    },
+    "enableTracing": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Enable OpenTelemetry tracing"
+      }
+    },
+    "logLevel": {
+      "type": "string",
+      "defaultValue": "INFO",
+      "allowedValues": [
+        "DEBUG",
+        "INFO",
+        "WARNING",
+        "ERROR",
+        "CRITICAL"
+      ],
+      "metadata": {
+        "description": "Log level"
+      }
+    },
+    "enableKeyVault": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Enable Key Vault for secrets management"
+      }
+    },
+    "enableContainerRegistry": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Enable Container Registry for Docker images"
+      }
+    },
+    "enableLogAnalyticsWorkspace": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Enable Log Analytics Workspace (required for workspace-based App Insights and diagnostic logs). Recommended by MCSB."
+      }
+    },
+    "enableSqlVulnerabilityAssessment": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Enable SQL Vulnerability Assessment (Express configuration). Recommended by MCSB."
+      }
+    },
+    "disableOpenAILocalAuth": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Disable API-key (local) auth on Azure OpenAI and require managed identity. Set true for production to comply with MCSB. Only applies when deployAzureOpenAI = true."
+      }
+    },
+    "enableVnetIntegration": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Enable VNet integration: deploys a VNet, adds App Service outbound integration, and places SQL behind a private endpoint. Required to satisfy the MCAPS deny policy that blocks SQL servers with public network access enabled."
+      }
+    }
+  },
+  "variables": {
+    "resourceNamePrefix": "[format('{0}-{1}', parameters('appName'), parameters('environment'))]",
+    "tags": {
+      "Application": "Agent Framework Demo",
+      "Environment": "[parameters('environment')]",
+      "ManagedBy": "Bicep-AVM",
+      "DeployedDate": "[substring(parameters('deploymentTimestamp'), 0, 10)]"
+    },
+    "generatedJwtSecret": "[uniqueString(resourceGroup().id, parameters('appName'), parameters('deploymentTimestamp'))]",
+    "finalJwtSecret": "[if(empty(parameters('jwtSecretKey')), variables('generatedJwtSecret'), parameters('jwtSecretKey'))]",
+    "sqlServerFqdn": "[format('{0}.database.windows.net', parameters('sqlServerName'))]"
+  },
+  "resources": {
+    "azureOpenAIModule": {
+      "condition": "[parameters('deployAzureOpenAI')]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "azureOpenAI-deployment",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "name": {
+            "value": "[parameters('azureOpenAIName')]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "tags": {
+            "value": "[variables('tags')]"
+          },
+          "sku": {
+            "value": "[parameters('azureOpenAISku')]"
+          },
+          "modelName": {
+            "value": "[parameters('azureOpenAIModelName')]"
+          },
+          "modelVersion": {
+            "value": "[parameters('azureOpenAIModelVersion')]"
+          },
+          "deploymentName": {
+            "value": "[parameters('azureOpenAIDeployment')]"
+          },
+          "deploymentCapacity": {
+            "value": "[parameters('azureOpenAIModelCapacity')]"
+          },
+          "disableLocalAuth": {
+            "value": "[parameters('disableOpenAILocalAuth')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.38.33.27573",
+              "templateHash": "12920932938213063581"
+            }
+          },
+          "parameters": {
+            "name": {
+              "type": "string",
+              "metadata": {
+                "description": "Name of the Azure OpenAI account"
+              }
+            },
+            "location": {
+              "type": "string",
+              "defaultValue": "[resourceGroup().location]",
+              "metadata": {
+                "description": "Location for the Azure OpenAI resource"
+              }
+            },
+            "tags": {
+              "type": "object",
+              "defaultValue": {},
+              "metadata": {
+                "description": "Tags for the resource"
+              }
+            },
+            "sku": {
+              "type": "string",
+              "defaultValue": "S0",
+              "allowedValues": [
+                "S0",
+                "S1"
+              ],
+              "metadata": {
+                "description": "SKU name for Azure OpenAI"
+              }
+            },
+            "customSubDomainName": {
+              "type": "string",
+              "defaultValue": "[parameters('name')]",
+              "metadata": {
+                "description": "Custom subdomain name for Azure OpenAI"
+              }
+            },
+            "publicNetworkAccess": {
+              "type": "string",
+              "defaultValue": "Enabled",
+              "allowedValues": [
+                "Enabled",
+                "Disabled"
+              ],
+              "metadata": {
+                "description": "Public network access setting"
+              }
+            },
+            "modelName": {
+              "type": "string",
+              "defaultValue": "gpt-4o",
+              "metadata": {
+                "description": "Model name to deploy (e.g., gpt-4o, gpt-4, gpt-35-turbo)"
+              }
+            },
+            "modelVersion": {
+              "type": "string",
+              "defaultValue": "2024-11-20",
+              "metadata": {
+                "description": "Model version to deploy"
+              }
+            },
+            "modelFormat": {
+              "type": "string",
+              "defaultValue": "OpenAI",
+              "allowedValues": [
+                "OpenAI"
+              ],
+              "metadata": {
+                "description": "Model format"
+              }
+            },
+            "deploymentName": {
+              "type": "string",
+              "defaultValue": "[parameters('modelName')]",
+              "metadata": {
+                "description": "Deployment name (defaults to model name if not specified)"
+              }
+            },
+            "deploymentCapacity": {
+              "type": "int",
+              "defaultValue": 10,
+              "minValue": 1,
+              "maxValue": 1000,
+              "metadata": {
+                "description": "Model deployment capacity (TPM in thousands)"
+              }
+            },
+            "deploymentSkuName": {
+              "type": "string",
+              "defaultValue": "Standard",
+              "allowedValues": [
+                "Standard",
+                "GlobalStandard"
+              ],
+              "metadata": {
+                "description": "Model deployment SKU"
+              }
+            },
+            "disableLocalAuth": {
+              "type": "bool",
+              "defaultValue": false,
+              "metadata": {
+                "description": "Disable API-key (local) auth and require Entra ID / managed identity. Set true for production environments to comply with MCSB."
+              }
+            },
+            "raiPolicyName": {
+              "type": "string",
+              "defaultValue": "agent-content-policy",
+              "metadata": {
+                "description": "Name to use for the content-filter (RAI) policy applied to this account."
+              }
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.CognitiveServices/accounts",
+              "apiVersion": "2025-06-01",
+              "name": "[parameters('name')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "kind": "AIServices",
+              "sku": {
+                "name": "[parameters('sku')]"
+              },
+              "identity": {
+                "type": "SystemAssigned"
+              },
+              "properties": {
+                "customSubDomainName": "[parameters('customSubDomainName')]",
+                "publicNetworkAccess": "[parameters('publicNetworkAccess')]",
+                "disableLocalAuth": "[parameters('disableLocalAuth')]",
+                "restrictOutboundNetworkAccess": false,
+                "networkAcls": {
+                  "defaultAction": "Allow"
+                }
+              }
+            },
+            {
+              "type": "Microsoft.CognitiveServices/accounts/raiPolicies",
+              "apiVersion": "2024-10-01",
+              "name": "[format('{0}/{1}', parameters('name'), parameters('raiPolicyName'))]",
+              "properties": {
+                "mode": "Default",
+                "contentFilters": [
+                  {
+                    "name": "indirect_attack",
+                    "enabled": true,
+                    "blocking": true,
+                    "severityThreshold": "high",
+                    "source": "Prompt"
+                  },
+                  {
+                    "name": "jailbreak",
+                    "enabled": true,
+                    "blocking": true,
+                    "severityThreshold": "high",
+                    "source": "Prompt"
+                  },
+                  {
+                    "name": "hate",
+                    "enabled": true,
+                    "blocking": true,
+                    "severityThreshold": "high",
+                    "source": "Prompt"
+                  },
+                  {
+                    "name": "violence",
+                    "enabled": true,
+                    "blocking": true,
+                    "severityThreshold": "high",
+                    "source": "Prompt"
+                  },
+                  {
+                    "name": "sexual",
+                    "enabled": true,
+                    "blocking": true,
+                    "severityThreshold": "high",
+                    "source": "Prompt"
+                  },
+                  {
+                    "name": "selfharm",
+                    "enabled": true,
+                    "blocking": true,
+                    "severityThreshold": "high",
+                    "source": "Prompt"
+                  },
+                  {
+                    "name": "profanity",
+                    "enabled": true,
+                    "blocking": false,
+                    "severityThreshold": "high",
+                    "source": "Prompt"
+                  },
+                  {
+                    "name": "hate",
+                    "enabled": true,
+                    "blocking": true,
+                    "severityThreshold": "high",
+                    "source": "Completion"
+                  },
+                  {
+                    "name": "violence",
+                    "enabled": true,
+                    "blocking": true,
+                    "severityThreshold": "high",
+                    "source": "Completion"
+                  },
+                  {
+                    "name": "sexual",
+                    "enabled": true,
+                    "blocking": true,
+                    "severityThreshold": "high",
+                    "source": "Completion"
+                  },
+                  {
+                    "name": "selfharm",
+                    "enabled": true,
+                    "blocking": true,
+                    "severityThreshold": "high",
+                    "source": "Completion"
+                  },
+                  {
+                    "name": "profanity",
+                    "enabled": true,
+                    "blocking": false,
+                    "severityThreshold": "high",
+                    "source": "Completion"
+                  },
+                  {
+                    "name": "protected_material_text",
+                    "enabled": true,
+                    "blocking": false,
+                    "severityThreshold": "high",
+                    "source": "Completion"
+                  },
+                  {
+                    "name": "protected_material_code",
+                    "enabled": true,
+                    "blocking": false,
+                    "severityThreshold": "high",
+                    "source": "Completion"
+                  }
+                ]
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.CognitiveServices/accounts', parameters('name'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.CognitiveServices/accounts/deployments",
+              "apiVersion": "2025-06-01",
+              "name": "[format('{0}/{1}', parameters('name'), parameters('deploymentName'))]",
+              "sku": {
+                "name": "[parameters('deploymentSkuName')]",
+                "capacity": "[parameters('deploymentCapacity')]"
+              },
+              "properties": {
+                "model": {
+                  "format": "[parameters('modelFormat')]",
+                  "name": "[parameters('modelName')]",
+                  "version": "[parameters('modelVersion')]"
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.CognitiveServices/accounts', parameters('name'))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "resourceId": {
+              "type": "string",
+              "metadata": {
+                "description": "Resource ID of the Azure OpenAI account"
+              },
+              "value": "[resourceId('Microsoft.CognitiveServices/accounts', parameters('name'))]"
+            },
+            "name": {
+              "type": "string",
+              "metadata": {
+                "description": "Name of the Azure OpenAI account"
+              },
+              "value": "[parameters('name')]"
+            },
+            "endpoint": {
+              "type": "string",
+              "metadata": {
+                "description": "Endpoint URL for Azure OpenAI"
+              },
+              "value": "[reference(resourceId('Microsoft.CognitiveServices/accounts', parameters('name')), '2025-06-01').endpoint]"
+            },
+            "deploymentName": {
+              "type": "string",
+              "metadata": {
+                "description": "Name of the model deployment"
+              },
+              "value": "[parameters('deploymentName')]"
+            },
+            "principalId": {
+              "type": "string",
+              "metadata": {
+                "description": "System-assigned managed identity principal ID"
+              },
+              "value": "[reference(resourceId('Microsoft.CognitiveServices/accounts', parameters('name')), '2025-06-01', 'full').identity.principalId]"
+            },
+            "location": {
+              "type": "string",
+              "metadata": {
+                "description": "Location of the resource"
+              },
+              "value": "[reference(resourceId('Microsoft.CognitiveServices/accounts', parameters('name')), '2025-06-01', 'full').location]"
+            },
+            "raiPolicyName": {
+              "type": "string",
+              "metadata": {
+                "description": "Name of the RAI content-filter policy applied to this account"
+              },
+              "value": "[parameters('raiPolicyName')]"
+            }
+          }
+        }
+      }
+    },
+    "networkModule": {
+      "condition": "[parameters('enableVnetIntegration')]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "network-deployment",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "vnetName": {
+            "value": "[format('{0}-vnet', variables('resourceNamePrefix'))]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "tags": {
+            "value": "[variables('tags')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.38.33.27573",
+              "templateHash": "6847807793439754115"
+            }
+          },
+          "parameters": {
+            "vnetName": {
+              "type": "string",
+              "metadata": {
+                "description": "Virtual network name"
+              }
+            },
+            "location": {
+              "type": "string",
+              "metadata": {
+                "description": "Location"
+              }
+            },
+            "tags": {
+              "type": "object",
+              "defaultValue": {},
+              "metadata": {
+                "description": "Resource tags"
+              }
+            },
+            "vnetAddressPrefix": {
+              "type": "string",
+              "defaultValue": "10.100.0.0/16",
+              "metadata": {
+                "description": "VNet address space"
+              }
+            },
+            "appServiceSubnetPrefix": {
+              "type": "string",
+              "defaultValue": "10.100.1.0/24",
+              "metadata": {
+                "description": "App Service outbound integration subnet prefix (min /28)"
+              }
+            },
+            "privateEndpointSubnetPrefix": {
+              "type": "string",
+              "defaultValue": "10.100.2.0/24",
+              "metadata": {
+                "description": "Private endpoint subnet prefix (min /28)"
+              }
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Network/virtualNetworks",
+              "apiVersion": "2023-09-01",
+              "name": "[parameters('vnetName')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "addressSpace": {
+                  "addressPrefixes": [
+                    "[parameters('vnetAddressPrefix')]"
+                  ]
+                },
+                "subnets": [
+                  {
+                    "name": "appservice-subnet",
+                    "properties": {
+                      "addressPrefix": "[parameters('appServiceSubnetPrefix')]",
+                      "delegations": [
+                        {
+                          "name": "webapp-delegation",
+                          "properties": {
+                            "serviceName": "Microsoft.Web/serverFarms"
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "name": "private-endpoint-subnet",
+                    "properties": {
+                      "addressPrefix": "[parameters('privateEndpointSubnetPrefix')]",
+                      "privateEndpointNetworkPolicies": "Disabled"
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "outputs": {
+            "vnetId": {
+              "type": "string",
+              "metadata": {
+                "description": "VNet resource ID"
+              },
+              "value": "[resourceId('Microsoft.Network/virtualNetworks', parameters('vnetName'))]"
+            },
+            "vnetName": {
+              "type": "string",
+              "metadata": {
+                "description": "VNet name"
+              },
+              "value": "[parameters('vnetName')]"
+            },
+            "appServiceSubnetId": {
+              "type": "string",
+              "metadata": {
+                "description": "App Service integration subnet resource ID"
+              },
+              "value": "[reference(resourceId('Microsoft.Network/virtualNetworks', parameters('vnetName')), '2023-09-01').subnets[0].id]"
+            },
+            "privateEndpointSubnetId": {
+              "type": "string",
+              "metadata": {
+                "description": "Private endpoint subnet resource ID"
+              },
+              "value": "[reference(resourceId('Microsoft.Network/virtualNetworks', parameters('vnetName')), '2023-09-01').subnets[1].id]"
+            }
+          }
+        }
+      }
+    },
+    "logAnalyticsModule": {
+      "condition": "[parameters('enableLogAnalyticsWorkspace')]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "logAnalytics-deployment",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "name": {
+            "value": "[format('{0}-law', variables('resourceNamePrefix'))]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "tags": {
+            "value": "[variables('tags')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.38.33.27573",
+              "templateHash": "10422979056529765351"
+            }
+          },
+          "parameters": {
+            "name": {
+              "type": "string",
+              "metadata": {
+                "description": "Log Analytics workspace name"
+              }
+            },
+            "location": {
+              "type": "string",
+              "metadata": {
+                "description": "Location for the workspace"
+              }
+            },
+            "tags": {
+              "type": "object",
+              "defaultValue": {},
+              "metadata": {
+                "description": "Resource tags"
+              }
+            },
+            "retentionInDays": {
+              "type": "int",
+              "defaultValue": 90,
+              "minValue": 30,
+              "maxValue": 730,
+              "metadata": {
+                "description": "Retention period in days (30-730)"
+              }
+            },
+            "skuName": {
+              "type": "string",
+              "defaultValue": "PerGB2018",
+              "allowedValues": [
+                "PerGB2018",
+                "CapacityReservation"
+              ],
+              "metadata": {
+                "description": "SKU name"
+              }
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.OperationalInsights/workspaces",
+              "apiVersion": "2023-09-01",
+              "name": "[parameters('name')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "sku": {
+                  "name": "[parameters('skuName')]"
+                },
+                "retentionInDays": "[parameters('retentionInDays')]",
+                "features": {
+                  "enableLogAccessUsingOnlyResourcePermissions": true
+                },
+                "publicNetworkAccessForIngestion": "Enabled",
+                "publicNetworkAccessForQuery": "Enabled"
+              }
+            }
+          ],
+          "outputs": {
+            "resourceId": {
+              "type": "string",
+              "metadata": {
+                "description": "Log Analytics workspace resource ID"
+              },
+              "value": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('name'))]"
+            },
+            "name": {
+              "type": "string",
+              "metadata": {
+                "description": "Log Analytics workspace name"
+              },
+              "value": "[parameters('name')]"
+            },
+            "customerId": {
+              "type": "string",
+              "metadata": {
+                "description": "Log Analytics workspace customer ID (used for queries)"
+              },
+              "value": "[reference(resourceId('Microsoft.OperationalInsights/workspaces', parameters('name')), '2023-09-01').customerId]"
+            }
+          }
+        }
+      }
+    },
+    "appInsightsModule": {
+      "condition": "[parameters('enableApplicationInsights')]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "appInsights-deployment",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "name": {
+            "value": "[format('{0}-insights', variables('resourceNamePrefix'))]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "tags": {
+            "value": "[variables('tags')]"
+          },
+          "logAnalyticsWorkspaceId": "[if(parameters('enableLogAnalyticsWorkspace'), createObject('value', reference('logAnalyticsModule').outputs.resourceId.value), createObject('value', ''))]"
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.38.33.27573",
+              "templateHash": "16359793682591408007"
+            }
+          },
+          "parameters": {
+            "name": {
+              "type": "string",
+              "metadata": {
+                "description": "Application Insights name"
+              }
+            },
+            "location": {
+              "type": "string",
+              "metadata": {
+                "description": "Location for the Application Insights resource"
+              }
+            },
+            "tags": {
+              "type": "object",
+              "defaultValue": {},
+              "metadata": {
+                "description": "Resource tags"
+              }
+            },
+            "retentionInDays": {
+              "type": "int",
+              "defaultValue": 90,
+              "minValue": 30,
+              "maxValue": 730,
+              "metadata": {
+                "description": "Retention period in days"
+              }
+            },
+            "applicationType": {
+              "type": "string",
+              "defaultValue": "web",
+              "allowedValues": [
+                "web",
+                "other"
+              ],
+              "metadata": {
+                "description": "Application type"
+              }
+            },
+            "ingestionMode": {
+              "type": "string",
+              "defaultValue": "ApplicationInsights",
+              "allowedValues": [
+                "ApplicationInsights",
+                "ApplicationInsightsWithDiagnosticSettings",
+                "LogAnalytics"
+              ],
+              "metadata": {
+                "description": "Ingestion mode"
+              }
+            },
+            "logAnalyticsWorkspaceId": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Log Analytics workspace resource ID. When provided, ingestionMode is automatically set to LogAnalytics for workspace-based App Insights (recommended by MCSB)."
+              }
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Insights/components",
+              "apiVersion": "2020-02-02",
+              "name": "[parameters('name')]",
+              "location": "[parameters('location')]",
+              "kind": "[parameters('applicationType')]",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "Application_Type": "[parameters('applicationType')]",
+                "RetentionInDays": "[parameters('retentionInDays')]",
+                "IngestionMode": "[if(empty(parameters('logAnalyticsWorkspaceId')), parameters('ingestionMode'), 'LogAnalytics')]",
+                "WorkspaceResourceId": "[if(empty(parameters('logAnalyticsWorkspaceId')), null(), parameters('logAnalyticsWorkspaceId'))]",
+                "publicNetworkAccessForIngestion": "Enabled",
+                "publicNetworkAccessForQuery": "Enabled"
+              }
+            }
+          ],
+          "outputs": {
+            "resourceId": {
+              "type": "string",
+              "metadata": {
+                "description": "Application Insights resource ID"
+              },
+              "value": "[resourceId('Microsoft.Insights/components', parameters('name'))]"
+            },
+            "name": {
+              "type": "string",
+              "metadata": {
+                "description": "Application Insights name"
+              },
+              "value": "[parameters('name')]"
+            },
+            "instrumentationKey": {
+              "type": "string",
+              "metadata": {
+                "description": "Application Insights instrumentation key"
+              },
+              "value": "[reference(resourceId('Microsoft.Insights/components', parameters('name')), '2020-02-02').InstrumentationKey]"
+            },
+            "connectionString": {
+              "type": "string",
+              "metadata": {
+                "description": "Application Insights connection string"
+              },
+              "value": "[reference(resourceId('Microsoft.Insights/components', parameters('name')), '2020-02-02').ConnectionString]"
+            },
+            "appId": {
+              "type": "string",
+              "metadata": {
+                "description": "Application ID"
+              },
+              "value": "[reference(resourceId('Microsoft.Insights/components', parameters('name')), '2020-02-02').AppId]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "logAnalyticsModule"
+      ]
+    },
+    "keyVaultModule": {
+      "condition": "[parameters('enableKeyVault')]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "keyVault-deployment",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "name": {
+            "value": "[take(format('{0}kv{1}', replace(variables('resourceNamePrefix'), '-', ''), uniqueString(resourceGroup().id)), 24)]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "tags": {
+            "value": "[variables('tags')]"
+          },
+          "enabledForTemplateDeployment": {
+            "value": true
+          },
+          "enableRbacAuthorization": {
+            "value": true
+          },
+          "secrets": {
+            "value": [
+              {
+                "name": "azureOpenAIApiKey",
+                "value": "[parameters('azureOpenAIApiKey')]"
+              },
+              {
+                "name": "powerbiClientSecret",
+                "value": "[parameters('powerbiClientSecret')]"
+              },
+              {
+                "name": "jwtSecretKey",
+                "value": "[variables('finalJwtSecret')]"
+              },
+              {
+                "name": "sqlAdminPassword",
+                "value": "[parameters('sqlAdminPassword')]"
+              }
+            ]
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.38.33.27573",
+              "templateHash": "12562276267557673256"
+            }
+          },
+          "parameters": {
+            "name": {
+              "type": "string",
+              "minLength": 3,
+              "maxLength": 24,
+              "metadata": {
+                "description": "Key Vault name (must be globally unique, 3-24 characters)"
+              }
+            },
+            "location": {
+              "type": "string",
+              "metadata": {
+                "description": "Location for the Key Vault"
+              }
+            },
+            "tags": {
+              "type": "object",
+              "defaultValue": {},
+              "metadata": {
+                "description": "Resource tags"
+              }
+            },
+            "enabledForTemplateDeployment": {
+              "type": "bool",
+              "defaultValue": true,
+              "metadata": {
+                "description": "Enable Key Vault for template deployment"
+              }
+            },
+            "enabledForDiskEncryption": {
+              "type": "bool",
+              "defaultValue": false,
+              "metadata": {
+                "description": "Enable Key Vault for disk encryption"
+              }
+            },
+            "enabledForDeployment": {
+              "type": "bool",
+              "defaultValue": false,
+              "metadata": {
+                "description": "Enable Key Vault for deployment"
+              }
+            },
+            "enableRbacAuthorization": {
+              "type": "bool",
+              "defaultValue": true,
+              "metadata": {
+                "description": "Enable RBAC authorization (recommended over access policies)"
+              }
+            },
+            "skuName": {
+              "type": "string",
+              "defaultValue": "standard",
+              "allowedValues": [
+                "standard",
+                "premium"
+              ],
+              "metadata": {
+                "description": "SKU name"
+              }
+            },
+            "secrets": {
+              "type": "array",
+              "defaultValue": [],
+              "metadata": {
+                "description": "Secrets to store in Key Vault"
+              }
+            },
+            "enableSoftDelete": {
+              "type": "bool",
+              "defaultValue": true,
+              "metadata": {
+                "description": "Enable soft delete"
+              }
+            },
+            "softDeleteRetentionInDays": {
+              "type": "int",
+              "defaultValue": 90,
+              "minValue": 7,
+              "maxValue": 90,
+              "metadata": {
+                "description": "Soft delete retention days"
+              }
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.KeyVault/vaults",
+              "apiVersion": "2023-07-01",
+              "name": "[parameters('name')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "tenantId": "[subscription().tenantId]",
+                "sku": {
+                  "family": "A",
+                  "name": "[parameters('skuName')]"
+                },
+                "enabledForTemplateDeployment": "[parameters('enabledForTemplateDeployment')]",
+                "enabledForDiskEncryption": "[parameters('enabledForDiskEncryption')]",
+                "enabledForDeployment": "[parameters('enabledForDeployment')]",
+                "enableRbacAuthorization": "[parameters('enableRbacAuthorization')]",
+                "enableSoftDelete": "[parameters('enableSoftDelete')]",
+                "softDeleteRetentionInDays": "[parameters('softDeleteRetentionInDays')]",
+                "enablePurgeProtection": true,
+                "publicNetworkAccess": "Enabled",
+                "networkAcls": {
+                  "defaultAction": "Allow",
+                  "bypass": "AzureServices"
+                }
+              }
+            },
+            {
+              "copy": {
+                "name": "keyVaultSecrets",
+                "count": "[length(parameters('secrets'))]"
+              },
+              "condition": "[not(empty(parameters('secrets')[copyIndex()].value))]",
+              "type": "Microsoft.KeyVault/vaults/secrets",
+              "apiVersion": "2023-07-01",
+              "name": "[format('{0}/{1}', parameters('name'), parameters('secrets')[copyIndex()].name)]",
+              "properties": {
+                "value": "[parameters('secrets')[copyIndex()].value]",
+                "contentType": "text/plain"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.KeyVault/vaults', parameters('name'))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "resourceId": {
+              "type": "string",
+              "metadata": {
+                "description": "Key Vault resource ID"
+              },
+              "value": "[resourceId('Microsoft.KeyVault/vaults', parameters('name'))]"
+            },
+            "name": {
+              "type": "string",
+              "metadata": {
+                "description": "Key Vault name"
+              },
+              "value": "[parameters('name')]"
+            },
+            "vaultUri": {
+              "type": "string",
+              "metadata": {
+                "description": "Key Vault URI"
+              },
+              "value": "[reference(resourceId('Microsoft.KeyVault/vaults', parameters('name')), '2023-07-01').vaultUri]"
+            },
+            "secretUris": {
+              "type": "object",
+              "metadata": {
+                "description": "Secret URIs for app settings reference"
+              },
+              "value": {
+                "azureOpenAIApiKey": "[format('{0}secrets/azureOpenAIApiKey', reference(resourceId('Microsoft.KeyVault/vaults', parameters('name')), '2023-07-01').vaultUri)]",
+                "powerbiClientSecret": "[format('{0}secrets/powerbiClientSecret', reference(resourceId('Microsoft.KeyVault/vaults', parameters('name')), '2023-07-01').vaultUri)]",
+                "jwtSecretKey": "[format('{0}secrets/jwtSecretKey', reference(resourceId('Microsoft.KeyVault/vaults', parameters('name')), '2023-07-01').vaultUri)]",
+                "sqlAdminPassword": "[format('{0}secrets/sqlAdminPassword', reference(resourceId('Microsoft.KeyVault/vaults', parameters('name')), '2023-07-01').vaultUri)]"
+              }
+            }
+          }
+        }
+      }
+    },
+    "containerRegistryModule": {
+      "condition": "[parameters('enableContainerRegistry')]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "acr-deployment",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "name": {
+            "value": "[format('{0}{1}acr', replace(parameters('appName'), '-', ''), parameters('environment'))]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "tags": {
+            "value": "[variables('tags')]"
+          },
+          "acrSku": {
+            "value": "Standard"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.38.33.27573",
+              "templateHash": "13332560542492788334"
+            }
+          },
+          "parameters": {
+            "name": {
+              "type": "string",
+              "minLength": 5,
+              "maxLength": 50,
+              "metadata": {
+                "description": "Container Registry name (alphanumeric only, globally unique)"
+              }
+            },
+            "location": {
+              "type": "string",
+              "metadata": {
+                "description": "Location for the Container Registry"
+              }
+            },
+            "tags": {
+              "type": "object",
+              "defaultValue": {},
+              "metadata": {
+                "description": "Resource tags"
+              }
+            },
+            "acrSku": {
+              "type": "string",
+              "defaultValue": "Standard",
+              "allowedValues": [
+                "Basic",
+                "Standard",
+                "Premium"
+              ],
+              "metadata": {
+                "description": "Container Registry SKU"
+              }
+            },
+            "adminUserEnabled": {
+              "type": "bool",
+              "defaultValue": false,
+              "metadata": {
+                "description": "Enable admin user (not recommended for production)"
+              }
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.ContainerRegistry/registries",
+              "apiVersion": "2023-07-01",
+              "name": "[parameters('name')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "sku": {
+                "name": "[parameters('acrSku')]"
+              },
+              "identity": {
+                "type": "SystemAssigned"
+              },
+              "properties": {
+                "adminUserEnabled": "[parameters('adminUserEnabled')]",
+                "publicNetworkAccess": "Enabled",
+                "networkRuleBypassOptions": "AzureServices",
+                "policies": {
+                  "quarantinePolicy": {
+                    "status": "disabled"
+                  },
+                  "retentionPolicy": {
+                    "status": "enabled",
+                    "days": 30
+                  },
+                  "trustPolicy": {
+                    "status": "disabled"
+                  }
+                }
+              }
+            }
+          ],
+          "outputs": {
+            "resourceId": {
+              "type": "string",
+              "metadata": {
+                "description": "Container Registry resource ID"
+              },
+              "value": "[resourceId('Microsoft.ContainerRegistry/registries', parameters('name'))]"
+            },
+            "name": {
+              "type": "string",
+              "metadata": {
+                "description": "Container Registry name"
+              },
+              "value": "[parameters('name')]"
+            },
+            "loginServer": {
+              "type": "string",
+              "metadata": {
+                "description": "Container Registry login server"
+              },
+              "value": "[reference(resourceId('Microsoft.ContainerRegistry/registries', parameters('name')), '2023-07-01').loginServer]"
+            },
+            "managedIdentityPrincipalId": {
+              "type": "string",
+              "metadata": {
+                "description": "Container Registry system-assigned managed identity principal ID"
+              },
+              "value": "[reference(resourceId('Microsoft.ContainerRegistry/registries', parameters('name')), '2023-07-01', 'full').identity.principalId]"
+            }
+          }
+        }
+      }
+    },
+    "sqlServerModule": {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "sql-deployment",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "serverName": {
+            "value": "[parameters('sqlServerName')]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "tags": {
+            "value": "[variables('tags')]"
+          },
+          "administratorLogin": "[if(parameters('sqlUseAzureAuth'), createObject('value', ''), createObject('value', parameters('sqlAdminUsername')))]",
+          "administratorLoginPassword": "[if(parameters('sqlUseAzureAuth'), createObject('value', ''), createObject('value', parameters('sqlAdminPassword')))]",
+          "azureAdAdminLogin": {
+            "value": "[parameters('sqlAzureAdAdminLogin')]"
+          },
+          "azureAdAdminSid": {
+            "value": "[parameters('sqlAzureAdAdminSid')]"
+          },
+          "azureADOnlyAuthentication": {
+            "value": "[parameters('sqlUseAzureAuth')]"
+          },
+          "databaseName": {
+            "value": "[parameters('sqlDatabaseName')]"
+          },
+          "databaseSku": {
+            "value": "[parameters('sqlDatabaseSku')]"
+          },
+          "enableAudit": {
+            "value": true
+          },
+          "enableThreatDetection": {
+            "value": true
+          },
+          "enableVulnerabilityAssessment": {
+            "value": "[parameters('enableSqlVulnerabilityAssessment')]"
+          },
+          "publicNetworkAccess": {
+            "value": "Disabled"
+          },
+          "restrictOutboundNetworkAccess": {
+            "value": "Enabled"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.38.33.27573",
+              "templateHash": "4267627716555504970"
+            }
+          },
+          "parameters": {
+            "serverName": {
+              "type": "string",
+              "metadata": {
+                "description": "SQL Server name (must be globally unique)"
+              }
+            },
+            "location": {
+              "type": "string",
+              "metadata": {
+                "description": "Location for SQL Server"
+              }
+            },
+            "tags": {
+              "type": "object",
+              "defaultValue": {},
+              "metadata": {
+                "description": "Resource tags"
+              }
+            },
+            "administratorLogin": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "SQL administrator login username"
+              }
+            },
+            "administratorLoginPassword": {
+              "type": "securestring",
+              "defaultValue": "",
+              "metadata": {
+                "description": "SQL administrator login password"
+              }
+            },
+            "azureAdAdminLogin": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Azure AD admin login name (UPN or display name, e.g. admin@contoso.com)"
+              }
+            },
+            "azureAdAdminSid": {
+              "type": "string",
+              "defaultValue": "",
+              "maxLength": 36,
+              "metadata": {
+                "description": "Azure AD admin Object ID - MUST be a valid GUID (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx).\nGet it with: az ad user show --id <UPN> --query id -o tsv\nLeave empty to skip inline AD admin configuration.\nWARNING: An invalid value (placeholder, email, empty path segment) causes ARM error\nInvalidResourceIdSegment on parameters.properties.administrators.sid."
+              }
+            },
+            "azureADOnlyAuthentication": {
+              "type": "bool",
+              "defaultValue": false,
+              "metadata": {
+                "description": "Enable Azure AD-only authentication"
+              }
+            },
+            "databaseName": {
+              "type": "string",
+              "metadata": {
+                "description": "Database name"
+              }
+            },
+            "databaseSku": {
+              "type": "string",
+              "defaultValue": "Basic",
+              "metadata": {
+                "description": "Database SKU (Basic, S0, S1, P1, etc.)"
+              }
+            },
+            "maxSizeBytes": {
+              "type": "int",
+              "defaultValue": 2147483648,
+              "metadata": {
+                "description": "Maximum database size in bytes"
+              }
+            },
+            "enableAudit": {
+              "type": "bool",
+              "defaultValue": false,
+              "metadata": {
+                "description": "Enable auditing"
+              }
+            },
+            "enableThreatDetection": {
+              "type": "bool",
+              "defaultValue": false,
+              "metadata": {
+                "description": "Enable threat detection"
+              }
+            },
+            "enableVulnerabilityAssessment": {
+              "type": "bool",
+              "defaultValue": false,
+              "metadata": {
+                "description": "Enable SQL Vulnerability Assessment (Express configuration, no storage account needed). Recommended by MCSB (SecurityCenterBuiltIn)."
+              }
+            },
+            "minimalTlsVersion": {
+              "type": "string",
+              "defaultValue": "1.2",
+              "allowedValues": [
+                "1.0",
+                "1.1",
+                "1.2"
+              ],
+              "metadata": {
+                "description": "Minimum TLS version"
+              }
+            },
+            "publicNetworkAccess": {
+              "type": "string",
+              "defaultValue": "Disabled",
+              "allowedValues": [
+                "Enabled",
+                "Disabled"
+              ],
+              "metadata": {
+                "description": "Public network access for SQL server. Set Disabled for MCAPS compliance — connectivity must go through a private endpoint."
+              }
+            },
+            "restrictOutboundNetworkAccess": {
+              "type": "string",
+              "defaultValue": "Enabled",
+              "allowedValues": [
+                "Enabled",
+                "Disabled"
+              ],
+              "metadata": {
+                "description": "Restrict outbound network access for SQL server. Set Enabled for MCAPS compliance — prevents SQL from making arbitrary outbound connections outside allowed resources."
+              }
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Sql/servers",
+              "apiVersion": "2023-05-01-preview",
+              "name": "[parameters('serverName')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "identity": {
+                "type": "SystemAssigned"
+              },
+              "properties": {
+                "administratorLogin": "[if(parameters('azureADOnlyAuthentication'), null(), parameters('administratorLogin'))]",
+                "administratorLoginPassword": "[if(parameters('azureADOnlyAuthentication'), null(), parameters('administratorLoginPassword'))]",
+                "minimalTlsVersion": "[parameters('minimalTlsVersion')]",
+                "publicNetworkAccess": "[parameters('publicNetworkAccess')]",
+                "restrictOutboundNetworkAccess": "[parameters('restrictOutboundNetworkAccess')]",
+                "administrators": "[if(and(not(empty(parameters('azureAdAdminLogin'))), not(empty(parameters('azureAdAdminSid')))), createObject('administratorType', 'ActiveDirectory', 'login', parameters('azureAdAdminLogin'), 'sid', parameters('azureAdAdminSid'), 'tenantId', subscription().tenantId, 'azureADOnlyAuthentication', parameters('azureADOnlyAuthentication')), null())]"
+              }
+            },
+            {
+              "condition": "[equals(parameters('publicNetworkAccess'), 'Enabled')]",
+              "type": "Microsoft.Sql/servers/firewallRules",
+              "apiVersion": "2023-05-01-preview",
+              "name": "[format('{0}/{1}', parameters('serverName'), 'AllowAllWindowsAzureIps')]",
+              "properties": {
+                "startIpAddress": "0.0.0.0",
+                "endIpAddress": "0.0.0.0"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Sql/servers', parameters('serverName'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Sql/servers/databases",
+              "apiVersion": "2023-05-01-preview",
+              "name": "[format('{0}/{1}', parameters('serverName'), parameters('databaseName'))]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "sku": {
+                "name": "[parameters('databaseSku')]"
+              },
+              "properties": {
+                "collation": "SQL_Latin1_General_CP1_CI_AS",
+                "maxSizeBytes": "[parameters('maxSizeBytes')]",
+                "catalogCollation": "SQL_Latin1_General_CP1_CI_AS",
+                "zoneRedundant": false,
+                "readScale": "Disabled"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Sql/servers', parameters('serverName'))]"
+              ]
+            },
+            {
+              "condition": "[parameters('enableAudit')]",
+              "type": "Microsoft.Sql/servers/auditingSettings",
+              "apiVersion": "2023-05-01-preview",
+              "name": "[format('{0}/{1}', parameters('serverName'), 'default')]",
+              "properties": {
+                "state": "Enabled",
+                "isAzureMonitorTargetEnabled": true,
+                "retentionDays": 90
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Sql/servers', parameters('serverName'))]"
+              ]
+            },
+            {
+              "condition": "[parameters('enableThreatDetection')]",
+              "type": "Microsoft.Sql/servers/securityAlertPolicies",
+              "apiVersion": "2023-05-01-preview",
+              "name": "[format('{0}/{1}', parameters('serverName'), 'Default')]",
+              "properties": {
+                "state": "Enabled",
+                "emailAccountAdmins": true,
+                "retentionDays": 90
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Sql/servers', parameters('serverName'))]"
+              ]
+            },
+            {
+              "condition": "[parameters('enableVulnerabilityAssessment')]",
+              "type": "Microsoft.Sql/servers/sqlVulnerabilityAssessments",
+              "apiVersion": "2022-11-01-preview",
+              "name": "[format('{0}/{1}', parameters('serverName'), 'default')]",
+              "properties": {
+                "state": "Enabled"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Sql/servers', parameters('serverName'))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "resourceId": {
+              "type": "string",
+              "metadata": {
+                "description": "SQL Server resource ID"
+              },
+              "value": "[resourceId('Microsoft.Sql/servers', parameters('serverName'))]"
+            },
+            "serverName": {
+              "type": "string",
+              "metadata": {
+                "description": "SQL Server name"
+              },
+              "value": "[parameters('serverName')]"
+            },
+            "fullyQualifiedDomainName": {
+              "type": "string",
+              "metadata": {
+                "description": "SQL Server FQDN"
+              },
+              "value": "[reference(resourceId('Microsoft.Sql/servers', parameters('serverName')), '2023-05-01-preview').fullyQualifiedDomainName]"
+            },
+            "databaseResourceId": {
+              "type": "string",
+              "metadata": {
+                "description": "SQL Database resource ID"
+              },
+              "value": "[resourceId('Microsoft.Sql/servers/databases', parameters('serverName'), parameters('databaseName'))]"
+            },
+            "databaseName": {
+              "type": "string",
+              "metadata": {
+                "description": "SQL Database name"
+              },
+              "value": "[parameters('databaseName')]"
+            },
+            "managedIdentityPrincipalId": {
+              "type": "string",
+              "metadata": {
+                "description": "SQL Server system-assigned managed identity principal ID"
+              },
+              "value": "[reference(resourceId('Microsoft.Sql/servers', parameters('serverName')), '2023-05-01-preview', 'full').identity.principalId]"
+            }
+          }
+        }
+      }
+    },
+    "sqlPrivateEndpointModule": {
+      "condition": "[parameters('enableVnetIntegration')]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "sql-private-endpoint-deployment",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "privateEndpointName": {
+            "value": "[format('{0}-sql-pe', variables('resourceNamePrefix'))]"
+          },
+          "sqlServerResourceId": {
+            "value": "[reference('sqlServerModule').outputs.resourceId.value]"
+          },
+          "subnetId": "[if(parameters('enableVnetIntegration'), createObject('value', reference('networkModule').outputs.privateEndpointSubnetId.value), createObject('value', ''))]",
+          "vnetId": "[if(parameters('enableVnetIntegration'), createObject('value', reference('networkModule').outputs.vnetId.value), createObject('value', ''))]",
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "tags": {
+            "value": "[variables('tags')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.38.33.27573",
+              "templateHash": "17397315890636347493"
+            }
+          },
+          "parameters": {
+            "privateEndpointName": {
+              "type": "string",
+              "metadata": {
+                "description": "Base name for private endpoint and related resources"
+              }
+            },
+            "sqlServerResourceId": {
+              "type": "string",
+              "metadata": {
+                "description": "SQL Server resource ID"
+              }
+            },
+            "subnetId": {
+              "type": "string",
+              "metadata": {
+                "description": "Resource ID of the private endpoint subnet"
+              }
+            },
+            "vnetId": {
+              "type": "string",
+              "metadata": {
+                "description": "Resource ID of the VNet for DNS zone link"
+              }
+            },
+            "location": {
+              "type": "string",
+              "metadata": {
+                "description": "Location"
+              }
+            },
+            "tags": {
+              "type": "object",
+              "defaultValue": {},
+              "metadata": {
+                "description": "Resource tags"
+              }
+            }
+          },
+          "variables": {
+            "sqlPrivateDnsZoneName": "[format('privatelink{0}', environment().suffixes.sqlServerHostname)]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Network/privateDnsZones",
+              "apiVersion": "2020-06-01",
+              "name": "[variables('sqlPrivateDnsZoneName')]",
+              "location": "global",
+              "tags": "[parameters('tags')]"
+            },
+            {
+              "type": "Microsoft.Network/privateDnsZones/virtualNetworkLinks",
+              "apiVersion": "2020-06-01",
+              "name": "[format('{0}/{1}', variables('sqlPrivateDnsZoneName'), format('{0}-vnet-link', parameters('privateEndpointName')))]",
+              "location": "global",
+              "properties": {
+                "registrationEnabled": false,
+                "virtualNetwork": {
+                  "id": "[parameters('vnetId')]"
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Network/privateDnsZones', variables('sqlPrivateDnsZoneName'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Network/privateEndpoints",
+              "apiVersion": "2023-09-01",
+              "name": "[parameters('privateEndpointName')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "subnet": {
+                  "id": "[parameters('subnetId')]"
+                },
+                "privateLinkServiceConnections": [
+                  {
+                    "name": "[parameters('privateEndpointName')]",
+                    "properties": {
+                      "privateLinkServiceId": "[parameters('sqlServerResourceId')]",
+                      "groupIds": [
+                        "sqlServer"
+                      ]
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.Network/privateEndpoints/privateDnsZoneGroups",
+              "apiVersion": "2023-09-01",
+              "name": "[format('{0}/{1}', parameters('privateEndpointName'), 'default')]",
+              "properties": {
+                "privateDnsZoneConfigs": [
+                  {
+                    "name": "sql-privatelink",
+                    "properties": {
+                      "privateDnsZoneId": "[resourceId('Microsoft.Network/privateDnsZones', variables('sqlPrivateDnsZoneName'))]"
+                    }
+                  }
+                ]
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Network/privateDnsZones', variables('sqlPrivateDnsZoneName'))]",
+                "[resourceId('Microsoft.Network/privateEndpoints', parameters('privateEndpointName'))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "privateEndpointId": {
+              "type": "string",
+              "metadata": {
+                "description": "Private endpoint resource ID"
+              },
+              "value": "[resourceId('Microsoft.Network/privateEndpoints', parameters('privateEndpointName'))]"
+            },
+            "privateDnsZoneId": {
+              "type": "string",
+              "metadata": {
+                "description": "Private DNS zone resource ID"
+              },
+              "value": "[resourceId('Microsoft.Network/privateDnsZones', variables('sqlPrivateDnsZoneName'))]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "networkModule",
+        "sqlServerModule"
+      ]
+    },
+    "appServiceModule": {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "appService-deployment",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "appServicePlanName": {
+            "value": "[format('{0}-plan', variables('resourceNamePrefix'))]"
+          },
+          "webAppName": {
+            "value": "[format('{0}-app', variables('resourceNamePrefix'))]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "tags": {
+            "value": "[variables('tags')]"
+          },
+          "appServicePlanSku": {
+            "value": "[parameters('appServicePlanSku')]"
+          },
+          "pythonVersion": {
+            "value": "3.11"
+          },
+          "alwaysOn": {
+            "value": true
+          },
+          "appSettings": {
+            "value": "[concat(createArray(createObject('name', 'AZURE_OPENAI_ENDPOINT', 'value', if(parameters('deployAzureOpenAI'), reference('azureOpenAIModule').outputs.endpoint.value, parameters('azureOpenAIEndpoint'))), createObject('name', 'AZURE_OPENAI_DEPLOYMENT', 'value', if(parameters('deployAzureOpenAI'), reference('azureOpenAIModule').outputs.deploymentName.value, parameters('azureOpenAIDeployment'))), createObject('name', 'AZURE_OPENAI_API_VERSION', 'value', parameters('azureOpenAIApiVersion')), createObject('name', 'AZURE_OPENAI_API_KEY', 'value', parameters('azureOpenAIApiKey')), createObject('name', 'PROJECT_ENDPOINT', 'value', parameters('projectEndpoint')), createObject('name', 'CONNECTION_NAME', 'value', parameters('connectionName')), createObject('name', 'MODEL_DEPLOYMENT_NAME', 'value', parameters('modelDeploymentName')), createObject('name', 'FABRIC_WORKSPACE_ID', 'value', parameters('fabricWorkspaceId')), createObject('name', 'FABRIC_ORCHESTRATOR_AGENT_ID', 'value', parameters('fabricOrchestratorAgentId')), createObject('name', 'FABRIC_DOCUMENT_AGENT_ID', 'value', parameters('fabricDocumentAgentId')), createObject('name', 'FABRIC_POWERBI_AGENT_ID', 'value', parameters('fabricPowerBiAgentId')), createObject('name', 'FABRIC_CHART_AGENT_ID', 'value', parameters('fabricChartAgentId')), createObject('name', 'FABRIC_SALES_AGENT_ID', 'value', parameters('fabricSalesAgentId')), createObject('name', 'FABRIC_REALTIME_AGENT_ID', 'value', parameters('fabricRealtimeAgentId')), createObject('name', 'POWERBI_WORKSPACE_ID', 'value', parameters('powerbiWorkspaceId')), createObject('name', 'POWERBI_REPORT_ID', 'value', parameters('powerbiReportId')), createObject('name', 'POWERBI_CLIENT_ID', 'value', parameters('powerbiClientId')), createObject('name', 'POWERBI_TENANT_ID', 'value', parameters('powerbiTenantId')), createObject('name', 'POWERBI_CLIENT_SECRET', 'value', parameters('powerbiClientSecret')), createObject('name', 'SQL_SERVER', 'value', variables('sqlServerFqdn')), createObject('name', 'SQL_DATABASE', 'value', parameters('sqlDatabaseName')), createObject('name', 'SQL_USE_AZURE_AUTH', 'value', string(parameters('sqlUseAzureAuth'))), createObject('name', 'SQL_USERNAME', 'value', if(parameters('sqlUseAzureAuth'), '', parameters('sqlAdminUsername'))), createObject('name', 'SQL_PASSWORD', 'value', if(parameters('sqlUseAzureAuth'), '', parameters('sqlAdminPassword'))), createObject('name', 'ENABLE_AUTHENTICATION', 'value', string(parameters('enableAuthentication'))), createObject('name', 'JWT_SECRET_KEY', 'value', variables('finalJwtSecret')), createObject('name', 'JWT_SECRET', 'value', variables('finalJwtSecret')), createObject('name', 'JWT_ALGORITHM', 'value', parameters('jwtAlgorithm')), createObject('name', 'JWT_EXPIRATION_MINUTES', 'value', string(parameters('jwtExpirationMinutes'))), createObject('name', 'JWT_EXPIRY_HOURS', 'value', string(div(parameters('jwtExpirationMinutes'), 60))), createObject('name', 'APP_PORT', 'value', string(parameters('appPort'))), createObject('name', 'ENABLE_TRACING', 'value', string(parameters('enableTracing'))), createObject('name', 'LOG_LEVEL', 'value', parameters('logLevel')), createObject('name', 'SCM_DO_BUILD_DURING_DEPLOYMENT', 'value', 'true'), createObject('name', 'ENABLE_ORYX_BUILD', 'value', 'true'), createObject('name', 'WEBSITES_CONTAINER_START_TIME_LIMIT', 'value', '1800'), createObject('name', 'WEBSITE_HTTPLOGGING_RETENTION_DAYS', 'value', '7')), if(parameters('enableApplicationInsights'), createArray(createObject('name', 'APPLICATIONINSIGHTS_CONNECTION_STRING', 'value', reference('appInsightsModule').outputs.connectionString.value), createObject('name', 'ApplicationInsightsAgent_EXTENSION_VERSION', 'value', '~3')), createArray()))]"
+          },
+          "enableSystemManagedIdentity": {
+            "value": true
+          },
+          "logAnalyticsWorkspaceId": "[if(parameters('enableLogAnalyticsWorkspace'), createObject('value', reference('logAnalyticsModule').outputs.resourceId.value), createObject('value', ''))]",
+          "vnetSubnetId": "[if(parameters('enableVnetIntegration'), createObject('value', reference('networkModule').outputs.appServiceSubnetId.value), createObject('value', ''))]"
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.38.33.27573",
+              "templateHash": "17727709547619030170"
+            }
+          },
+          "parameters": {
+            "appServicePlanName": {
+              "type": "string",
+              "metadata": {
+                "description": "App Service Plan name"
+              }
+            },
+            "webAppName": {
+              "type": "string",
+              "metadata": {
+                "description": "Web App name"
+              }
+            },
+            "location": {
+              "type": "string",
+              "metadata": {
+                "description": "Location for resources"
+              }
+            },
+            "tags": {
+              "type": "object",
+              "defaultValue": {},
+              "metadata": {
+                "description": "Resource tags"
+              }
+            },
+            "appServicePlanSku": {
+              "type": "string",
+              "defaultValue": "B2",
+              "metadata": {
+                "description": "App Service Plan SKU"
+              }
+            },
+            "pythonVersion": {
+              "type": "string",
+              "defaultValue": "3.11",
+              "allowedValues": [
+                "3.8",
+                "3.9",
+                "3.10",
+                "3.11",
+                "3.12"
+              ],
+              "metadata": {
+                "description": "Python version"
+              }
+            },
+            "alwaysOn": {
+              "type": "bool",
+              "defaultValue": true,
+              "metadata": {
+                "description": "Enable always on"
+              }
+            },
+            "appSettings": {
+              "type": "array",
+              "defaultValue": [],
+              "metadata": {
+                "description": "App settings array"
+              }
+            },
+            "enableSystemManagedIdentity": {
+              "type": "bool",
+              "defaultValue": true,
+              "metadata": {
+                "description": "Enable system-assigned managed identity"
+              }
+            },
+            "healthCheckPath": {
+              "type": "string",
+              "defaultValue": "/health",
+              "metadata": {
+                "description": "Health check path"
+              }
+            },
+            "appCommandLine": {
+              "type": "string",
+              "defaultValue": "bash startup.sh",
+              "metadata": {
+                "description": "App command line (startup script)"
+              }
+            },
+            "logAnalyticsWorkspaceId": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Log Analytics Workspace resource ID for diagnostic settings. Leave empty to skip."
+              }
+            },
+            "vnetSubnetId": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "VNet subnet resource ID for regional VNet integration (outbound). Leave empty to skip."
+              }
+            }
+          },
+          "variables": {
+            "tier": "[if(contains(parameters('appServicePlanSku'), 'B'), 'Basic', if(contains(parameters('appServicePlanSku'), 'S'), 'Standard', if(contains(parameters('appServicePlanSku'), 'P'), 'PremiumV2', 'Free')))]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Web/serverfarms",
+              "apiVersion": "2023-01-01",
+              "name": "[parameters('appServicePlanName')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "kind": "linux",
+              "sku": {
+                "name": "[parameters('appServicePlanSku')]",
+                "tier": "[variables('tier')]",
+                "capacity": 1
+              },
+              "properties": {
+                "reserved": true,
+                "zoneRedundant": false
+              }
+            },
+            {
+              "type": "Microsoft.Web/sites",
+              "apiVersion": "2023-01-01",
+              "name": "[parameters('webAppName')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "kind": "app,linux",
+              "identity": "[if(parameters('enableSystemManagedIdentity'), createObject('type', 'SystemAssigned'), null())]",
+              "properties": {
+                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', parameters('appServicePlanName'))]",
+                "httpsOnly": true,
+                "reserved": true,
+                "clientAffinityEnabled": false,
+                "siteConfig": {
+                  "linuxFxVersion": "[format('PYTHON|{0}', parameters('pythonVersion'))]",
+                  "alwaysOn": "[parameters('alwaysOn')]",
+                  "ftpsState": "Disabled",
+                  "minTlsVersion": "1.2",
+                  "http20Enabled": true,
+                  "appCommandLine": "[parameters('appCommandLine')]",
+                  "healthCheckPath": "[parameters('healthCheckPath')]",
+                  "appSettings": "[parameters('appSettings')]",
+                  "pythonVersion": "[parameters('pythonVersion')]"
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Web/serverfarms', parameters('appServicePlanName'))]"
+              ]
+            },
+            {
+              "condition": "[not(empty(parameters('vnetSubnetId')))]",
+              "type": "Microsoft.Web/sites/networkConfig",
+              "apiVersion": "2023-01-01",
+              "name": "[format('{0}/{1}', parameters('webAppName'), 'virtualNetwork')]",
+              "properties": {
+                "subnetResourceId": "[parameters('vnetSubnetId')]",
+                "swiftSupported": true
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Web/sites', parameters('webAppName'))]"
+              ]
+            },
+            {
+              "condition": "[not(empty(parameters('logAnalyticsWorkspaceId')))]",
+              "type": "Microsoft.Insights/diagnosticSettings",
+              "apiVersion": "2021-05-01-preview",
+              "scope": "[format('Microsoft.Web/sites/{0}', parameters('webAppName'))]",
+              "name": "appservice-diagnostics",
+              "properties": {
+                "workspaceId": "[parameters('logAnalyticsWorkspaceId')]",
+                "logs": [
+                  {
+                    "category": "AppServiceHTTPLogs",
+                    "enabled": true,
+                    "retentionPolicy": {
+                      "enabled": false,
+                      "days": 0
+                    }
+                  },
+                  {
+                    "category": "AppServiceConsoleLogs",
+                    "enabled": true,
+                    "retentionPolicy": {
+                      "enabled": false,
+                      "days": 0
+                    }
+                  },
+                  {
+                    "category": "AppServiceAppLogs",
+                    "enabled": true,
+                    "retentionPolicy": {
+                      "enabled": false,
+                      "days": 0
+                    }
+                  },
+                  {
+                    "category": "AppServiceAuditLogs",
+                    "enabled": true,
+                    "retentionPolicy": {
+                      "enabled": false,
+                      "days": 0
+                    }
+                  },
+                  {
+                    "category": "AppServiceIPSecAuditLogs",
+                    "enabled": true,
+                    "retentionPolicy": {
+                      "enabled": false,
+                      "days": 0
+                    }
+                  }
+                ],
+                "metrics": [
+                  {
+                    "category": "AllMetrics",
+                    "enabled": true,
+                    "retentionPolicy": {
+                      "enabled": false,
+                      "days": 0
+                    }
+                  }
+                ]
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Web/sites', parameters('webAppName'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Web/sites/basicPublishingCredentialsPolicies",
+              "apiVersion": "2023-01-01",
+              "name": "[format('{0}/{1}', parameters('webAppName'), 'ftp')]",
+              "properties": {
+                "allow": false
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Web/sites', parameters('webAppName'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Web/sites/basicPublishingCredentialsPolicies",
+              "apiVersion": "2023-01-01",
+              "name": "[format('{0}/{1}', parameters('webAppName'), 'scm')]",
+              "properties": {
+                "allow": true
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Web/sites', parameters('webAppName'))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "appServicePlanResourceId": {
+              "type": "string",
+              "metadata": {
+                "description": "App Service Plan resource ID"
+              },
+              "value": "[resourceId('Microsoft.Web/serverfarms', parameters('appServicePlanName'))]"
+            },
+            "appServicePlanName": {
+              "type": "string",
+              "metadata": {
+                "description": "App Service Plan name"
+              },
+              "value": "[parameters('appServicePlanName')]"
+            },
+            "resourceId": {
+              "type": "string",
+              "metadata": {
+                "description": "Web App resource ID"
+              },
+              "value": "[resourceId('Microsoft.Web/sites', parameters('webAppName'))]"
+            },
+            "webAppName": {
+              "type": "string",
+              "metadata": {
+                "description": "Web App name"
+              },
+              "value": "[parameters('webAppName')]"
+            },
+            "defaultHostName": {
+              "type": "string",
+              "metadata": {
+                "description": "Web App default hostname"
+              },
+              "value": "[reference(resourceId('Microsoft.Web/sites', parameters('webAppName')), '2023-01-01').defaultHostName]"
+            },
+            "webAppUrl": {
+              "type": "string",
+              "metadata": {
+                "description": "Web App URL"
+              },
+              "value": "[format('https://{0}', reference(resourceId('Microsoft.Web/sites', parameters('webAppName')), '2023-01-01').defaultHostName)]"
+            },
+            "managedIdentityPrincipalId": {
+              "type": "string",
+              "metadata": {
+                "description": "Web App system-assigned managed identity principal ID"
+              },
+              "value": "[if(parameters('enableSystemManagedIdentity'), reference(resourceId('Microsoft.Web/sites', parameters('webAppName')), '2023-01-01', 'full').identity.principalId, '')]"
+            },
+            "managedIdentityTenantId": {
+              "type": "string",
+              "metadata": {
+                "description": "Web App system-assigned managed identity tenant ID"
+              },
+              "value": "[if(parameters('enableSystemManagedIdentity'), reference(resourceId('Microsoft.Web/sites', parameters('webAppName')), '2023-01-01', 'full').identity.tenantId, '')]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "appInsightsModule",
+        "azureOpenAIModule",
+        "logAnalyticsModule",
+        "networkModule"
+      ]
+    },
+    "keyVaultRoleAssignment": {
+      "condition": "[parameters('enableKeyVault')]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "keyVault-roleAssignment",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "principalId": {
+            "value": "[reference('appServiceModule').outputs.managedIdentityPrincipalId.value]"
+          },
+          "roleDefinitionId": {
+            "value": "4633458b-17de-408a-b874-0445c86b69e6"
+          },
+          "targetResourceId": "[if(parameters('enableKeyVault'), createObject('value', reference('keyVaultModule').outputs.resourceId.value), createObject('value', ''))]"
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.38.33.27573",
+              "templateHash": "5925712208084120879"
+            }
+          },
+          "parameters": {
+            "principalId": {
+              "type": "string",
+              "metadata": {
+                "description": "Principal ID (managed identity) to assign the role to"
+              }
+            },
+            "roleDefinitionId": {
+              "type": "string",
+              "metadata": {
+                "description": "Role definition ID (GUID of the built-in or custom role)"
+              }
+            },
+            "targetResourceId": {
+              "type": "string",
+              "metadata": {
+                "description": "Target resource ID to assign the role on"
+              }
+            },
+            "principalType": {
+              "type": "string",
+              "defaultValue": "ServicePrincipal",
+              "allowedValues": [
+                "ServicePrincipal",
+                "User",
+                "Group"
+              ],
+              "metadata": {
+                "description": "Principal type"
+              }
+            }
+          },
+          "resources": [
+            {
+              "condition": "[not(equals(parameters('roleDefinitionId'), '00000000-0000-0000-0000-000000000000'))]",
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "name": "[guid(parameters('principalId'), parameters('roleDefinitionId'), parameters('targetResourceId'))]",
+              "properties": {
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', parameters('roleDefinitionId'))]",
+                "principalId": "[parameters('principalId')]",
+                "principalType": "[parameters('principalType')]"
+              }
+            }
+          ],
+          "outputs": {
+            "resourceId": {
+              "type": "string",
+              "metadata": {
+                "description": "Role assignment resource ID"
+              },
+              "value": "[if(not(equals(parameters('roleDefinitionId'), '00000000-0000-0000-0000-000000000000')), resourceId('Microsoft.Authorization/roleAssignments', guid(parameters('principalId'), parameters('roleDefinitionId'), parameters('targetResourceId'))), '')]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "appServiceModule",
+        "keyVaultModule"
+      ]
+    },
+    "sqlRoleAssignment": {
+      "condition": "[parameters('sqlUseAzureAuth')]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "sql-roleAssignment",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "principalId": {
+            "value": "[reference('appServiceModule').outputs.managedIdentityPrincipalId.value]"
+          },
+          "roleDefinitionId": {
+            "value": "00000000-0000-0000-0000-000000000000"
+          },
+          "targetResourceId": {
+            "value": "[reference('sqlServerModule').outputs.resourceId.value]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.38.33.27573",
+              "templateHash": "5925712208084120879"
+            }
+          },
+          "parameters": {
+            "principalId": {
+              "type": "string",
+              "metadata": {
+                "description": "Principal ID (managed identity) to assign the role to"
+              }
+            },
+            "roleDefinitionId": {
+              "type": "string",
+              "metadata": {
+                "description": "Role definition ID (GUID of the built-in or custom role)"
+              }
+            },
+            "targetResourceId": {
+              "type": "string",
+              "metadata": {
+                "description": "Target resource ID to assign the role on"
+              }
+            },
+            "principalType": {
+              "type": "string",
+              "defaultValue": "ServicePrincipal",
+              "allowedValues": [
+                "ServicePrincipal",
+                "User",
+                "Group"
+              ],
+              "metadata": {
+                "description": "Principal type"
+              }
+            }
+          },
+          "resources": [
+            {
+              "condition": "[not(equals(parameters('roleDefinitionId'), '00000000-0000-0000-0000-000000000000'))]",
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "name": "[guid(parameters('principalId'), parameters('roleDefinitionId'), parameters('targetResourceId'))]",
+              "properties": {
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', parameters('roleDefinitionId'))]",
+                "principalId": "[parameters('principalId')]",
+                "principalType": "[parameters('principalType')]"
+              }
+            }
+          ],
+          "outputs": {
+            "resourceId": {
+              "type": "string",
+              "metadata": {
+                "description": "Role assignment resource ID"
+              },
+              "value": "[if(not(equals(parameters('roleDefinitionId'), '00000000-0000-0000-0000-000000000000')), resourceId('Microsoft.Authorization/roleAssignments', guid(parameters('principalId'), parameters('roleDefinitionId'), parameters('targetResourceId'))), '')]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "appServiceModule",
+        "sqlServerModule"
+      ]
+    }
+  },
+  "outputs": {
+    "resourceGroupName": {
+      "type": "string",
+      "metadata": {
+        "description": "Resource group name"
+      },
+      "value": "[resourceGroup().name]"
+    },
+    "webAppName": {
+      "type": "string",
+      "metadata": {
+        "description": "Web App name"
+      },
+      "value": "[reference('appServiceModule').outputs.webAppName.value]"
+    },
+    "webAppUrl": {
+      "type": "string",
+      "metadata": {
+        "description": "Web App URL"
+      },
+      "value": "[reference('appServiceModule').outputs.webAppUrl.value]"
+    },
+    "managedIdentityPrincipalId": {
+      "type": "string",
+      "metadata": {
+        "description": "Web App managed identity principal ID"
+      },
+      "value": "[reference('appServiceModule').outputs.managedIdentityPrincipalId.value]"
+    },
+    "sqlServerName": {
+      "type": "string",
+      "metadata": {
+        "description": "SQL Server name"
+      },
+      "value": "[reference('sqlServerModule').outputs.serverName.value]"
+    },
+    "sqlDatabaseName": {
+      "type": "string",
+      "metadata": {
+        "description": "SQL Database name"
+      },
+      "value": "[reference('sqlServerModule').outputs.databaseName.value]"
+    },
+    "keyVaultName": {
+      "type": "string",
+      "metadata": {
+        "description": "Key Vault name"
+      },
+      "value": "[if(parameters('enableKeyVault'), reference('keyVaultModule').outputs.name.value, '')]"
+    },
+    "azureOpenAIEndpoint": {
+      "type": "string",
+      "metadata": {
+        "description": "Azure OpenAI endpoint (deployed or provided)"
+      },
+      "value": "[if(parameters('deployAzureOpenAI'), reference('azureOpenAIModule').outputs.endpoint.value, parameters('azureOpenAIEndpoint'))]"
+    },
+    "azureOpenAIDeployment": {
+      "type": "string",
+      "metadata": {
+        "description": "Azure OpenAI deployment name"
+      },
+      "value": "[if(parameters('deployAzureOpenAI'), reference('azureOpenAIModule').outputs.deploymentName.value, parameters('azureOpenAIDeployment'))]"
+    },
+    "azureOpenAIName": {
+      "type": "string",
+      "metadata": {
+        "description": "Azure OpenAI resource name (if deployed)"
+      },
+      "value": "[if(parameters('deployAzureOpenAI'), reference('azureOpenAIModule').outputs.name.value, '')]"
+    },
+    "containerRegistryName": {
+      "type": "string",
+      "metadata": {
+        "description": "Container Registry name"
+      },
+      "value": "[if(parameters('enableContainerRegistry'), reference('containerRegistryModule').outputs.name.value, '')]"
+    },
+    "containerRegistryLoginServer": {
+      "type": "string",
+      "metadata": {
+        "description": "Container Registry login server"
+      },
+      "value": "[if(parameters('enableContainerRegistry'), reference('containerRegistryModule').outputs.loginServer.value, '')]"
+    },
+    "applicationInsightsConnectionString": {
+      "type": "string",
+      "metadata": {
+        "description": "Application Insights connection string"
+      },
+      "value": "[if(parameters('enableApplicationInsights'), reference('appInsightsModule').outputs.connectionString.value, '')]"
+    },
+    "logAnalyticsWorkspaceId": {
+      "type": "string",
+      "metadata": {
+        "description": "Log Analytics Workspace resource ID"
+      },
+      "value": "[if(parameters('enableLogAnalyticsWorkspace'), reference('logAnalyticsModule').outputs.resourceId.value, '')]"
+    },
+    "logAnalyticsWorkspaceName": {
+      "type": "string",
+      "metadata": {
+        "description": "Log Analytics Workspace name"
+      },
+      "value": "[if(parameters('enableLogAnalyticsWorkspace'), reference('logAnalyticsModule').outputs.name.value, '')]"
+    },
+    "vnetName": {
+      "type": "string",
+      "metadata": {
+        "description": "VNet name (deployed when enableVnetIntegration = true)"
+      },
+      "value": "[if(parameters('enableVnetIntegration'), reference('networkModule').outputs.vnetName.value, '')]"
+    },
+    "jwtSecretKey": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Generated JWT secret (if auto-generated)"
+      },
+      "value": "[variables('finalJwtSecret')]"
+    },
+    "nextSteps": {
+      "type": "string",
+      "metadata": {
+        "description": "Next steps for deployment"
+      },
+      "value": "========================================\r\n🎉 INFRASTRUCTURE DEPLOYMENT SUCCESSFUL!\r\n========================================\r\n\r\n📋 NEXT STEPS:\r\n\r\n1️⃣  Grant SQL Database Access to Managed Identity\r\n   ${sqlUseAzureAuth ? '   Run this in Azure Portal → SQL Query Editor:\\n   \\n   CREATE USER [${appServiceModule.outputs.webAppName}] FROM EXTERNAL PROVIDER;\\n   ALTER ROLE db_owner ADD MEMBER [${appServiceModule.outputs.webAppName}];' : '   Skipped - Using SQL authentication'}\r\n\r\n2️⃣  Deploy Application Code\r\n   \r\n   cd azure-deployment-template\r\n   ./scripts/deploy-code.ps1 -AppName ${appServiceModule.outputs.webAppName} -ResourceGroup ${resourceGroup().name}\r\n\r\n3️⃣  Verify Deployment\r\n   \r\n   🌐 App URL: ${appServiceModule.outputs.webAppUrl}\r\n   🔐 Default Login: admin / Admin@123\r\n   \r\n   ⚠️  IMPORTANT: Change default admin password immediately!\r\n\r\n4️⃣  Monitor Application\r\n   \r\n   📊 Application Insights: ${enableApplicationInsights ? 'Enabled' : 'Disabled'}\r\n   📝 Logs: az webapp log tail --name ${appServiceModule.outputs.webAppName} -g ${resourceGroup().name}\r\n\r\n========================================\r\n"
+    }
+  }
+}

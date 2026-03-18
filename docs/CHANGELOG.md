@@ -10,7 +10,33 @@ All notable changes to the Azure Intelligent Agent application will be documente
   - Remove hardcoded mock data and custom query code
   - Enable natural language queries for sales, inventory, customers, and performance metrics
   - Maintain RLS filtering through Fabric permissions
-  - See agentsdemos implementation-plan.md for detailed approach
+
+---
+
+## [1.3.0] - 2026-03-06
+
+### Added - Azure Policy Compliance + Pre-Deployment Validation
+
+#### Infrastructure (bicep/modules/sqlServer.bicep)
+- `restrictOutboundNetworkAccess` parameter now defaults to `'Enabled'`, preventing SQL from making arbitrary outbound connections
+- `AllowAllWindowsAzureIps` firewall rule is now conditional on `publicNetworkAccess == 'Enabled'` — omitted when private endpoint is used
+- `administrators` block moved **inline** onto the SQL server resource (`properties.administrators`). ARM policy evaluates Azure AD-only authentication on the server resource at validation time; separate child resources (`/administrators`, `/azureADOnlyAuthentications`) are not inspected at that point
+- `@maxLength(36)` constraint on `azureAdAdminSid` prevents placeholder values from causing `InvalidResourceIdSegment` at ARM validation
+
+#### New: Pre-Deployment Policy Validator (scripts/validate-policy-compliance.ps1)
+- **Parameter health checks** — catches unfilled placeholders, empty GUID fields, and mismatched AD login/SID pairs before hitting ARM
+- **Template validation** — `az bicep build` for new resource groups; `az deployment group validate` for existing ones; surfaces `RequestDisallowedByPolicy` details
+- **What-if preview** — shows planned resource diffs and highlights any policy blocks
+- **Policy audit** — lists active deny assignments and highlights SQL/network/auth-related policies
+- **9 static template checks** — verifies `publicNetworkAccess`, `restrictOutboundNetworkAccess`, `minimalTlsVersion`, firewall rule conditionality, inline administrators block, VNet integration, and param guards
+
+#### Documentation
+- README, CONFIGURATION.md, QUICK_REFERENCE.md updated with private endpoint architecture, policy guidance, and `azd init` workflow
+- CHANGELOG.md updated
+
+### Fixed
+- SQL server Bicep deployment no longer blocked by Azure subscription-level policies requiring disabled public network access and Entra-only authentication
+- `InvalidResourceIdSegment` error caused by placeholder values in `sqlAzureAdAdminSid`
 
 ---
 

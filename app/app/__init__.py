@@ -13,7 +13,7 @@ from types import ModuleType
 _MODULES = [
     "rls_middleware",
     "powerbi_integration",
-    "agent_framework_manager",
+    # "agent_framework_manager",  # Removed - use app/agent_framework_manager.py directly
     "routes_auth",
     "routes_admin_agents",
     "agent_tools",

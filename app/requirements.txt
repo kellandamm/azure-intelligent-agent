@@ -11,25 +11,16 @@ email-validator>=2.0.0
 # Azure Functions
 azure-functions>=1.20.0
 
-# Azure AI & Identity - Working versions from local
-azure-identity==1.21.0
-azure-core==1.35.1
-azure-ai-projects==1.1.0b4
-azure-ai-agents==1.2.0b5
-azure-ai-inference==1.0.0b1
-azure-purview-catalog==1.0.0b4
-azure-purview-scanning==1.0.0b2
+# Azure Identity & supporting SDKs
+azure-identity>=1.21.0
+azure-core>=1.35.1
+azure-ai-inference>=1.0.0b1
+azure-ai-agents>=1.0.0b1  # Azure AI Agent SDK for Foundry integration
+azure-ai-contentsafety>=1.0.0  # For prompt injection detection
+azure-purview-catalog>=1.0.0b4
+azure-purview-scanning>=1.0.0b2
 
-# Agent Framework - Optional, can be kept for compatibility
-# These are still used by old agent_framework_manager.py
-agent-framework
-agent-framework-core
-agent-framework-a2a
-agent-framework-azure-ai
-agent-framework-copilotstudio
-agent-framework-mem0
-agent-framework-redis
-agent-framework-devui
+# Agent Framework runtime is provided via the local agent_framework/ package
 
 # OpenAI - Compatible version from local
 openai>=1.99.0,<2
@@ -48,13 +39,20 @@ bcrypt>=4.0.0
 python-jose[cryptography]>=3.3.0
 structlog>=24.0.0
 
-# OpenTelemetry for Tracing - Compatible versions with azure-monitor-opentelemetry
-opentelemetry-api>=1.37.0
-opentelemetry-sdk>=1.37.0
-opentelemetry-exporter-otlp-proto-grpc>=1.36.0
-opentelemetry-instrumentation-fastapi>=0.58b0
-azure-monitor-opentelemetry==1.8.1
-azure-monitor-opentelemetry-exporter>=1.0.0b28
+# OpenTelemetry for Tracing - Compatible versions with azure-monitor-opentelemetry 1.7.0
+# azure-monitor-opentelemetry 1.7.0 requires:
+# - opentelemetry-instrumentation-fastapi~=0.57b0
+# - azure-monitor-opentelemetry-exporter~=1.0.0b40
+opentelemetry-api>=1.31.0
+opentelemetry-sdk>=1.31.0
+opentelemetry-exporter-otlp-proto-grpc>=1.31.0
+opentelemetry-instrumentation-fastapi>=0.57b0
+azure-monitor-opentelemetry==1.7.0
+
+# Production-Ready Features
+prometheus-client>=0.20.0  # Metrics collection
+azure-cosmos>=4.8.0  # CosmosDB for caching
+psutil>=5.9.0  # System metrics for health checks
 
 # Utilities
 httpx
@@ -65,7 +63,7 @@ plotly==6.3.1
 structlog==24.4.0
 rpds-py==0.27.1
 
-# Testing - v1.2.0
+# Testing
 pytest>=8.0.0
 pytest-asyncio>=0.23.0
 pytest-mock>=3.12.0

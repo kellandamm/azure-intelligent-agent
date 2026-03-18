@@ -1049,7 +1049,9 @@
 
         // View deal details
         function viewDealDetails(customer, product) {
-            alert('View details for ' + customer + '\n\nProduct: ' + product + '\n\nThis would open a detailed view with:\n- Full deal history\n- Contact information\n- Next steps and activities\n- Communication timeline\n- Related opportunities');
+            const encodedCustomer = encodeURIComponent(customer);
+            const encodedProduct = encodeURIComponent(product);
+            window.location.href = `/static/deal-detail.html?customer=${encodedCustomer}&product=${encodedProduct}`;
         }
 
         // Load top products

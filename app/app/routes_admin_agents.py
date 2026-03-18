@@ -3,11 +3,12 @@ Admin routes for Agent Management and System Monitoring.
 Provides dashboard, agent configuration, and system analytics.
 """
 from typing import Optional, List, Dict, Any
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, HTTPException, status, Depends, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field
 import json
+import logging
 import os
 
 from utils.auth import (
@@ -19,6 +20,8 @@ from utils.auth import (
 from utils.db_connection import DatabaseConnection
 from config import settings
 from app.agents.admin_config_agent import AdminConfigAgent
+
+logger = logging.getLogger(__name__)
 
 # Create router
 admin_agent_router = APIRouter(prefix="/api/admin/agents", tags=["Agent Management"])
@@ -62,23 +65,25 @@ class DashboardStatsResponse(BaseModel):
     recent_activity: List[Dict[str, Any]]
 
 
+
 # ========================================
 # Helper Functions
 # ========================================
 
+_AGENT_CONFIGS_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "agent_configs.json")
+
+
 def load_agent_configs() -> Dict[str, Any]:
     """Load agent configurations from file."""
-    config_path = "agent_configs.json"
-    if os.path.exists(config_path):
-        with open(config_path, "r") as f:
+    if os.path.exists(_AGENT_CONFIGS_PATH):
+        with open(_AGENT_CONFIGS_PATH, "r") as f:
             return json.load(f)
     return {}
 
 
 def save_agent_configs(configs: Dict[str, Any]) -> None:
     """Save agent configurations to file."""
-    config_path = "agent_configs.json"
-    with open(config_path, "w") as f:
+    with open(_AGENT_CONFIGS_PATH, "w") as f:
         json.dump(configs, f, indent=2)
 
 
@@ -104,51 +109,69 @@ def get_default_agent_configs() -> Dict[str, Any]:
     return configs
 
 
-async def log_agent_request(
+def log_agent_request(
     agent_key: str,
     message: str,
     response: str,
     user_id: int,
     response_time: float,
     success: bool = True,
-    error: Optional[str] = None
+    error: Optional[str] = None,
+    db_connection: Optional[DatabaseConnection] = None
 ) -> None:
-    """Log an agent request for analytics."""
-    async with DatabaseConnection() as conn:
-        query = """
-        IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'AgentRequestLogs')
-        BEGIN
-            CREATE TABLE AgentRequestLogs (
-                LogID INT IDENTITY(1,1) PRIMARY KEY,
-                AgentKey NVARCHAR(50) NOT NULL,
-                Message NVARCHAR(MAX),
-                Response NVARCHAR(MAX),
-                UserID INT,
-                ResponseTime FLOAT,
-                Success BIT DEFAULT 1,
-                Error NVARCHAR(MAX),
-                CreatedDate DATETIME2 DEFAULT GETUTCDATE()
-            );
-            CREATE INDEX IX_AgentRequestLogs_AgentKey ON AgentRequestLogs(AgentKey);
-            CREATE INDEX IX_AgentRequestLogs_CreatedDate ON AgentRequestLogs(CreatedDate);
-        END
-        
-        INSERT INTO AgentRequestLogs (AgentKey, Message, Response, UserID, ResponseTime, Success, Error)
-        VALUES (@AgentKey, @Message, @Response, @UserID, @ResponseTime, @Success, @Error)
-        """
-        
-        await conn.execute(
-            query,
-            {
-                "AgentKey": agent_key,
-                "Message": message[:1000],  # Truncate if too long
-                "Response": response[:2000] if response else None,
-                "UserID": user_id,
-                "ResponseTime": response_time,
-                "Success": success,
-                "Error": error,
-            },
-        )
+    """
+    Log an agent request for analytics (synchronous).
+    
+    Args:
+        agent_key: Agent identifier (e.g., 'sales', 'financial')
+        message: User's message
+        response: Agent's response
+        user_id: User ID
+        response_time: Response time in seconds
+        success: Whether request was successful
+        error: Error message if failed
+        db_connection: Optional pre-initialized database connection (for reuse)
+    """
+    # Use provided connection or create temporary one
+    db = db_connection
+    if db is None:
+        from config import settings
+        db = DatabaseConnection(settings.database_connection_string)
+    
+    query = """
+    IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'AgentRequestLogs')
+    BEGIN
+        CREATE TABLE AgentRequestLogs (
+            LogID INT IDENTITY(1,1) PRIMARY KEY,
+            AgentKey NVARCHAR(50) NOT NULL,
+            Message NVARCHAR(MAX),
+            Response NVARCHAR(MAX),
+            UserID INT,
+            ResponseTime FLOAT,
+            Success BIT DEFAULT 1,
+            Error NVARCHAR(MAX),
+            CreatedDate DATETIME2 DEFAULT GETUTCDATE()
+        );
+        CREATE INDEX IX_AgentRequestLogs_AgentKey ON AgentRequestLogs(AgentKey);
+        CREATE INDEX IX_AgentRequestLogs_CreatedDate ON AgentRequestLogs(CreatedDate);
+    END
+    
+    INSERT INTO AgentRequestLogs (AgentKey, Message, Response, UserID, ResponseTime, Success, Error)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+    """
+    
+    db.execute_query(
+        query,
+        (
+            agent_key,
+            message[:1000],  # Truncate if too long
+            response[:2000] if response else None,
+            user_id,
+            response_time,
+            1 if success else 0,
+            error,
+        ),
+    )
 
 
 # ========================================
@@ -209,6 +232,7 @@ async def get_agent(agent_key: str, current_user: dict = Depends(get_current_use
 async def update_agent(
     agent_key: str,
     agent_config: AgentConfigModel,
+    request: Request,
     current_user: dict = Depends(get_current_user)
 ):
     """
@@ -236,35 +260,34 @@ async def update_agent(
         "is_active": agent_config.is_active,
         "model": agent_config.model,
         "modified_by": current_user["user_id"],
-        "modified_date": datetime.utcnow().isoformat(),
+        "modified_date": datetime.now(timezone.utc).isoformat(),
     })
     
     save_agent_configs(configs)
-    
-    # Log the change
-    async with DatabaseConnection() as conn:
-        await conn.execute(
-            """
-            IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'AgentConfigChanges')
-            BEGIN
-                CREATE TABLE AgentConfigChanges (
-                    ChangeID INT IDENTITY(1,1) PRIMARY KEY,
-                    AgentKey NVARCHAR(50) NOT NULL,
-                    Changes NVARCHAR(MAX),
-                    ModifiedBy INT,
-                    ModifiedDate DATETIME2 DEFAULT GETUTCDATE()
-                );
-            END
-            
-            INSERT INTO AgentConfigChanges (AgentKey, Changes, ModifiedBy)
-            VALUES (@AgentKey, @Changes, @ModifiedBy)
-            """,
-            {
-                "AgentKey": agent_key,
-                "Changes": json.dumps(agent_config.dict()),
-                "ModifiedBy": current_user["user_id"],
-            },
-        )
+
+    # Log the change to database (best-effort — skip if db not available)
+    db_connection = getattr(getattr(request.app, "state", None), "db_connection", None)
+    if db_connection:
+        try:
+            db_connection.execute_query("""
+                IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'AgentConfigChanges')
+                BEGIN
+                    CREATE TABLE AgentConfigChanges (
+                        ChangeID INT IDENTITY(1,1) PRIMARY KEY,
+                        AgentKey NVARCHAR(50) NOT NULL,
+                        Changes NVARCHAR(MAX),
+                        ModifiedBy INT,
+                        ModifiedDate DATETIME2 DEFAULT GETUTCDATE()
+                    );
+                END
+            """, fetch=False)
+            db_connection.execute_query(
+                "INSERT INTO AgentConfigChanges (AgentKey, Changes, ModifiedBy) VALUES (?, ?, ?)",
+                (agent_key, json.dumps(agent_config.dict()), current_user["user_id"]),
+                fetch=False,
+            )
+        except Exception as e:
+            logger.warning(f"Failed to log agent config change to database: {e}")
     
     return {
         "message": f"Agent '{agent_key}' updated successfully",
@@ -294,15 +317,15 @@ async def test_agent(
     
     try:
         # Create a test session
-        session_id = f"test_{current_user['user_id']}_{datetime.utcnow().timestamp()}"
+        session_id = f"test_{current_user['user_id']}_{datetime.now(timezone.utc).timestamp()}"
         
         # Send test message
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc)
         response_text, history, usage = await manager._run_specialist(
             test_request.agent_key,
             test_request.test_message
         )
-        end_time = datetime.utcnow()
+        end_time = datetime.now(timezone.utc)
         
         response_time = (end_time - start_time).total_seconds()
         
@@ -383,7 +406,7 @@ async def get_dashboard_stats(
                 "errors_last_24h": 0,
                 "top_agents": [],
                 "recent_activity": [],
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.now(timezone.utc).isoformat()
             }
         
         db = request.app.state.db_connection
@@ -503,7 +526,7 @@ async def get_dashboard_stats(
             "errors_last_24h": errors_24h,
             "top_agents": top_agents,
             "recent_activity": recent_activity,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
     except Exception as e:
         logger.error(f"Dashboard stats error: {e}", exc_info=True)
@@ -515,6 +538,7 @@ async def get_dashboard_stats(
 
 @admin_dashboard_router.get("/agent-analytics/{agent_key}", dependencies=[Depends(require_admin)])
 async def get_agent_analytics(
+    request: Request,
     agent_key: str,
     days: int = 7,
     current_user: dict = Depends(get_current_user)
@@ -523,96 +547,99 @@ async def get_agent_analytics(
     Get detailed analytics for a specific agent.
     Admin and SuperAdmin only.
     """
-    async with DatabaseConnection() as conn:
-        try:
-            # Request volume over time
-            volume_result = await conn.fetch_all(
-                f"""
-                SELECT
-                    CAST(CreatedDate AS DATE) as Date,
-                    COUNT(*) as RequestCount,
-                    AVG(ResponseTime) as AvgResponseTime,
-                    SUM(CASE WHEN Success = 0 THEN 1 ELSE 0 END) as ErrorCount
-                FROM AgentRequestLogs
-                WHERE AgentKey = @AgentKey
-                  AND CreatedDate >= DATEADD(DAY, -@Days, GETUTCDATE())
-                GROUP BY CAST(CreatedDate AS DATE)
-                ORDER BY Date DESC
-                """,
-                {"AgentKey": agent_key, "Days": days}
-            )
-            
-            volume_by_date = [
-                {
-                    "date": row["Date"].isoformat() if row["Date"] else None,
-                    "request_count": row["RequestCount"],
-                    "avg_response_time": float(row["AvgResponseTime"]) if row["AvgResponseTime"] else 0,
-                    "error_count": row["ErrorCount"]
-                }
-                for row in (volume_result or [])
-            ]
-            
-            # Success rate
-            success_stats = await conn.fetch_one(
-                """
-                SELECT
-                    COUNT(*) as Total,
-                    SUM(CASE WHEN Success = 1 THEN 1 ELSE 0 END) as Successful,
-                    SUM(CASE WHEN Success = 0 THEN 1 ELSE 0 END) as Failed
-                FROM AgentRequestLogs
-                WHERE AgentKey = @AgentKey
-                  AND CreatedDate >= DATEADD(DAY, -@Days, GETUTCDATE())
-                """,
-                {"AgentKey": agent_key, "Days": days}
-            )
-            
-            total = success_stats["Total"] if success_stats else 0
-            successful = success_stats["Successful"] if success_stats else 0
-            failed = success_stats["Failed"] if success_stats else 0
-            success_rate = (successful / total * 100) if total > 0 else 0
-            
-            # Recent errors
-            errors_result = await conn.fetch_all(
-                """
-                SELECT TOP 10
-                    Message,
-                    Error,
-                    CreatedDate
-                FROM AgentRequestLogs
-                WHERE AgentKey = @AgentKey
-                  AND Success = 0
-                  AND CreatedDate >= DATEADD(DAY, -@Days, GETUTCDATE())
-                ORDER BY CreatedDate DESC
-                """,
-                {"AgentKey": agent_key, "Days": days}
-            )
-            
-            recent_errors = [
-                {
-                    "message": row["Message"][:100] if row["Message"] else "",
-                    "error": row["Error"],
-                    "timestamp": row["CreatedDate"].isoformat() if row["CreatedDate"] else None
-                }
-                for row in (errors_result or [])
-            ]
-            
+    try:
+        # Use database connection from app state
+        if not hasattr(request.app.state, 'db_connection'):
             return {
                 "agent_key": agent_key,
-                "period_days": days,
-                "total_requests": total,
-                "successful_requests": successful,
-                "failed_requests": failed,
-                "success_rate": success_rate,
-                "volume_by_date": volume_by_date,
-                "recent_errors": recent_errors
+                "error": "Analytics not available yet. Database not initialized.",
             }
-            
-        except Exception as e:
-            return {
-                "agent_key": agent_key,
-                "error": "Analytics not available yet. No requests logged.",
-                "detail": str(e)
+        
+        db = request.app.state.db_connection
+        
+        # Request volume over time
+        volume_query = f"""
+        SELECT
+            CAST(CreatedDate AS DATE) as Date,
+            COUNT(*) as RequestCount,
+            AVG(ResponseTime) as AvgResponseTime,
+            SUM(CASE WHEN Success = 0 THEN 1 ELSE 0 END) as ErrorCount
+        FROM AgentRequestLogs
+        WHERE AgentKey = ?
+          AND CreatedDate >= DATEADD(DAY, -?, GETUTCDATE())
+        GROUP BY CAST(CreatedDate AS DATE)
+        ORDER BY Date DESC
+        """
+        volume_result = db.execute_query(volume_query, (agent_key, days))
+        
+        volume_by_date = [
+            {
+                "date": row["Date"].isoformat() if row["Date"] else None,
+                "request_count": row["RequestCount"],
+                "avg_response_time": float(row["AvgResponseTime"]) if row["AvgResponseTime"] else 0,
+                "error_count": row["ErrorCount"]
             }
+            for row in (volume_result or [])
+        ]
+        
+        # Success rate
+        success_query = """
+        SELECT
+            COUNT(*) as Total,
+            SUM(CASE WHEN Success = 1 THEN 1 ELSE 0 END) as Successful,
+            SUM(CASE WHEN Success = 0 THEN 1 ELSE 0 END) as Failed
+        FROM AgentRequestLogs
+        WHERE AgentKey = ?
+          AND CreatedDate >= DATEADD(DAY, -?, GETUTCDATE())
+        """
+        success_result = db.execute_query(success_query, (agent_key, days))
+        success_stats = success_result[0] if success_result else None
+        
+        total = success_stats["Total"] if success_stats else 0
+        successful = success_stats["Successful"] if success_stats else 0
+        failed = success_stats["Failed"] if success_stats else 0
+        success_rate = (successful / total * 100) if total > 0 else 0
+        
+        # Recent errors
+        errors_query = """
+        SELECT TOP 10
+            Message,
+            Error,
+            CreatedDate
+        FROM AgentRequestLogs
+        WHERE AgentKey = ?
+          AND Success = 0
+          AND CreatedDate >= DATEADD(DAY, -?, GETUTCDATE())
+        ORDER BY CreatedDate DESC
+        """
+        errors_result = db.execute_query(errors_query, (agent_key, days))
+        
+        recent_errors = [
+            {
+                "message": row["Message"][:100] if row["Message"] else "",
+                "error": row["Error"],
+                "timestamp": row["CreatedDate"].isoformat() if row["CreatedDate"] else None
+            }
+            for row in (errors_result or [])
+        ]
+        
+        return {
+            "agent_key": agent_key,
+            "period_days": days,
+            "total_requests": total,
+            "successful_requests": successful,
+            "failed_requests": failed,
+            "success_rate": success_rate,
+            "volume_by_date": volume_by_date,
+            "recent_errors": recent_errors
+        }
+        
+    except Exception as e:
+        return {
+            "agent_key": agent_key,
+            "error": "Analytics not available yet. No requests logged.",
+            "detail": str(e)
+        }
 
 
 @admin_dashboard_router.get("/system-health", dependencies=[Depends(require_admin)])
@@ -623,7 +650,7 @@ async def get_system_health(current_user: dict = Depends(get_current_user)):
     """
     health_data = {
         "status": "healthy",
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "components": {}
     }
     

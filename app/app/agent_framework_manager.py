@@ -6,6 +6,7 @@ import asyncio
 import json
 import inspect
 import uuid
+import time
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Callable, Awaitable
 
@@ -16,16 +17,21 @@ from agent_framework._types import ChatMessage, TextContent
 from config import settings
 from .agent_tools import (
     FABRIC_TOOLS,
-    SALES_TOOLS,
     CALCULATION_TOOLS,
     WEATHER_TOOLS,
     execute_tool_call,
 )
 from utils.logging_config import logger
 from .chart_generator import ResponseFormatter, ChartGenerator
+from .token_manager import TokenManager
+from .session_persistence import SessionPersistenceManager
+from .request_deduplicator import RequestDeduplicator, DeduplicationContext, DuplicateRequestError
 
 
 Message = Dict[str, Any]
+
+# Session TTL - sessions older than 1 hour will be cleaned up
+SESSION_TTL_SECONDS = 3600  # 1 hour
 
 
 @dataclass
@@ -42,18 +48,47 @@ class ChatResult:
 class AgentFrameworkManager:
     """Manages orchestrator and specialist agents using Microsoft Agent Framework."""
 
-    def __init__(self) -> None:
+    def __init__(self, cache_manager=None) -> None:
         self.credential = self._create_credential()
-        self.client = AzureOpenAIChatClient(
-            endpoint=settings.azure_openai_endpoint,
-            deployment_name=settings.azure_openai_deployment,
-            credential=self.credential,
-            api_version=settings.azure_openai_api_version,
-        )
+        if settings.azure_openai_endpoint:
+            self.client = AzureOpenAIChatClient(
+                endpoint=settings.azure_openai_endpoint,
+                deployment_name=settings.azure_openai_deployment,
+                credential=self.credential,
+                api_version=settings.azure_openai_api_version,
+            )
+        else:
+            logger.warning(
+                "⚠️  AZURE_OPENAI_ENDPOINT not configured — "
+                "chat functionality unavailable until the env var is set"
+            )
+            self.client = None
 
-        self.sessions: Dict[str, List[Message]] = {}
+        # Initialize Phase 3 enhancements with error handling
+        try:
+            self.session_persistence = SessionPersistenceManager(
+                cache_manager=cache_manager,
+                session_ttl_seconds=SESSION_TTL_SECONDS
+            )
+        except Exception as e:
+            logger.warning(f"⚠️  Failed to initialize session persistence: {e}")
+            self.session_persistence = None
+        
+        try:
+            self.request_deduplicator = RequestDeduplicator(window_seconds=10)
+        except Exception as e:
+            logger.warning(f"⚠️  Failed to initialize request deduplicator: {e}")
+            self.request_deduplicator = None
+
+        # Backward compatibility: Keep in-memory dict for non-persisted sessions
+        self.sessions: Dict[str, Dict[str, Any]] = {}  # {thread_id: {"messages": [...], "last_access": timestamp}}
         self._lock = asyncio.Lock()
         self.current_user_context: Optional[Dict[str, Any]] = None  # For RLS filtering
+        
+        # Background cleanup task (started by FastAPI lifespan event, not __init__)
+        self._cleanup_task: Optional[asyncio.Task] = None
+        # NOTE: Do NOT start cleanup task here - no event loop exists yet during import
+        # Task must be started by FastAPI's lifespan event in main.py
 
         # Specialist agent definitions
         self.specialist_profiles: Dict[str, Dict[str, Any]] = {
@@ -62,12 +97,11 @@ class AgentFrameworkManager:
                 "id": settings.fabric_sales_agent_id,
                 "prompt": (
                     "You are SalesAssistant. Provide revenue insights, top products, and sales trends "
-                    "using clear, metric-driven language. When data is requested, call the provided "
+                    "using clear, metric-driven language. When data is requested, call the provided Fabric "
                     "tools to gather accurate figures before responding. Summaries should highlight key "
-                    "successes and risks, ending with an actionable recommendation. Data is automatically "
-                    "filtered by the user's authorized region."
+                    "successes and risks, ending with an actionable recommendation."
                 ),
-                "tools": SALES_TOOLS,  # Use local tools with RLS support
+                "tools": FABRIC_TOOLS,
             },
             "operations": {
                 "display_name": "OperationsAssistant",
@@ -249,6 +283,46 @@ class AgentFrameworkManager:
                 "ℹ️ Falling back to AzureCliCredential for Agent Framework client"
             )
             return AzureCliCredential()
+    
+    def _start_cleanup_task(self) -> None:
+        """Start background task to clean up old sessions."""
+        self._cleanup_task = asyncio.create_task(self._cleanup_old_sessions_loop())
+        logger.info("✅ Session cleanup background task started (TTL: 1 hour)")
+    
+    async def _cleanup_old_sessions_loop(self) -> None:
+        """Background task that periodically cleans up old sessions."""
+        while True:
+            try:
+                # Run cleanup every 10 minutes
+                await asyncio.sleep(600)
+                await self._cleanup_old_sessions()
+            except asyncio.CancelledError:
+                logger.info("Session cleanup task cancelled")
+                break
+            except Exception as e:
+                logger.error(f"Error in session cleanup task: {e}")
+    
+    async def _cleanup_old_sessions(self) -> None:
+        """Remove sessions that haven't been accessed in SESSION_TTL_SECONDS."""
+        async with self._lock:
+            current_time = time.time()
+            expired_sessions = [
+                thread_id
+                for thread_id, session_data in self.sessions.items()
+                if current_time - session_data.get("last_access", 0) > SESSION_TTL_SECONDS
+            ]
+            
+            for thread_id in expired_sessions:
+                del self.sessions[thread_id]
+            
+            if expired_sessions:
+                logger.info(f"🧹 Cleaned up {len(expired_sessions)} expired session(s)")
+    
+    def shutdown(self) -> None:
+        """Shutdown the manager and cancel background tasks."""
+        if self._cleanup_task:
+            self._cleanup_task.cancel()
+            logger.info("Session cleanup task cancelled")
 
     async def _route_to_specialist(self, specialist_type: str, question: str) -> str:
         """Route a question to a specific specialist and return their response."""
@@ -308,6 +382,7 @@ class AgentFrameworkManager:
 
         # Store user context for tool execution
         self.current_user_context = user_context
+        user_id = user_context.get("user_id") if user_context else None
 
         normalized_type = (agent_type or "").strip().lower()
         if not normalized_type or normalized_type in {
@@ -318,21 +393,117 @@ class AgentFrameworkManager:
         }:
             normalized_type = "orchestrator"
 
-        async with self._lock:
-            if not thread_id or thread_id not in self.sessions:
-                thread_id = thread_id or str(uuid.uuid4())
-                self.sessions[thread_id] = []
-            session_history = list(self.sessions[thread_id])
+        # Phase 3: Request deduplication - prevent duplicate calls from retries/double-clicks
+        # Skip if deduplicator not initialized
+        if self.request_deduplicator:
+            try:
+                async with DeduplicationContext(
+                    self.request_deduplicator,
+                    thread_id or "no-thread",
+                    message,
+                    user_id
+                ):
+                    return await self._process_chat_internal(
+                        message=message,
+                        agent_type=normalized_type,
+                        thread_id=thread_id,
+                        user_context=user_context
+                    )
+            except DuplicateRequestError as e:
+                logger.warning(f"Duplicate request detected, waiting for original: {e.request_id}")
+                # Wait for the original request to complete
+                await self.request_deduplicator.wait_for_completion(e.request_id, timeout_seconds=30)
+                
+                # Retrieve the response from session history (if available)
+                if thread_id and self.session_persistence and self.session_persistence.enabled:
+                    session_data = await self.session_persistence.get_session(thread_id)
+                    if session_data and session_data["messages"]:
+                        # Return last assistant response
+                        for msg in reversed(session_data["messages"]):
+                            if msg.get("role") == "assistant":
+                                return ChatResult(
+                                    response=msg["content"],
+                                    thread_id=thread_id,
+                                    agent_id=self.orchestrator_agent_id,
+                                    run_id=str(uuid.uuid4()),
+                                    metadata={"duplicate_request": True}
+                                )
+                
+                # Fallback: generic response if we can't retrieve the original
+                return ChatResult(
+                    response="Your previous request is still being processed. Please wait a moment.",
+                    thread_id=thread_id or str(uuid.uuid4()),
+                    agent_id=self.orchestrator_agent_id,
+                    run_id=str(uuid.uuid4()),
+                    metadata={"duplicate_request": True}
+                )
+        else:
+            # Deduplicator not available, process directly
+            return await self._process_chat_internal(
+                message=message,
+                agent_type=normalized_type,
+                thread_id=thread_id,
+                user_context=user_context
+            )
 
+    async def _process_chat_internal(
+        self,
+        message: str,
+        agent_type: str,
+        thread_id: Optional[str],
+        user_context: Optional[Dict[str, Any]]
+    ) -> ChatResult:
+        """Internal chat processing after deduplication check."""
+        
+        # Phase 3: Load session from persistence layer (CosmosDB or memory)
+        if not thread_id:
+            thread_id = str(uuid.uuid4())
+        
+        # Try session persistence if available
+        session_data = None
+        if self.session_persistence:
+            session_data = await self.session_persistence.get_session(thread_id)
+        
+        if session_data:
+            session_history = list(session_data["messages"])
+        else:
+            # New session
+            session_history = []
+            async with self._lock:
+                self.sessions[thread_id] = {
+                    "messages": [],
+                    "last_access": time.time()
+                }
+        
+        # Update last access time
+        async with self._lock:
+            if thread_id in self.sessions:
+                self.sessions[thread_id]["last_access"] = time.time()
+        
+        # Phase 3: LLM-based conversation summarization (instead of simple truncation)
+        if TokenManager.should_compress(session_history):
+            logger.info(f"🤖 Conversation requires compression ({len(session_history)} messages)")
+            session_history = await TokenManager.summarize_conversation(
+                session_history,
+                client=self.client,
+                keep_recent=10  # Keep last 10 messages as-is
+            )
+        
         # Append the user message for this turn
         session_history.append({"role": "user", "content": message})
 
-        if normalized_type == "orchestrator":
+        if agent_type == "orchestrator":
             response_text, updated_history, usage = await self._run_orchestrator(
                 session_history
             )
-            async with self._lock:
-                self.sessions[thread_id] = updated_history
+            
+            # Phase 3: Persist to CosmosDB + memory
+            await self._save_session(
+                thread_id,
+                updated_history,
+                user_context
+            )
+            
             metadata = {"usage": usage} if usage else None
             return ChatResult(
                 response=response_text,
@@ -342,10 +513,10 @@ class AgentFrameworkManager:
                 metadata=metadata,
             )
 
-        if normalized_type not in self.specialist_profiles:
+        if agent_type not in self.specialist_profiles:
             raise ValueError(f"Unknown agent type: {agent_type}")
 
-        specialist_key = normalized_type
+        specialist_key = agent_type
         specialist_text, specialist_history = await self._run_specialist(
             specialist_key,
             message,
@@ -353,8 +524,13 @@ class AgentFrameworkManager:
 
         # Persist simplified conversation (user + specialist reply) for future context
         session_history.extend(specialist_history)
-        async with self._lock:
-            self.sessions[thread_id] = session_history
+        
+        # Phase 3: Persist to CosmosDB + memory
+        await self._save_session(
+            thread_id,
+            session_history,
+            user_context
+        )
 
         profile = self.specialist_profiles[specialist_key]
         return ChatResult(
@@ -363,6 +539,32 @@ class AgentFrameworkManager:
             agent_id=profile["id"],
             run_id=str(uuid.uuid4()),
         )
+    
+    async def _save_session(
+        self,
+        thread_id: str,
+        messages: List[Dict[str, Any]],
+        user_context: Optional[Dict[str, Any]] = None
+    ) -> None:
+        """Save session to both memory and CosmosDB."""
+        # Update memory cache
+        async with self._lock:
+            self.sessions[thread_id] = {
+                "messages": messages,
+                "last_access": time.time()
+            }
+        
+        # Persist to CosmosDB (optional - Phase 3 feature)
+        if self.session_persistence:
+            metadata = {
+                "user_id": user_context.get("user_id") if user_context else None,
+                "agent_type": "orchestrator"
+            }
+            await self.session_persistence.save_session(
+                thread_id,
+                messages,
+                metadata
+            )
 
     async def _run_orchestrator(
         self,
@@ -576,14 +778,22 @@ class AgentFrameworkManager:
         except json.JSONDecodeError:
             arguments = {}
 
+        # Log tool execution for demo visibility
+        logger.info(f"🔧 Tool Call: {name}({json.dumps(arguments, indent=2)})")
+        
         try:
             # Pass user context to tool execution for RLS filtering
+            # execution_mode is passed for logging/visibility purposes
             result = await asyncio.to_thread(
                 execute_tool_call,
                 name,
                 arguments,
                 self.current_user_context,  # Pass user context
+                "local"  # Currently using local execution (can be "mcp" if MCP server is used)
             )
+            
+            # Note: The execute_tool_call function now logs the execution mode internally
+            
         except Exception as exc:  # pragma: no cover - surface error to model
             logger.error("❌ Tool '%s' execution failed: %s", name, exc)
             result = {"error": str(exc)}
@@ -696,5 +906,14 @@ class AgentFrameworkManager:
         return assistant_message
 
 
-agent_framework_manager = AgentFrameworkManager()
+try:
+    agent_framework_manager = AgentFrameworkManager()
+except Exception as _e:
+    import logging as _logging
+    _logging.getLogger(__name__).warning(
+        "⚠️  AgentFrameworkManager failed to initialize: %s — "
+        "set AZURE_OPENAI_ENDPOINT to enable chat functionality",
+        _e,
+    )
+    agent_framework_manager = None
 """Singleton manager used by FastAPI endpoints."""

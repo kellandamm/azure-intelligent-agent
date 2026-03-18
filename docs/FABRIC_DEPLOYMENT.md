@@ -1,907 +1,485 @@
-# 📊 Fabric Data Management - Deployment Guide
+# Microsoft Fabric Setup — Mirroring, Medallion Architecture & Pipelines
 
-Complete guide for deploying and managing the Fabric synthetic data generation component.
+Sets up Microsoft Fabric to mirror your Azure SQL database and build a medallion analytics architecture that powers the AI agents and dashboards.
 
----
-
-## 📋 Table of Contents
-
-- [Overview](#overview)
-- [Architecture](#architecture)
-- [Prerequisites](#prerequisites)
-- [Deployment Options](#deployment-options)
-- [Step-by-Step Deployment](#step-by-step-deployment)
-- [Database Schema](#database-schema)
-- [Configuration](#configuration)
-- [Testing & Verification](#testing--verification)
-- [Management](#management)
-- [Troubleshooting](#troubleshooting)
+> **No Fabric?** Skip this guide entirely. Run `app/Fabric/synthetic_data.sql` against Azure SQL and the app works without any Fabric configuration. See [QUICK_START.md Phase 6](../docs/QUICK_START.md#phase-6--fabric).
 
 ---
 
-## 🎯 Overview
+## Architecture Overview
 
-The **Fabric Data Management** component provides:
+```
+Azure SQL DB  ──Mirror──▶  Fabric OneLake (Bronze — live replica)
+                                    │
+                             Notebooks / Dataflows
+                                    │
+                           Fabric Lakehouse Silver  (cleansed)
+                                    │
+                             Notebooks / Pipeline
+                                    │
+                           Fabric Lakehouse Gold    (analytics-ready)
+                                    │
+                     App AI Agents + Analytics Dashboard
+                      (via Fabric SQL Analytics Endpoint)
+```
 
-- **Synthetic data generation** for Azure SQL Database
-- **Database schema management** (Categories, Products, Customers, Orders, OrderItems)
-- **Azure Function** for automated ongoing data generation
-- **Management tools** for viewing and testing database content
-
-### When to Use Fabric
-
-✅ **Use Fabric when:**
-- You need realistic test data for demos
-- You want automated data generation
-- You're building a proof-of-concept
-- You need sample data for development
-
-❌ **Don't use Fabric when:**
-- You have production data to migrate
-- You need specific data formats
-- You're deploying to production environments
+**Bronze** = raw mirrored tables from Azure SQL (automatic, no code)
+**Silver** = cleansed, standardised views
+**Gold**   = pre-aggregated tables matching the schema expected by the app's agent tools and API routes
 
 ---
 
-## 🏗️ Architecture
+## Prerequisites
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                    Azure SQL Database                    │
-│  ┌──────────────────────────────────────────────────┐  │
-│  │  Tables: Categories, Products, Customers,        │  │
-│  │          Orders, OrderItems                      │  │
-│  └──────────────────────────────────────────────────┘  │
-└─────────────────┬───────────────────┬───────────────────┘
-                  │                   │
-         ┌────────▼────────┐  ┌──────▼──────────┐
-         │  Web App        │  │  Azure Function  │
-         │  (Main Agent)   │  │  (Data Gen)      │
-         │                 │  │                  │
-         │  - Query data   │  │  - Timer trigger │
-         │  - Use in demos │  │  - Generate data │
-         └─────────────────┘  └──────────────────┘
-```
-
-### Components
-
-1. **Database Scripts** (`fabric/database/`)
-   - `deploy_schema.py` - Deploy SQL schema
-   - `generate_initial_data.py` - Create seed data
-   - `view_tables.py` - View table contents
-   - `view_schemas.py` - View schema details
-   - `test_connection.py` - Test connectivity
-
-2. **Azure Function** (`fabric/function/`)
-   - `function_app.py` - Timer-triggered data generation
-   - Runs every 5 minutes (configurable)
-   - Uses managed identity for SQL access
-
-3. **Deployment Scripts** (`fabric/scripts/`)
-   - `setup-database.ps1` - Deploy schema and data
-   - `deploy-fabric-function.ps1` - Deploy Azure Function
+- Microsoft Fabric capacity assigned to your tenant (F2 or higher, or a Fabric trial)
+- Azure SQL database deployed and seeded (Phase 2 + Phase 5 of QUICK_START.md complete)
+- Azure CLI logged in with Contributor access to the resource group
+- Fabric workspace admin rights
 
 ---
 
-## ✅ Prerequisites
+## Phase 1 — Create a Fabric Workspace
 
-### Required
+1. Navigate to [app.fabric.microsoft.com](https://app.fabric.microsoft.com)
+2. **Workspaces** (left sidebar) → **+ New workspace**
+3. Name: `AgentDemo-Analytics` (or your preference)
+4. **Advanced** → assign your Fabric capacity (F2+)
+5. Click **Apply**
 
-1. **Azure Resources**
-   - Azure SQL Database (deployed via main template)
-   - Azure CLI installed and logged in
-   - Resource group created
+Copy the **Workspace ID** for use in Phase 5:
 
-2. **Local Development Tools**
-   - Python 3.9+ installed
-   - ODBC Driver 18 for SQL Server
-   - PowerShell 7.0+
-
-3. **Permissions**
-   - Azure SQL Database access (Azure AD)
-   - Contributor role on resource group
-   - SQL Database permissions (CREATE USER, ALTER ROLE)
-
-### Install ODBC Driver 18
-
-#### Windows
-```powershell
-# Download and run installer from:
-https://learn.microsoft.com/sql/connect/odbc/download-odbc-driver-for-sql-server
-```
-
-#### macOS
-```bash
-brew tap microsoft/mssql-release https://github.com/Microsoft/homebrew-mssql-release
-brew update
-brew install msodbcsql18
-```
-
-#### Linux (Ubuntu/Debian)
-```bash
-curl https://packages.microsoft.com/keys/microsoft.asc | sudo apt-key add -
-curl https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/prod.list | \
-    sudo tee /etc/apt/sources.list.d/mssql-release.list
-sudo apt-get update
-sudo ACCEPT_EULA=Y apt-get install -y msodbcsql18
-```
-
-### Install Azure Functions Core Tools
-
-#### Windows
-```powershell
-winget install Microsoft.Azure.FunctionsCoreTools
-```
-
-#### macOS
-```bash
-brew tap azure/functions
-brew install azure-functions-core-tools@4
-```
-
-#### Linux
-```bash
-curl https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor > microsoft.gpg
-sudo mv microsoft.gpg /etc/apt/trusted.gpg.d/microsoft.gpg
-sudo sh -c 'echo "deb [arch=amd64] https://packages.microsoft.com/repos/microsoft-ubuntu-$(lsb_release -cs)-prod $(lsb_release -cs) main" > /etc/apt/sources.list.d/dotnetdev.list'
-sudo apt-get update
-sudo apt-get install azure-functions-core-tools-4
-```
+- Settings (gear icon) → **Properties** → copy the GUID next to **Workspace ID**
 
 ---
 
-## 🚀 Deployment Options
+## Phase 2 — Prepare Azure SQL for Mirroring
 
-### Option 1: Integrated Deployment (Recommended)
-
-Deploy Fabric as part of complete deployment:
-
-```powershell
-cd scripts
-.\deploy-complete.ps1 `
-    -ResourceGroupName "rg-myagents-prod" `
-    -DeployFabric `
-    -GenerateInitialData
-```
-
-**Advantages:**
-- ✅ Everything in one command
-- ✅ Automatic configuration
-- ✅ Coordinated deployment
-
----
-
-### Option 2: Standalone Deployment
-
-Deploy Fabric separately after main deployment:
-
-#### Step 1: Set Environment Variables
-```powershell
-$env:SQL_SERVER = "your-server.database.windows.net"
-$env:SQL_DATABASE = "your-database-name"
-```
-
-#### Step 2: Deploy Database Schema
-```powershell
-cd fabric\scripts
-.\setup-database.ps1 -GenerateData
-```
-
-#### Step 3: Deploy Azure Function
-```powershell
-.\deploy-fabric-function.ps1 `
-    -ResourceGroupName "rg-myagents-prod" `
-    -SqlServerName "sql-myagents-prod" `
-    -SqlDatabaseName "sqldb-myagents-prod"
-```
-
-**Advantages:**
-- ✅ Deploy only what you need
-- ✅ Test database setup first
-- ✅ Deploy function later
-
----
-
-### Option 3: Manual Deployment
-
-For maximum control:
-
-#### 1. Install Python Dependencies
-```powershell
-cd fabric\database
-pip install -r requirements.txt
-```
-
-#### 2. Deploy Schema
-```powershell
-$env:SQL_SERVER = "your-server.database.windows.net"
-$env:SQL_DATABASE = "your-database-name"
-
-python deploy_schema.py
-```
-
-#### 3. Generate Data
-```powershell
-python generate_initial_data.py
-```
-
-#### 4. Verify
-```powershell
-python test_connection.py
-python view_tables.py
-```
-
----
-
-## 📖 Step-by-Step Deployment
-
-### Complete Walkthrough (Integrated Deployment)
-
-#### 1. Ensure Prerequisites
-
-```powershell
-# Check Python
-python --version  # Should be 3.9+
-
-# Check Azure CLI
-az --version
-az account show
-
-# Check ODBC Driver
-# Windows: Control Panel → Administrative Tools → ODBC Data Sources
-# macOS/Linux: odbcinst -q -d
-```
-
-#### 2. Deploy Main Infrastructure
-
-If not already deployed:
-
-```powershell
-cd scripts
-.\deploy-complete.ps1 `
-    -ResourceGroupName "rg-myagents-prod" `
-    -Location "eastus2"
-```
-
-#### 3. Deploy Fabric
-
-```powershell
-# With initial data generation
-.\deploy-complete.ps1 `
-    -ResourceGroupName "rg-myagents-prod" `
-    -DeployFabric `
-    -GenerateInitialData `
-    -SkipInfrastructure `
-    -SkipAppCode
-```
-
-#### 4. Grant Function SQL Access
-
-Open Azure Portal:
-
-1. Navigate to: **SQL Databases** → **your-database** → **Query Editor**
-2. Authenticate with Azure AD
-3. Run these commands:
+Fabric mirroring uses SQL Change Tracking to replicate rows as they change.
+Run the following in **Azure Portal → SQL Database → Query Editor**
+(authenticate with your Azure AD admin account):
 
 ```sql
--- Replace with your actual function app name from deployment output
-CREATE USER [func-fabric-myagents] FROM EXTERNAL PROVIDER;
-ALTER ROLE db_datareader ADD MEMBER [func-fabric-myagents];
-ALTER ROLE db_datawriter ADD MEMBER [func-fabric-myagents];
+-- Enable change tracking on the database (7-day retention)
+ALTER DATABASE CURRENT
+    SET CHANGE_TRACKING = ON
+    (CHANGE_RETENTION = 7 DAYS, AUTO_CLEANUP = ON);
+
+-- Enable per-table tracking on the tables you want mirrored
+ALTER TABLE dbo.Categories  ENABLE CHANGE_TRACKING WITH (TRACK_COLUMNS_UPDATED = ON);
+ALTER TABLE dbo.Products    ENABLE CHANGE_TRACKING WITH (TRACK_COLUMNS_UPDATED = ON);
+ALTER TABLE dbo.Customers   ENABLE CHANGE_TRACKING WITH (TRACK_COLUMNS_UPDATED = ON);
+ALTER TABLE dbo.Orders      ENABLE CHANGE_TRACKING WITH (TRACK_COLUMNS_UPDATED = ON);
+ALTER TABLE dbo.OrderItems  ENABLE CHANGE_TRACKING WITH (TRACK_COLUMNS_UPDATED = ON);
+ALTER TABLE dbo.CustomerDim ENABLE CHANGE_TRACKING WITH (TRACK_COLUMNS_UPDATED = ON);
+ALTER TABLE dbo.ProductDim  ENABLE CHANGE_TRACKING WITH (TRACK_COLUMNS_UPDATED = ON);
+ALTER TABLE dbo.SalesFact   ENABLE CHANGE_TRACKING WITH (TRACK_COLUMNS_UPDATED = ON);
 ```
 
-#### 5. Verify Deployment
+> Existing gold tables (`gold_*`) do not need change tracking — they will be rebuilt by the Gold pipeline.
 
-```powershell
-# View table data
-cd fabric\database
-python view_tables.py
+---
 
-# Expected output:
-# Categories: 10 records
-# Products: ~50 records
-# Customers: ~100 records
-# Orders: ~200 records
-# OrderItems: ~450 records
+## Phase 3 — Create the Mirrored Database (Bronze)
+
+1. In your Fabric workspace → **+ New item** → **Mirrored Azure SQL Database**
+2. Click **+ New connection** and enter:
+   - **Server**: `<your-server>.database.windows.net`
+   - **Database**: `aiagentsdb`
+   - **Authentication kind**: Organisational account (Azure AD interactive) — recommended for initial setup
+3. Click **Connect**, then select these tables to mirror:
+   - `dbo.Categories`, `dbo.Products`, `dbo.Customers`
+   - `dbo.Orders`, `dbo.OrderItems`
+   - `dbo.CustomerDim`, `dbo.ProductDim`, `dbo.SalesFact`
+4. Click **Mirror database**
+
+**What happens next:**
+Fabric performs an initial snapshot (5–15 min depending on table size), then continuously replicates changes. Monitor progress under the **Mirroring** tab → **Monitor**.
+
+All mirrored status should show **Running** before proceeding.
+
+### Grant Fabric read access to Azure SQL
+
+Fabric creates a service principal for the mirror. Its name appears in the connection details.
+Run in Query Editor:
+
+```sql
+-- Replace <fabric-spn-name> with the name shown in the Fabric mirror connection settings
+CREATE USER [<fabric-spn-name>] FROM EXTERNAL PROVIDER;
+ALTER ROLE db_datareader ADD MEMBER [<fabric-spn-name>];
 ```
 
 ---
 
-## 🗄️ Database Schema
+## Phase 4 — Create the Silver and Gold Lakehouses
 
-### Entity Relationship Diagram
+### Create two lakehouses
 
-```
-┌─────────────────┐
-│   Categories    │
-│─────────────────│
-│ CategoryID (PK) │      ┌──────────────────┐
-│ CategoryName    │◄────┐│    Products       │
-│ Description     │     ││──────────────────│
-└─────────────────┘     ││ ProductID (PK)   │
-                        ││ ProductName      │
-                        ││ CategoryID (FK)  │───┐
-┌─────────────────┐     ││ Price            │   │
-│   Customers     │     ││ StockQuantity    │   │
-│─────────────────│     │└──────────────────┘   │
-│ CustomerID (PK) │     │                       │
-│ FirstName       │     │                       │
-│ LastName        │     │  ┌──────────────────┐ │
-│ Email           │     │  │   OrderItems     │ │
-│ Phone           │     │  │──────────────────│ │
-│ Address         │     │  │ OrderItemID (PK) │ │
-└────────┬────────┘     │  │ OrderID (FK)     │ │
-         │              │  │ ProductID (FK)   │─┘
-         │              │  │ Quantity         │
-         │              │  │ UnitPrice        │
-         │  ┌───────────▼──▼──────────────┐   │
-         │  │       Orders               │   │
-         │  │────────────────────────────│   │
-         └─►│ OrderID (PK)               │   │
-            │ CustomerID (FK)            │   │
-            │ OrderDate                  │   │
-            │ TotalAmount                │   │
-            └────────────────────────────┘
-```
+In your workspace → **+ New item** → **Lakehouse** (repeat twice):
 
-### Table Definitions
-
-#### Categories
-| Column | Type | Description |
-|--------|------|-------------|
-| CategoryID | int (PK, Identity) | Unique category identifier |
-| CategoryName | nvarchar(100) | Category name |
-| Description | nvarchar(500) | Category description |
-
-**Pre-seeded Categories:**
-Electronics, Clothing, Books, Home & Garden, Sports, Toys, Health & Beauty, Automotive, Food & Beverage, Office Supplies
-
-#### Products
-| Column | Type | Description |
-|--------|------|-------------|
-| ProductID | int (PK, Identity) | Unique product identifier |
-| ProductName | nvarchar(200) | Product name |
-| CategoryID | int (FK) | Reference to Categories |
-| Price | decimal(10,2) | Product price |
-| StockQuantity | int | Available inventory |
-| CreatedDate | datetime | Creation timestamp |
-
-#### Customers
-| Column | Type | Description |
-|--------|------|-------------|
-| CustomerID | int (PK, Identity) | Unique customer identifier |
-| FirstName | nvarchar(100) | Customer first name |
-| LastName | nvarchar(100) | Customer last name |
-| Email | nvarchar(200) | Email address (unique) |
-| Phone | nvarchar(20) | Phone number |
-| Address | nvarchar(500) | Mailing address |
-| City | nvarchar(100) | City |
-| Country | nvarchar(100) | Country |
-| CreatedDate | datetime | Registration date |
-
-#### Orders
-| Column | Type | Description |
-|--------|------|-------------|
-| OrderID | int (PK, Identity) | Unique order identifier |
-| CustomerID | int (FK) | Reference to Customers |
-| OrderDate | datetime | Order timestamp |
-| TotalAmount | decimal(10,2) | Order total |
-| Status | nvarchar(50) | Order status (Pending/Completed/Cancelled) |
-
-#### OrderItems
-| Column | Type | Description |
-|--------|------|-------------|
-| OrderItemID | int (PK, Identity) | Unique item identifier |
-| OrderID | int (FK) | Reference to Orders |
-| ProductID | int (FK) | Reference to Products |
-| Quantity | int | Quantity ordered |
-| UnitPrice | decimal(10,2) | Price at time of order |
+| Name | Purpose |
+|------|---------|
+| `AgentDemo_Silver` | Cleansed, standardised tables |
+| `AgentDemo_Gold` | Pre-aggregated analytics tables queried by the app |
 
 ---
 
-## ⚙️ Configuration
+## Phase 5 — Silver Layer — Cleansing Notebook
 
-### Environment Variables
+1. Workspace → **+ New item** → **Notebook**
+2. Name: `Silver_Transform`
+3. Click **Add lakehouse** → select `AgentDemo_Silver` → **Add**
 
-Required for local scripts:
-
-```powershell
-# Windows PowerShell
-$env:SQL_SERVER = "your-server.database.windows.net"
-$env:SQL_DATABASE = "your-database-name"
-
-# Or create .env file in fabric/database/
-SQL_SERVER=your-server.database.windows.net
-SQL_DATABASE=your-database-name
-```
-
-### Azure Function Settings
-
-Configured automatically by deployment script:
-
-| Setting | Description | Example |
-|---------|-------------|---------|
-| SQL_SERVER | SQL Server FQDN | myserver.database.windows.net |
-| SQL_DATABASE | Database name | sqldb-myagents-prod |
-| SQL_AUTH_TYPE | Authentication method | AzureAD |
-| AzureWebJobsStorage | Function storage | <connection-string> |
-| FUNCTIONS_WORKER_RUNTIME | Runtime | python |
-
-### Customizing Data Generation
-
-Edit `fabric/database/generate_initial_data.py`:
+Paste the following cells and **Run all**:
 
 ```python
-# Change quantities
-num_customers = 100  # Default: 100
-num_products = 50    # Default: 50
-num_orders = 200     # Default: 200
+# Cell 1 — Silver: Customers
+from pyspark.sql.functions import col, upper, trim, coalesce, lit
 
-# Change date ranges
-start_date = datetime.now() - timedelta(days=365)
-end_date = datetime.now()
+mirrored_db = "<your-mirrored-db-name>"   # name of the Mirrored Database item in Fabric
 
-# Change order size
-items_per_order = random.randint(1, 5)  # 1-5 items per order
+customers = spark.sql(f"SELECT * FROM {mirrored_db}.dbo.Customers")
+customers_silver = (
+    customers
+    .withColumn("State",   upper(trim(col("State"))))
+    .withColumn("Country", coalesce(col("Country"), lit("USA")))
+    .withColumn("Email",   trim(col("Email")))
+    .dropDuplicates(["Email"])
+)
+customers_silver.write.mode("overwrite").saveAsTable("silver_customers")
+print(f"silver_customers: {customers_silver.count()} rows")
 ```
-
-### Customizing Function Schedule
-
-Edit `fabric/function/function_app.py`:
 
 ```python
-# Change from every 5 minutes to every hour
-@app.function_name(name="GenerateData")
-@app.schedule(schedule="0 0 * * * *", arg_name="mytimer", run_on_startup=False)
-def generate_data_timer(mytimer: func.TimerRequest) -> None:
-    # ... function code
+# Cell 2 — Silver: Orders
+orders = spark.sql(f"SELECT * FROM {mirrored_db}.dbo.Orders WHERE OrderStatus != 'Cancelled'")
+orders.write.mode("overwrite").saveAsTable("silver_orders")
+print(f"silver_orders: {orders.count()} rows")
 ```
 
-**Cron Schedule Examples:**
-- Every 5 minutes: `0 */5 * * * *`
-- Every hour: `0 0 * * * *`
-- Every day at midnight: `0 0 0 * * *`
-- Every Monday at 9am: `0 0 9 * * 1`
+```python
+# Cell 3 — Silver: OrderItems
+order_items = spark.sql(f"SELECT * FROM {mirrored_db}.dbo.OrderItems")
+order_items.write.mode("overwrite").saveAsTable("silver_order_items")
+print(f"silver_order_items: {order_items.count()} rows")
+```
+
+```python
+# Cell 4 — Silver: Products
+products = spark.sql(f"""
+    SELECT p.*, c.CategoryName
+    FROM {mirrored_db}.dbo.Products p
+    LEFT JOIN {mirrored_db}.dbo.Categories c ON p.CategoryID = c.CategoryID
+    WHERE p.IsActive = 1
+""")
+products.write.mode("overwrite").saveAsTable("silver_products")
+print(f"silver_products: {products.count()} rows")
+```
 
 ---
 
-## 🧪 Testing & Verification
+## Phase 6 — Gold Layer — Aggregation Notebook
 
-### Test Database Connection
+1. Workspace → **+ New item** → **Notebook**
+2. Name: `Gold_Aggregate`
+3. Click **Add lakehouse** → select `AgentDemo_Gold` → **Add**
 
-```powershell
-cd fabric\database
-python test_connection.py
+Paste each cell and **Run all**:
+
+```python
+# Cell 1 — Gold: Monthly Sales Time Series
+spark.sql("""
+CREATE OR REPLACE TABLE gold_sales_time_series AS
+SELECT
+    DATE_TRUNC('month', o.OrderDate)              AS OrderDate,
+    YEAR(o.OrderDate)                              AS year,
+    QUARTER(o.OrderDate)                           AS quarter,
+    MONTH(o.OrderDate)                             AS month,
+    DATE_FORMAT(o.OrderDate, 'MMMM')               AS month_name,
+    COUNT(DISTINCT o.OrderID)                      AS daily_orders,
+    ROUND(SUM(oi.LineTotal), 2)                    AS daily_revenue,
+    ROUND(SUM(oi.LineTotal) / COUNT(DISTINCT o.OrderID), 6) AS avg_order_value,
+    COUNT(DISTINCT o.CustomerID)                   AS unique_customers
+FROM silver_orders o
+JOIN silver_order_items oi ON o.OrderID = oi.OrderID
+GROUP BY 1, 2, 3, 4, 5
+ORDER BY 1
+""")
+print("gold_sales_time_series created")
 ```
 
-**Expected Output:**
-```
-✓ Connected to database
-✓ Azure AD authentication working
-✓ Tables accessible
-✓ Data readable
-```
-
-### View Table Data
-
-```powershell
-python view_tables.py
-```
-
-**Expected Output:**
-```
-╔══════════════════════════════════════════════════════╗
-║              DATABASE TABLE SUMMARY                  ║
-╚══════════════════════════════════════════════════════╝
-
-Server:   myserver.database.windows.net
-Database: mydb
-
-Table               Records
-──────────────────  ─────────
-Categories          10
-Products            50
-Customers           100
-Orders              200
-OrderItems          450
-```
-
-### View Schema Details
-
-```powershell
-python view_schemas.py
-```
-
-Shows:
-- Table structures
-- Column types and constraints
-- Foreign key relationships
-- Indexes
-
-### Test Function Deployment
-
-```powershell
-# View function logs
-az functionapp log tail `
-    -g <resource-group> `
-    -n <function-name>
-
-# Trigger function manually
-az functionapp function invoke `
-    -g <resource-group> `
-    -n <function-name> `
-    --function-name GenerateData
+```python
+# Cell 2 — Gold: Customer 360
+spark.sql("""
+CREATE OR REPLACE TABLE gold_customer_360 AS
+SELECT
+    c.CustomerID,
+    c.FirstName,
+    c.LastName,
+    c.Email,
+    c.City,
+    c.State,
+    c.Country,
+    c.CustomerSince,
+    COUNT(DISTINCT o.OrderID)                                         AS total_orders,
+    ROUND(SUM(oi.LineTotal), 2)                                       AS lifetime_value,
+    ROUND(SUM(oi.LineTotal) / NULLIF(COUNT(DISTINCT o.OrderID), 0), 6) AS avg_order_value,
+    MAX(o.OrderDate)                                                  AS last_order_date,
+    MIN(o.OrderDate)                                                  AS first_order_date,
+    AVG(DATEDIFF(o.ShippedDate, o.OrderDate))                        AS avg_delivery_days,
+    DATEDIFF(CURRENT_DATE, c.CustomerSince)                          AS customer_tenure_days,
+    DATEDIFF(CURRENT_DATE, MAX(o.OrderDate))                         AS recency_days,
+    CASE
+        WHEN SUM(oi.LineTotal) >= 10000 THEN 'Premium'
+        WHEN SUM(oi.LineTotal) >= 5000  THEN 'Standard'
+        WHEN COUNT(DISTINCT o.OrderID) = 1 THEN 'New'
+        ELSE 'At Risk'
+    END AS customer_segment,
+    CASE
+        WHEN DATEDIFF(CURRENT_DATE, MAX(o.OrderDate)) > 365 THEN 'Churned'
+        WHEN DATEDIFF(CURRENT_DATE, MAX(o.OrderDate)) > 180 THEN 'Inactive'
+        ELSE 'Active'
+    END AS customer_status
+FROM silver_customers c
+LEFT JOIN silver_orders o      ON c.CustomerID = o.CustomerID
+LEFT JOIN silver_order_items oi ON o.OrderID   = oi.OrderID
+GROUP BY 1,2,3,4,5,6,7,8
+""")
+print("gold_customer_360 created")
 ```
 
-### Query Data Manually
+```python
+# Cell 3 — Gold: Sales Performance KPIs
+spark.sql("""
+CREATE OR REPLACE TABLE gold_sales_performance AS
+SELECT 'Total Revenue'     AS metric_name, ROUND(SUM(LineTotal), 2) AS metric_value FROM silver_order_items
+UNION ALL
+SELECT 'Total Orders',     CAST(COUNT(DISTINCT OrderID) AS DOUBLE)  FROM silver_orders
+UNION ALL
+SELECT 'Avg Order Value',  ROUND(AVG(TotalAmount), 2)               FROM silver_orders
+UNION ALL
+SELECT 'Win Rate',
+    ROUND(COUNT(CASE WHEN OrderStatus = 'Delivered' THEN 1 END) * 100.0 / NULLIF(COUNT(*), 0), 2)
+    FROM silver_orders
+UNION ALL
+SELECT 'Conversion Rate',
+    ROUND(COUNT(DISTINCT CustomerID) * 100.0 / NULLIF((SELECT COUNT(*) FROM silver_customers), 0), 2)
+    FROM silver_orders
+UNION ALL
+SELECT 'Avg Delivery Days',
+    ROUND(AVG(DATEDIFF(ShippedDate, OrderDate)), 2)
+    FROM silver_orders WHERE ShippedDate IS NOT NULL
+""")
+print("gold_sales_performance created")
+```
 
-In Azure Portal → SQL Query Editor:
+```python
+# Cell 4 — Gold: Geographic Sales
+spark.sql("""
+CREATE OR REPLACE TABLE gold_geographic_sales AS
+SELECT
+    c.State,
+    c.City,
+    YEAR(o.OrderDate)    AS year,
+    QUARTER(o.OrderDate) AS quarter,
+    MONTH(o.OrderDate)   AS month,
+    COUNT(DISTINCT o.OrderID)   AS order_count,
+    ROUND(SUM(oi.LineTotal), 2) AS total_revenue,
+    COUNT(DISTINCT o.CustomerID) AS unique_customers
+FROM silver_customers c
+JOIN silver_orders      o  ON c.CustomerID = o.CustomerID
+JOIN silver_order_items oi ON o.OrderID    = oi.OrderID
+GROUP BY 1, 2, 3, 4, 5
+""")
+print("gold_geographic_sales created")
+```
 
-```sql
--- View recent orders
-SELECT TOP 10 
-    o.OrderID,
-    c.FirstName + ' ' + c.LastName AS Customer,
-    o.OrderDate,
-    o.TotalAmount,
-    o.Status
-FROM Orders o
-JOIN Customers c ON o.CustomerID = c.CustomerID
-ORDER BY o.OrderDate DESC;
+```python
+# Cell 5 — Gold: Cohort Analysis
+spark.sql("""
+CREATE OR REPLACE TABLE gold_cohort_analysis AS
+WITH cohorts AS (
+    SELECT
+        CustomerID,
+        DATE_FORMAT(MIN(OrderDate), 'yyyy-MM') AS cohort_month,
+        COUNT(DISTINCT OrderID)                AS order_count,
+        SUM(total_revenue)                     AS cohort_revenue
+    FROM (
+        SELECT o.CustomerID, o.OrderID, o.OrderDate, SUM(oi.LineTotal) AS total_revenue
+        FROM silver_orders o
+        JOIN silver_order_items oi ON o.OrderID = oi.OrderID
+        GROUP BY o.CustomerID, o.OrderID, o.OrderDate
+    ) t
+    GROUP BY CustomerID
+)
+SELECT
+    cohort_month,
+    COUNT(*)                               AS cohort_size,
+    ROUND(SUM(cohort_revenue), 2)          AS cohort_revenue,
+    ROUND(COUNT(CASE WHEN order_count > 1 THEN 1 END) * 100.0 / COUNT(*), 2) AS retention_rate
+FROM cohorts
+GROUP BY cohort_month
+ORDER BY cohort_month DESC
+""")
+print("gold_cohort_analysis created")
+```
 
--- View product inventory
-SELECT 
+```python
+# Cell 6 — Gold: Inventory Analysis
+spark.sql("""
+CREATE OR REPLACE TABLE gold_inventory_analysis AS
+SELECT
+    cat.CategoryName     AS category,
     p.ProductName,
-    cat.CategoryName,
-    p.Price,
-    p.StockQuantity
-FROM Products p
-JOIN Categories cat ON p.CategoryID = cat.CategoryID
-ORDER BY p.StockQuantity DESC;
+    p.StockQuantity      AS current_stock,
+    COALESCE(sold.units_sold, 0) AS units_sold_30d,
+    CASE
+        WHEN p.StockQuantity = 0 THEN 'Out of Stock'
+        WHEN p.StockQuantity < 10 THEN 'Low Stock'
+        ELSE 'In Stock'
+    END AS stock_status,
+    ROUND(p.Price, 2) AS unit_price,
+    ROUND(p.Price * p.StockQuantity, 2) AS inventory_value
+FROM silver_products p
+JOIN silver_orders o1 ON 1=0  -- placeholder join structure
+LEFT JOIN (
+    SELECT oi.ProductID, SUM(oi.Quantity) AS units_sold
+    FROM silver_order_items oi
+    JOIN silver_orders o ON oi.OrderID = o.OrderID
+    WHERE o.OrderDate >= DATE_SUB(CURRENT_DATE, 30)
+    GROUP BY oi.ProductID
+) sold ON p.ProductID = sold.ProductID
+JOIN (SELECT CategoryID, CategoryName FROM silver_products GROUP BY CategoryID, CategoryName) cat
+    ON p.CategoryID = cat.CategoryID
+""")
+print("gold_inventory_analysis created")
+```
 
--- View order items
-SELECT 
-    o.OrderID,
-    p.ProductName,
-    oi.Quantity,
-    oi.UnitPrice,
-    oi.Quantity * oi.UnitPrice AS LineTotal
-FROM OrderItems oi
-JOIN Orders o ON oi.OrderID = o.OrderID
-JOIN Products p ON oi.ProductID = p.ProductID
-WHERE o.OrderID = 1;  -- Change order ID
+> **Note:** The inventory notebook cell above uses a simplified join — adjust to match the actual `Categories` table structure in your Silver lakehouse.
+
+---
+
+## Phase 7 — Build the Refresh Pipeline
+
+1. Workspace → **+ New item** → **Data pipeline**
+2. Name: `Medallion_Refresh`
+
+### Add activities
+
+| # | Type | Name | Notebook |
+|---|------|------|----------|
+| 1 | Notebook | Run Silver | `Silver_Transform` |
+| 2 | Notebook | Run Gold | `Gold_Aggregate` |
+
+**Set dependency:** Click the green arrow on the `Run Silver` activity → drag it to `Run Gold`. This ensures Gold only runs after Silver completes successfully.
+
+### Schedule the pipeline
+
+1. Click **Schedule** in the pipeline toolbar → **+ New schedule**
+2. Set: **Daily**, **Start time = 02:00 UTC**
+3. Click **Apply**
+
+### Test manually
+
+Click **Run** → **Run now**. Monitor the run under the **Pipeline runs** tab in the workspace.
+
+---
+
+## Phase 8 — Connect the App to Fabric Gold
+
+### Get the SQL Analytics Endpoint
+
+1. Open the `AgentDemo_Gold` lakehouse in Fabric
+2. Click the **SQL analytics endpoint** button in the top ribbon (or switch views in the top-right dropdown)
+3. Copy the **Server** value — it looks like:
+   `<workspace-name>-<guid>.datawarehouse.fabric.microsoft.com`
+
+### Set App Service environment variables
+
+```powershell
+az webapp config appsettings set `
+  --name <your-app-name> `
+  --resource-group reg-admin `
+  --settings `
+    FABRIC_SQL_SERVER="<endpoint>.datawarehouse.fabric.microsoft.com" `
+    FABRIC_SQL_DATABASE="AgentDemo_Gold" `
+    FABRIC_WORKSPACE_ID="<workspace-guid>"
+```
+
+Or set them in **Azure Portal → App Service → Settings → Environment variables**.
+
+### Restart the app
+
+```powershell
+az webapp restart --name <your-app-name> --resource-group reg-admin
+```
+
+Tail startup logs to confirm the Fabric connection initialises:
+
+```powershell
+az webapp log tail --name <your-app-name> --resource-group reg-admin
+```
+
+The AI agents and all analytics dashboards will now query Fabric Gold tables.
+
+---
+
+## Verification
+
+### Check mirroring status
+
+Fabric workspace → Mirrored database → **Monitor** tab
+All tables should show **Running** with a recent sync timestamp.
+
+### Check Gold tables exist
+
+`AgentDemo_Gold` lakehouse → **Tables** pane
+Expected tables: `gold_sales_time_series`, `gold_customer_360`, `gold_sales_performance`, `gold_geographic_sales`, `gold_cohort_analysis`, `gold_inventory_analysis`
+
+### Verify app is hitting Fabric
+
+In the app startup log, look for:
+```
+Fabric connection string set — agents will query Fabric
+```
+
+Or make a chat request asking about sales data and check that the agent returns data.
+
+### Run the smoke test
+
+```bash
+python tests/smoke_test.py --url https://<app-name>.azurewebsites.net --skip-auth
 ```
 
 ---
 
-## 🎮 Management
+## Troubleshooting
 
-### Regenerate All Data
-
-```powershell
-cd fabric\database
-
-# Clear existing data (except categories)
-# Run in SQL Query Editor:
-TRUNCATE TABLE OrderItems;
-TRUNCATE TABLE Orders;
-TRUNCATE TABLE Customers;
-TRUNCATE TABLE Products;
-
-# Regenerate
-python generate_initial_data.py
-```
-
-### Update Schema
-
-```powershell
-# Edit fabric/database/schema.sql
-# Then deploy changes:
-python deploy_schema.py
-```
-
-**Note:** `deploy_schema.py` is NOT idempotent for schema changes. Drop tables first if structure changed.
-
-### Monitor Function
-
-```powershell
-# Real-time logs
-az functionapp log tail `
-    -g rg-myagents-prod `
-    -n func-fabric-myagents
-
-# View executions in Azure Portal
-# Functions → GenerateData → Monitor → Invocations
-```
-
-### Scale Function
-
-```powershell
-# Change function app plan (consumption → premium)
-az functionapp plan update `
-    --resource-group rg-myagents-prod `
-    --name asp-fabric-myagents `
-    --sku P1V2
-
-# Or keep consumption and adjust concurrency in host.json
-```
-
-### Stop Data Generation
-
-```powershell
-# Disable function
-az functionapp function disable `
-    -g rg-myagents-prod `
-    -n func-fabric-myagents `
-    --function-name GenerateData
-
-# Enable again
-az functionapp function enable `
-    -g rg-myagents-prod `
-    -n func-fabric-myagents `
-    --function-name GenerateData
-```
-
-### Delete Fabric Resources
-
-```powershell
-# Delete function app
-az functionapp delete `
-    -g rg-myagents-prod `
-    -n func-fabric-myagents
-
-# Delete storage account
-az storage account delete `
-    -n stfabricmyagents `
-    -g rg-myagents-prod `
-    --yes
-
-# Clear database (optional)
-# Run in SQL Query Editor:
-DROP TABLE IF EXISTS OrderItems;
-DROP TABLE IF EXISTS Orders;
-DROP TABLE IF EXISTS Customers;
-DROP TABLE IF EXISTS Products;
-DROP TABLE IF EXISTS Categories;
-```
+| Issue | Fix |
+|-------|-----|
+| Mirroring stuck at "Initializing" | Run the `ALTER DATABASE ... SET CHANGE_TRACKING = ON` command in SQL Query Editor. |
+| Mirror shows "Pending" for individual tables | Ensure each table has a primary key — Fabric mirroring requires PKs. |
+| Permission denied creating mirror | Grant the Fabric service principal `db_datareader` on Azure SQL (see Phase 3). |
+| Gold tables empty after pipeline run | Run `Gold_Aggregate` notebook manually; check the **Spark logs** for errors. |
+| App still querying Azure SQL after env var change | Restart the app: `az webapp restart`. Check `FABRIC_SQL_SERVER` is set and not empty. |
+| SQL analytics endpoint unreachable | Fabric capacity may be paused. Resume it in **Fabric Admin → Capacity settings**. |
+| `Login failed` for Fabric SQL endpoint | The App Service managed identity needs access. In Fabric workspace → Access, add the managed identity as **Contributor**. |
+| PySpark errors in Silver notebook | Check the mirrored DB name in the `mirrored_db` variable matches the item name in your workspace exactly. |
 
 ---
 
-## 🐛 Troubleshooting
+## Reference: Gold Table Schema
 
-### Issue: ODBC Driver Not Found
+The following tables are expected by the app's API routes and AI agent tools.
+They are created by the `Gold_Aggregate` notebook above.
 
-**Error:**
-```
-pyodbc.Error: ('01000', "[01000] [unixODBC][Driver Manager]Can't open lib 'ODBC Driver 18 for SQL Server'")
-```
+| Table | Used by |
+|-------|---------|
+| `gold_sales_time_series` | Analytics timeseries, sales metrics, goals |
+| `gold_customer_360` | Deals endpoint, deal detail, agent tools |
+| `gold_upsell_opportunities` | Deals endpoint, deal detail |
+| `gold_sales_performance` | Sales metrics win rate, predictive insights |
+| `gold_geographic_sales` | Agent geographic queries |
+| `gold_cohort_analysis` | Analytics cohort dashboard |
+| `gold_inventory_analysis` | Agent inventory queries |
 
-**Solution:**
-Install ODBC Driver 18 (see [Prerequisites](#prerequisites))
-
-**Verify Installation:**
-```powershell
-# Windows
-odbcad32
-
-# macOS/Linux
-odbcinst -q -d
-```
-
----
-
-### Issue: Authentication Failed
-
-**Error:**
-```
-Login failed for user '<token-identified principal>'
-```
-
-**Solution:**
-```powershell
-# 1. Ensure logged in to Azure CLI
-az login
-
-# 2. Check your access to the database
-az sql db show `
-    --resource-group rg-myagents-prod `
-    --server sql-myagents-prod `
-    --name sqldb-myagents-prod
-
-# 3. Ensure you have SQL permissions
-# Run in SQL Query Editor as admin:
-CREATE USER [your-email@domain.com] FROM EXTERNAL PROVIDER;
-ALTER ROLE db_owner ADD MEMBER [your-email@domain.com];
-```
-
----
-
-### Issue: Table Already Exists
-
-**Error:**
-```
-There is already an object named 'Categories' in the database
-```
-
-**Solution:**
-Schema deployment is idempotent for data but not structure. Either:
-
-**Option 1: Drop and recreate**
-```sql
--- In SQL Query Editor
-DROP TABLE IF EXISTS OrderItems;
-DROP TABLE IF EXISTS Orders;
-DROP TABLE IF EXISTS Customers;
-DROP TABLE IF EXISTS Products;
-DROP TABLE IF EXISTS Categories;
-```
-
-Then redeploy:
-```powershell
-python deploy_schema.py
-```
-
-**Option 2: Skip schema deployment**
-```powershell
-.\setup-database.ps1 -SkipSchema -GenerateData
-```
-
----
-
-### Issue: Function Deployment Failed
-
-**Error:**
-```
-Error: Azure Functions Core Tools not found
-```
-
-**Solution:**
-```powershell
-# Check if installed
-func --version
-
-# Install (Windows)
-winget install Microsoft.Azure.FunctionsCoreTools
-
-# Or use npm (cross-platform)
-npm install -g azure-functions-core-tools@4
-```
-
----
-
-### Issue: Function Can't Access SQL
-
-**Error (in function logs):**
-```
-Login failed for user 'NT AUTHORITY\ANONYMOUS LOGON'
-```
-
-**Solution:**
-Grant managed identity SQL access (see [Step-by-Step Deployment](#step-by-step-deployment), Step 4)
-
-```sql
--- Get function app name from Azure Portal
--- Navigate to Function App → Identity → System assigned → Object ID
-
--- In SQL Query Editor:
-CREATE USER [func-fabric-myagents] FROM EXTERNAL PROVIDER;
-ALTER ROLE db_datareader ADD MEMBER [func-fabric-myagents];
-ALTER ROLE db_datawriter ADD MEMBER [func-fabric-myagents];
-```
-
----
-
-### Issue: No Data Generated
-
-**Symptoms:**
-- Scripts run without errors
-- Tables exist but are empty
-
-**Solution:**
-```powershell
-# Check if script actually ran
-python generate_initial_data.py
-
-# Check for connection issues
-python test_connection.py
-
-# View tables to verify
-python view_tables.py
-
-# Check script output for errors
-```
-
-If no errors but still no data, check SQL permissions:
-```sql
--- In SQL Query Editor
-SELECT 
-    dp.name,
-    dp.type_desc,
-    drm.role_principal_id,
-    drp.name AS role_name
-FROM sys.database_principals dp
-LEFT JOIN sys.database_role_members drm ON dp.principal_id = drm.member_principal_id
-LEFT JOIN sys.database_principals drp ON drm.role_principal_id = drp.principal_id
-WHERE dp.name LIKE '%your-email%';
-```
-
-Ensure you have `db_owner` or at least `db_datawriter` role.
-
----
-
-### Issue: Python Package Errors
-
-**Error:**
-```
-ModuleNotFoundError: No module named 'pyodbc'
-```
-
-**Solution:**
-```powershell
-cd fabric\database
-pip install -r requirements.txt
-
-# Or install individually
-pip install pyodbc azure-identity Faker
-```
-
-**For Azure Function:**
-```powershell
-cd fabric\function
-pip install -r requirements.txt
-```
-
----
-
-## 📚 Additional Resources
-
-### Documentation
-- [Fabric README](../fabric/README.md)
-- [Main Deployment Guide](QUICK_START.md)
-- [Azure SQL Documentation](https://learn.microsoft.com/azure/azure-sql/)
-- [Azure Functions Python Guide](https://learn.microsoft.com/azure/azure-functions/functions-reference-python)
-
-### Tools
-- [ODBC Driver Download](https://learn.microsoft.com/sql/connect/odbc/download-odbc-driver-for-sql-server)
-- [Azure Functions Core Tools](https://learn.microsoft.com/azure/azure-functions/functions-run-local)
-- [Faker Documentation](https://faker.readthedocs.io/)
-
-### Scripts Reference
-- [Setup Database Script](../fabric/scripts/setup-database.ps1)
-- [Deploy Function Script](../fabric/scripts/deploy-fabric-function.ps1)
-
----
-
-## 🎯 Quick Command Reference
-
-```powershell
-# Complete deployment with data
-.\deploy-complete.ps1 -ResourceGroupName "rg" -DeployFabric -GenerateInitialData
-
-# Standalone database setup
-.\fabric\scripts\setup-database.ps1 -GenerateData
-
-# Deploy function only
-.\fabric\scripts\deploy-fabric-function.ps1 -ResourceGroupName "rg" -SqlServerName "server" -SqlDatabaseName "db"
-
-# View data
-python fabric\database\view_tables.py
-python fabric\database\view_schemas.py
-
-# Test connection
-python fabric\database\test_connection.py
-
-# Monitor function
-az functionapp log tail -g <rg> -n <function-name>
-```
-
----
-
-**🎉 Congratulations!** You now have a complete synthetic data generation system for your Azure Intelligent Agent Starter application!
-
-For questions or issues, refer to the main [README](../README.md) or open an issue in the repository.
-
----
-
-**Made with ❤️ for Azure Intelligent Agent Starter**  
-*Realistic test data for better demos* 📊
+> `gold_upsell_opportunities` is not generated by the notebooks above — it requires an ML scoring model or can be seeded manually. For demos, the `synthetic_data.sql` script includes 15 sample rows.

@@ -12,7 +12,6 @@ from pydantic import BaseModel
 from utils.auth import get_current_user
 from utils.db_connection import DatabaseConnection
 from config import settings
-from app.mock_data import generate_mock_deals, generate_mock_top_products_sales
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +69,47 @@ class Goal(BaseModel):
     activities_current: int
     activities_target: int
     activities_percentage: float
+
+
+class CustomerProfile(BaseModel):
+    """Customer 360 profile"""
+
+    customer_id: str
+    name: str
+    email: str
+    phone: str
+    region: str
+    segment: str
+    lifetime_value: float
+    account_age_days: int
+
+
+class TimelineEvent(BaseModel):
+    """Deal timeline event"""
+
+    date: str
+    stage: str
+    note: str
+    user: str
+
+
+class DealDetail(BaseModel):
+    """Comprehensive deal details"""
+
+    # Core deal info
+    customer: str
+    product: str
+    value: float
+    status: str
+    close_date: str
+    # Extended data
+    customer_profile: CustomerProfile
+    timeline: List[TimelineEvent]
+    activities: List[Dict[str, Any]]
+    related_deals: List[Deal]
+    communications: List[Dict[str, Any]]
+    documents: List[Dict[str, Any]]
+    insights: Dict[str, Any]
 
 
 @router.get("/metrics", response_model=SalesMetrics)
@@ -160,9 +200,13 @@ async def get_sales_metrics(
 
             deals_change = int(current_metrics[1] - prev_metrics[1])
 
-            # Calculate win rate (assuming 70% based on business metrics)
-            win_rate = 70.0
-            win_rate_change = 2.5
+            # Win rate from gold_sales_performance
+            cursor.execute(
+                "SELECT TOP 1 metric_value FROM dbo.gold_sales_performance WHERE metric_name = 'Win Rate'"
+            )
+            win_rate_row = cursor.fetchone()
+            win_rate = float(win_rate_row[0]) if win_rate_row else 0.0
+            win_rate_change = 0.0
 
             cursor.close()
 
@@ -211,7 +255,7 @@ async def get_recent_deals(
             region_filter = ""
             query_params = []
             if user_region:
-                region_filter = " WHERE c.Region = ?"
+                region_filter = " WHERE c.State = ?"
                 query_params.append(user_region)
 
             # Query recent upsell opportunities with customer details and RLS
@@ -251,19 +295,14 @@ async def get_recent_deals(
 
             cursor.close()
 
-            # If no deals found, return mock data
-            if not deals or len(deals) == 0:
-                logger.info("No deals found in database, using mock data")
-                mock_deals = generate_mock_deals(limit)
-                return [Deal(**deal) for deal in mock_deals]
-
             return deals
 
     except Exception as e:
-        logger.error(f"Error fetching recent deals: {e}, using mock data")
-        # Return mock data on error
-        mock_deals = generate_mock_deals(limit)
-        return [Deal(**deal) for deal in mock_deals]
+        logger.error(f"Error fetching recent deals: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch recent deals: {str(e)}",
+        )
 
 
 @router.get("/products", response_model=List[Product])
@@ -293,41 +332,23 @@ async def get_top_products(
             start_date = end_date - timedelta(days=30)
             prev_start = start_date - timedelta(days=30)
 
-            # Build RLS filter
-            region_filter = ""
             query_params = [
-                start_date,
-                end_date,
-                start_date,
-                end_date,
-                prev_start,
-                start_date,
-                start_date,
-                end_date,
+                start_date, end_date,
+                start_date, end_date,
+                prev_start, start_date,
+                start_date, end_date,
             ]
 
-            if user_region:
-                region_filter = " AND s.Region = ?"
-                # Add region parameter for each query section that uses sales data
-                query_params.extend(
-                    [user_region, user_region, user_region, user_region]
-                )
-
-            # Query top products by revenue from sales data with RLS
             query = f"""
                 SELECT TOP {limit}
                     p.ProductName,
-                    ISNULL(SUM(CASE WHEN s.OrderDate >= ? AND s.OrderDate <= ? {region_filter if user_region else ""}
-                        THEN s.daily_revenue / 10 ELSE 0 END), 0) as revenue,
-                    ISNULL(COUNT(DISTINCT CASE WHEN s.OrderDate >= ? AND s.OrderDate <= ? {region_filter if user_region else ""}
-                        THEN s.OrderDate ELSE NULL END), 0) as deals,
-                    ISNULL(SUM(CASE WHEN s.OrderDate >= ? AND s.OrderDate < ? {region_filter if user_region else ""}
-                        THEN s.daily_revenue / 10 ELSE 0 END), 0) as prev_revenue
-                FROM dbo.dim_product p
-                LEFT JOIN dbo.gold_sales_time_series s ON 1=1
-                GROUP BY p.ProductName
-                HAVING SUM(CASE WHEN s.OrderDate >= ? AND s.OrderDate <= ? {region_filter if user_region else ""}
-                    THEN s.daily_revenue / 10 ELSE 0 END) > 0
+                    ISNULL(SUM(CASE WHEN s.OrderDate >= ? AND s.OrderDate <= ? THEN s.TotalAmount ELSE 0 END), 0) as revenue,
+                    ISNULL(COUNT(DISTINCT CASE WHEN s.OrderDate >= ? AND s.OrderDate <= ? THEN s.OrderID ELSE NULL END), 0) as deals,
+                    ISNULL(SUM(CASE WHEN s.OrderDate >= ? AND s.OrderDate < ? THEN s.TotalAmount ELSE 0 END), 0) as prev_revenue
+                FROM dbo.ProductDim p
+                LEFT JOIN dbo.SalesFact s ON p.ProductID = s.ProductID
+                GROUP BY p.ProductID, p.ProductName
+                HAVING SUM(CASE WHEN s.OrderDate >= ? AND s.OrderDate <= ? THEN s.TotalAmount ELSE 0 END) > 0
                 ORDER BY revenue DESC
             """
 
@@ -355,19 +376,14 @@ async def get_top_products(
 
             cursor.close()
 
-            # If no products found, return mock data
-            if not products or len(products) == 0:
-                logger.info("No top products found in database, using mock data")
-                mock_products = generate_mock_top_products_sales(limit)
-                return [Product(**product) for product in mock_products]
-
             return products
 
     except Exception as e:
-        logger.error(f"Error fetching top products: {e}, using mock data")
-        # Return mock data on error
-        mock_products = generate_mock_top_products_sales(limit)
-        return [Product(**product) for product in mock_products]
+        logger.error(f"Error fetching top products: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch top products: {str(e)}",
+        )
 
 
 @router.get("/goals", response_model=Goal)
@@ -456,4 +472,287 @@ async def get_goals(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to fetch goals: {str(e)}",
+        )
+
+
+@router.get("/deals/detail", response_model=DealDetail)
+async def get_deal_details(
+    customer: str,
+    product: str,
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+) -> DealDetail:
+    """
+    Get comprehensive deal details including customer profile, timeline, and activities.
+
+    Args:
+        customer: Customer name (FirstName + LastName)
+        product: Product/recommended action
+        current_user: Current authenticated user
+
+    Returns:
+        DealDetail: Comprehensive deal information filtered by user's region
+    """
+    try:
+        user_region = current_user.get("region")
+        db_conn = get_fabric_connection()
+
+        with db_conn.get_connection() as conn:
+            cursor = conn.cursor()
+
+            # Build RLS filter
+            region_filter = ""
+            query_params = [customer, product]
+            if user_region:
+                region_filter = " AND c.State = ?"
+                query_params.append(user_region)
+
+            # Query deal and customer data
+            query = f"""
+                SELECT
+                    c.CustomerID,
+                    c.FirstName + ' ' + c.LastName as customer_name,
+                    c.Email,
+                    NULL as Phone,
+                    c.State as Region,
+                    c.customer_segment,
+                    c.lifetime_value,
+                    DATEDIFF(day, c.first_order_date, GETDATE()) as account_age,
+                    u.recommended_action as product,
+                    u.upsell_score * 1000 as value,
+                    CASE
+                        WHEN u.upsell_score > 0.8 THEN 'won'
+                        WHEN u.upsell_score > 0.5 THEN 'negotiating'
+                        ELSE 'prospecting'
+                    END as status,
+                    CONVERT(varchar, GETDATE(), 23) as close_date,
+                    u.upsell_score
+                FROM dbo.gold_customer_360 c
+                INNER JOIN dbo.gold_upsell_opportunities u ON c.CustomerID = u.CustomerID
+                WHERE c.FirstName + ' ' + c.LastName = ?
+                  AND u.recommended_action = ?
+                  {region_filter}
+            """
+
+            cursor.execute(query, tuple(query_params))
+            row = cursor.fetchone()
+
+            if not row:
+                cursor.close()
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Deal not found or access denied",
+                )
+
+            # Build customer profile
+            customer_profile = CustomerProfile(
+                customer_id=str(row[0]),
+                name=row[1],
+                email=row[2] or "email@example.com",
+                phone=row[3] or "N/A",
+                region=row[4] or "Unknown",
+                segment=row[5] or "Standard",
+                lifetime_value=float(row[6]) if row[6] else 0.0,
+                account_age_days=int(row[7]) if row[7] else 0,
+            )
+
+            # Query related deals for this customer
+            related_query_params = [row[0], product]
+            if user_region:
+                related_query_params.append(user_region)
+
+            cursor.execute(
+                f"""
+                SELECT TOP 5
+                    c.FirstName + ' ' + c.LastName as customer,
+                    u.recommended_action as product,
+                    u.upsell_score * 1000 as value,
+                    CASE
+                        WHEN u.upsell_score > 0.8 THEN 'won'
+                        WHEN u.upsell_score > 0.5 THEN 'negotiating'
+                        ELSE 'prospecting'
+                    END as status,
+                    CONVERT(varchar, GETDATE(), 23) as close_date
+                FROM dbo.gold_upsell_opportunities u
+                INNER JOIN dbo.gold_customer_360 c ON u.CustomerID = c.CustomerID
+                WHERE u.CustomerID = ?
+                  AND u.recommended_action != ?
+                  {"AND c.State = ?" if user_region else ""}
+                ORDER BY u.upsell_score DESC
+            """,
+                tuple(related_query_params),
+            )
+
+            related_deals = [
+                Deal(
+                    customer=r[0],
+                    product=r[1],
+                    value=float(r[2]),
+                    status=r[3].lower(),
+                    close_date=r[4],
+                )
+                for r in cursor.fetchall()
+            ]
+
+            cursor.close()
+
+            # Generate mock timeline based on status
+            timeline = [
+                TimelineEvent(
+                    date=(datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d"),
+                    stage="Prospecting",
+                    note="Initial contact made via LinkedIn",
+                    user=current_user.get("username", "Sales Rep"),
+                ),
+                TimelineEvent(
+                    date=(datetime.now() - timedelta(days=20)).strftime("%Y-%m-%d"),
+                    stage="Qualification",
+                    note="Discovery call completed, identified key needs",
+                    user=current_user.get("username", "Sales Rep"),
+                ),
+                TimelineEvent(
+                    date=(datetime.now() - timedelta(days=10)).strftime("%Y-%m-%d"),
+                    stage="Proposal",
+                    note="Custom proposal sent to decision makers",
+                    user=current_user.get("username", "Sales Rep"),
+                ),
+            ]
+
+            if row[10] == "negotiating":
+                timeline.append(
+                    TimelineEvent(
+                        date=(datetime.now() - timedelta(days=3)).strftime("%Y-%m-%d"),
+                        stage="Negotiation",
+                        note="Contract terms being reviewed by legal",
+                        user=current_user.get("username", "Sales Rep"),
+                    )
+                )
+            elif row[10] == "won":
+                timeline.append(
+                    TimelineEvent(
+                        date=(datetime.now() - timedelta(days=3)).strftime("%Y-%m-%d"),
+                        stage="Negotiation",
+                        note="Final terms agreed upon",
+                        user=current_user.get("username", "Sales Rep"),
+                    )
+                )
+                timeline.append(
+                    TimelineEvent(
+                        date=(datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d"),
+                        stage="Won",
+                        note="Contract signed!",
+                        user=current_user.get("username", "Sales Rep"),
+                    )
+                )
+
+            # Generate mock activities
+            activities = [
+                {
+                    "type": "call",
+                    "date": (datetime.now() - timedelta(days=2)).strftime("%Y-%m-%d"),
+                    "subject": "Follow-up call with stakeholders",
+                    "duration": "45 minutes",
+                    "outcome": "Positive - moving to next stage",
+                },
+                {
+                    "type": "meeting",
+                    "date": (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d"),
+                    "subject": "Product demo for technical team",
+                    "duration": "90 minutes",
+                    "outcome": "Technical requirements confirmed",
+                },
+                {
+                    "type": "email",
+                    "date": (datetime.now() - timedelta(days=14)).strftime("%Y-%m-%d"),
+                    "subject": "Initial proposal sent",
+                    "status": "Read",
+                },
+            ]
+
+            # Generate mock communications
+            communications = [
+                {
+                    "type": "email",
+                    "date": (datetime.now() - timedelta(days=1)).strftime(
+                        "%Y-%m-%d %H:%M"
+                    ),
+                    "subject": "Re: Pricing questions",
+                    "from": customer_profile.email,
+                    "to": current_user.get("email", "sales@contoso.com"),
+                    "preview": "Thank you for clarifying the pricing structure...",
+                },
+                {
+                    "type": "email",
+                    "date": (datetime.now() - timedelta(days=5)).strftime(
+                        "%Y-%m-%d %H:%M"
+                    ),
+                    "subject": "Meeting notes - Product demo",
+                    "from": current_user.get("email", "sales@contoso.com"),
+                    "to": customer_profile.email,
+                    "preview": "Following up on our demo session...",
+                },
+            ]
+
+            # Generate mock documents
+            documents = [
+                {
+                    "name": "Proposal - " + product,
+                    "type": "PDF",
+                    "date": (datetime.now() - timedelta(days=10)).strftime("%Y-%m-%d"),
+                    "size": "2.4 MB",
+                    "status": "Sent",
+                },
+                {
+                    "name": "Product Specifications",
+                    "type": "PDF",
+                    "date": (datetime.now() - timedelta(days=15)).strftime("%Y-%m-%d"),
+                    "size": "1.8 MB",
+                    "status": "Viewed",
+                },
+            ]
+
+            # Calculate insights
+            upsell_score = float(row[12])
+            win_probability = 0.0
+            if row[10] == "won":
+                win_probability = 95.0
+            elif row[10] == "negotiating":
+                win_probability = 65.0
+            else:
+                win_probability = 35.0
+
+            insights = {
+                "health_score": int(upsell_score * 100),
+                "win_probability": win_probability,
+                "days_in_pipeline": 30,
+                "engagement_level": "High" if upsell_score > 0.7 else "Medium",
+                "next_best_action": (
+                    "Schedule executive briefing"
+                    if row[10] == "negotiating"
+                    else "Send proposal"
+                ),
+            }
+
+            return DealDetail(
+                customer=row[1],
+                product=row[8],
+                value=float(row[9]),
+                status=row[10],
+                close_date=row[11],
+                customer_profile=customer_profile,
+                timeline=timeline,
+                activities=activities,
+                related_deals=related_deals,
+                communications=communications,
+                documents=documents,
+                insights=insights,
+            )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching deal details: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch deal details: {str(e)}",
         )

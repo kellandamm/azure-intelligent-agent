@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configuration Assistant - Admin Panel</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="/static/css/admin-config-chat.css">
+    
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 2rem 0;
+        }
+        
+        .container-main {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .page-header {
+            text-align: center;
+            color: white;
+            margin-bottom: 2rem;
+        }
+        
+        .page-header h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+        
+        .page-header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+        
+        .chat-wrapper {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+            overflow: hidden;
+            height: 80vh;
+            min-height: 600px;
+        }
+        
+        .back-link {
+            position: absolute;
+            top: 1rem;
+            left: 1rem;
+            color: white;
+            text-decoration: none;
+            padding: 0.5rem 1rem;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+            transition: all 0.3s ease;
+        }
+        
+        .back-link:hover {
+            background: rgba(255, 255, 255, 0.3);
+            color: white;
+        }
+        
+        .quick-actions {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1rem;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        
+        .quick-action-btn {
+            padding: 0.75rem 1.5rem;
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+        }
+        
+        .quick-action-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            color: white;
+            transform: translateY(-2px);
+        }
+    </style>
+</head>
+<body>
+    <a href="/shop" class="back-link">
+        <i class="fas fa-arrow-left"></i> Back to Shop
+    </a>
+    
+    <div class="container-main">
+        <div class="page-header">
+            <h1><i class="fas fa-comments"></i> Chat with AI Assistant</h1>
+            <p>Ask questions about products, get recommendations, or chat about anything</p>
+            
+            <div class="quick-actions">
+                <button class="quick-action-btn" onclick="sendQuickCommand('What products do you recommend?')">
+                    <i class="fas fa-star"></i> Recommendations
+                </button>
+                <button class="quick-action-btn" onclick="sendQuickCommand('Show me your best deals')">
+                    <i class="fas fa-tags"></i> Best Deals
+                </button>
+                <button class="quick-action-btn" onclick="sendQuickCommand('Help me find something')">
+                    <i class="fas fa-search"></i> Find Products
+                </button>
+            </div>
+        </div>
+        
+        <div class="chat-wrapper" id="chatWrapper">
+            <!-- Chat interface will be injected here -->
+        </div>
+    </div>
+    
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/static/js/admin-config-chat.js"></script>
+    
+    <script>
+        // Initialize the chat interface
+        document.addEventListener('DOMContentLoaded', () => {
+            const chatWrapper = document.getElementById('chatWrapper');
+            const chatInterface = adminConfigChat.createChatInterface();
+            chatWrapper.appendChild(chatInterface);
+            adminConfigChat.init();
+        });
+        
+        // Quick command function
+        function sendQuickCommand(command) {
+            if (adminConfigChat && adminConfigChat.inputField) {
+                adminConfigChat.inputField.value = command;
+                adminConfigChat.sendMessage();
+            }
+        }
+        
+        // Check authentication
+        const token = localStorage.getItem('token');
+        if (!token) {
+            window.location.href = '/login';
+        }
+    </script>
+</body>
+</html>

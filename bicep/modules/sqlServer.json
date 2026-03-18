@@ -1,0 +1,280 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.38.33.27573",
+      "templateHash": "4267627716555504970"
+    }
+  },
+  "parameters": {
+    "serverName": {
+      "type": "string",
+      "metadata": {
+        "description": "SQL Server name (must be globally unique)"
+      }
+    },
+    "location": {
+      "type": "string",
+      "metadata": {
+        "description": "Location for SQL Server"
+      }
+    },
+    "tags": {
+      "type": "object",
+      "defaultValue": {},
+      "metadata": {
+        "description": "Resource tags"
+      }
+    },
+    "administratorLogin": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "SQL administrator login username"
+      }
+    },
+    "administratorLoginPassword": {
+      "type": "securestring",
+      "defaultValue": "",
+      "metadata": {
+        "description": "SQL administrator login password"
+      }
+    },
+    "azureAdAdminLogin": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Azure AD admin login name (UPN or display name, e.g. admin@contoso.com)"
+      }
+    },
+    "azureAdAdminSid": {
+      "type": "string",
+      "defaultValue": "",
+      "maxLength": 36,
+      "metadata": {
+        "description": "Azure AD admin Object ID - MUST be a valid GUID (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx).\nGet it with: az ad user show --id <UPN> --query id -o tsv\nLeave empty to skip inline AD admin configuration.\nWARNING: An invalid value (placeholder, email, empty path segment) causes ARM error\nInvalidResourceIdSegment on parameters.properties.administrators.sid."
+      }
+    },
+    "azureADOnlyAuthentication": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Enable Azure AD-only authentication"
+      }
+    },
+    "databaseName": {
+      "type": "string",
+      "metadata": {
+        "description": "Database name"
+      }
+    },
+    "databaseSku": {
+      "type": "string",
+      "defaultValue": "Basic",
+      "metadata": {
+        "description": "Database SKU (Basic, S0, S1, P1, etc.)"
+      }
+    },
+    "maxSizeBytes": {
+      "type": "int",
+      "defaultValue": 2147483648,
+      "metadata": {
+        "description": "Maximum database size in bytes"
+      }
+    },
+    "enableAudit": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Enable auditing"
+      }
+    },
+    "enableThreatDetection": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Enable threat detection"
+      }
+    },
+    "enableVulnerabilityAssessment": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Enable SQL Vulnerability Assessment (Express configuration, no storage account needed). Recommended by MCSB (SecurityCenterBuiltIn)."
+      }
+    },
+    "minimalTlsVersion": {
+      "type": "string",
+      "defaultValue": "1.2",
+      "allowedValues": [
+        "1.0",
+        "1.1",
+        "1.2"
+      ],
+      "metadata": {
+        "description": "Minimum TLS version"
+      }
+    },
+    "publicNetworkAccess": {
+      "type": "string",
+      "defaultValue": "Disabled",
+      "allowedValues": [
+        "Enabled",
+        "Disabled"
+      ],
+      "metadata": {
+        "description": "Public network access for SQL server. Set Disabled for MCAPS compliance — connectivity must go through a private endpoint."
+      }
+    },
+    "restrictOutboundNetworkAccess": {
+      "type": "string",
+      "defaultValue": "Enabled",
+      "allowedValues": [
+        "Enabled",
+        "Disabled"
+      ],
+      "metadata": {
+        "description": "Restrict outbound network access for SQL server. Set Enabled for MCAPS compliance — prevents SQL from making arbitrary outbound connections outside allowed resources."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Sql/servers",
+      "apiVersion": "2023-05-01-preview",
+      "name": "[parameters('serverName')]",
+      "location": "[parameters('location')]",
+      "tags": "[parameters('tags')]",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "properties": {
+        "administratorLogin": "[if(parameters('azureADOnlyAuthentication'), null(), parameters('administratorLogin'))]",
+        "administratorLoginPassword": "[if(parameters('azureADOnlyAuthentication'), null(), parameters('administratorLoginPassword'))]",
+        "minimalTlsVersion": "[parameters('minimalTlsVersion')]",
+        "publicNetworkAccess": "[parameters('publicNetworkAccess')]",
+        "restrictOutboundNetworkAccess": "[parameters('restrictOutboundNetworkAccess')]",
+        "administrators": "[if(and(not(empty(parameters('azureAdAdminLogin'))), not(empty(parameters('azureAdAdminSid')))), createObject('administratorType', 'ActiveDirectory', 'login', parameters('azureAdAdminLogin'), 'sid', parameters('azureAdAdminSid'), 'tenantId', subscription().tenantId, 'azureADOnlyAuthentication', parameters('azureADOnlyAuthentication')), null())]"
+      }
+    },
+    {
+      "condition": "[equals(parameters('publicNetworkAccess'), 'Enabled')]",
+      "type": "Microsoft.Sql/servers/firewallRules",
+      "apiVersion": "2023-05-01-preview",
+      "name": "[format('{0}/{1}', parameters('serverName'), 'AllowAllWindowsAzureIps')]",
+      "properties": {
+        "startIpAddress": "0.0.0.0",
+        "endIpAddress": "0.0.0.0"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Sql/servers', parameters('serverName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Sql/servers/databases",
+      "apiVersion": "2023-05-01-preview",
+      "name": "[format('{0}/{1}', parameters('serverName'), parameters('databaseName'))]",
+      "location": "[parameters('location')]",
+      "tags": "[parameters('tags')]",
+      "sku": {
+        "name": "[parameters('databaseSku')]"
+      },
+      "properties": {
+        "collation": "SQL_Latin1_General_CP1_CI_AS",
+        "maxSizeBytes": "[parameters('maxSizeBytes')]",
+        "catalogCollation": "SQL_Latin1_General_CP1_CI_AS",
+        "zoneRedundant": false,
+        "readScale": "Disabled"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Sql/servers', parameters('serverName'))]"
+      ]
+    },
+    {
+      "condition": "[parameters('enableAudit')]",
+      "type": "Microsoft.Sql/servers/auditingSettings",
+      "apiVersion": "2023-05-01-preview",
+      "name": "[format('{0}/{1}', parameters('serverName'), 'default')]",
+      "properties": {
+        "state": "Enabled",
+        "isAzureMonitorTargetEnabled": true,
+        "retentionDays": 90
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Sql/servers', parameters('serverName'))]"
+      ]
+    },
+    {
+      "condition": "[parameters('enableThreatDetection')]",
+      "type": "Microsoft.Sql/servers/securityAlertPolicies",
+      "apiVersion": "2023-05-01-preview",
+      "name": "[format('{0}/{1}', parameters('serverName'), 'Default')]",
+      "properties": {
+        "state": "Enabled",
+        "emailAccountAdmins": true,
+        "retentionDays": 90
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Sql/servers', parameters('serverName'))]"
+      ]
+    },
+    {
+      "condition": "[parameters('enableVulnerabilityAssessment')]",
+      "type": "Microsoft.Sql/servers/sqlVulnerabilityAssessments",
+      "apiVersion": "2022-11-01-preview",
+      "name": "[format('{0}/{1}', parameters('serverName'), 'default')]",
+      "properties": {
+        "state": "Enabled"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Sql/servers', parameters('serverName'))]"
+      ]
+    }
+  ],
+  "outputs": {
+    "resourceId": {
+      "type": "string",
+      "metadata": {
+        "description": "SQL Server resource ID"
+      },
+      "value": "[resourceId('Microsoft.Sql/servers', parameters('serverName'))]"
+    },
+    "serverName": {
+      "type": "string",
+      "metadata": {
+        "description": "SQL Server name"
+      },
+      "value": "[parameters('serverName')]"
+    },
+    "fullyQualifiedDomainName": {
+      "type": "string",
+      "metadata": {
+        "description": "SQL Server FQDN"
+      },
+      "value": "[reference(resourceId('Microsoft.Sql/servers', parameters('serverName')), '2023-05-01-preview').fullyQualifiedDomainName]"
+    },
+    "databaseResourceId": {
+      "type": "string",
+      "metadata": {
+        "description": "SQL Database resource ID"
+      },
+      "value": "[resourceId('Microsoft.Sql/servers/databases', parameters('serverName'), parameters('databaseName'))]"
+    },
+    "databaseName": {
+      "type": "string",
+      "metadata": {
+        "description": "SQL Database name"
+      },
+      "value": "[parameters('databaseName')]"
+    },
+    "managedIdentityPrincipalId": {
+      "type": "string",
+      "metadata": {
+        "description": "SQL Server system-assigned managed identity principal ID"
+      },
+      "value": "[reference(resourceId('Microsoft.Sql/servers', parameters('serverName')), '2023-05-01-preview', 'full').identity.principalId]"
+    }
+  }
+}

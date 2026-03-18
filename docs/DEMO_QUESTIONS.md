@@ -606,13 +606,13 @@ Provide go/no-go recommendation with critical path items, risk mitigation plans,
 
 ## 📚 Additional Resources
 
-- [Row-Level Security Implementation](../app/rls_middleware.py)
-- [Agent Configuration](../app/agent_framework_manager.py)
-- [Authentication System](../app/routes_auth.py)
+- [Row-Level Security Implementation](../app/app/rls_middleware.py)
+- [Agent Configuration](../app/app/agent_framework_manager.py)
+- [Authentication System](../app/app/routes_auth.py)
 - [Deployment Guide](../README.md)
 - [Troubleshooting](QUICK_START.md)
 
 ---
 
-**Last Updated:** December 2, 2025  
+**Last Updated:** March 2026
 **Version:** 2.0 - Enterprise Edition

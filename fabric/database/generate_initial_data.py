@@ -24,6 +24,12 @@ SERVER = os.getenv('SQL_SERVER', '<your-sql-server>.database.windows.net')
 DATABASE = os.getenv('SQL_DATABASE', 'aiagentsdb')
 AUTH_TYPE = os.getenv('SQL_AUTH_TYPE', 'AzureAD')
 
+# ── Configurable data volumes ─────────────────────────────────────────────────
+# Edit these to change how many records are generated
+NUM_PRODUCTS  = 100
+NUM_CUSTOMERS = 200
+NUM_ORDERS    = 300
+
 def get_azure_ad_token():
     """Get Azure AD access token for SQL Database"""
     credential = DefaultAzureCredential()
@@ -247,9 +253,9 @@ def main():
         print("✓ Connected successfully\n")
         
         # Generate data
-        generate_products(conn, 100)
-        generate_customers(conn, 200)
-        generate_orders_and_items(conn, 300)
+        generate_products(conn, NUM_PRODUCTS)
+        generate_customers(conn, NUM_CUSTOMERS)
+        generate_orders_and_items(conn, NUM_ORDERS)
         
         # Summary
         cursor = conn.cursor()

@@ -5,22 +5,14 @@ Provides advanced analytics endpoints for Admin and Data Analyst roles
 
 import logging
 import os
-import random
 from typing import Optional, List, Dict, Any
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
-import json
 
 from utils.auth import get_current_user
 from utils.db_connection import DatabaseConnection
 from config import settings
-from app.mock_data import (
-    generate_mock_products,
-    generate_mock_sales_reps,
-    generate_mock_data_quality,
-    generate_mock_customer_segments,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -196,51 +188,68 @@ async def get_analytics_metrics(
         with db_conn.get_connection() as conn:
             cursor = conn.cursor()
 
-            # Total customers from gold_customer_360
+            # Total customers from CustomerDim (Fabric lakehouse)
             cursor.execute(
-                "SELECT COUNT(DISTINCT CustomerID) FROM dbo.gold_customer_360"
+                "SELECT COUNT(DISTINCT CustomerID) FROM CustomerDim WHERE YEAR(CreatedDate) = YEAR(GETDATE()) OR CreatedDate IS NULL"
             )
             total_customers = cursor.fetchone()[0] or 0
 
-            # Total revenue from gold_sales_time_series (all time)
+            # Total revenue from SalesFact for 2026
             cursor.execute("""
                 SELECT 
-                    ISNULL(SUM(daily_revenue), 0) as total_revenue,
-                    ISNULL(SUM(daily_orders), 0) as total_orders,
+                    ISNULL(SUM(TotalAmount), 0) as total_revenue,
+                    ISNULL(COUNT(DISTINCT OrderID), 0) as total_orders,
                     CASE 
-                        WHEN SUM(daily_orders) > 0 
-                        THEN SUM(daily_revenue) / SUM(daily_orders)
+                        WHEN COUNT(DISTINCT OrderID) > 0 
+                        THEN SUM(TotalAmount) / COUNT(DISTINCT OrderID)
                         ELSE 0 
                     END as avg_order_value
-                FROM dbo.gold_sales_time_series
+                FROM SalesFact
+                WHERE YEAR(OrderDate) = YEAR(GETDATE())
             """)
             row = cursor.fetchone()
             total_revenue = float(row[0] or 0)
             total_orders = int(row[1] or 0)
             avg_deal_value = float(row[2] or 0)
 
-            # Upsell opportunities count from gold_upsell_opportunities
-            cursor.execute("SELECT COUNT(*) FROM dbo.gold_upsell_opportunities")
+            # Upsell opportunities: high-value customers with recent activity
+            cursor.execute("""
+                SELECT COUNT(DISTINCT CustomerID) 
+                FROM SalesFact 
+                WHERE YEAR(OrderDate) = YEAR(GETDATE()) 
+                  AND TotalAmount > (SELECT AVG(TotalAmount) * 1.5 FROM SalesFact WHERE YEAR(OrderDate) = YEAR(GETDATE()))
+            """)
             total_opportunities = cursor.fetchone()[0] or 0
 
-            # Conversion rate: customers who made repeat purchases
+            # Conversion rate: customers with multiple orders in 2026
             cursor.execute("""
+                WITH CustomerOrders AS (
+                    SELECT CustomerID, COUNT(DISTINCT OrderID) as order_count
+                    FROM SalesFact
+                    WHERE YEAR(OrderDate) = YEAR(GETDATE())
+                    GROUP BY CustomerID
+                )
                 SELECT 
-                    COUNT(CASE WHEN total_orders > 1 THEN 1 END) * 100.0 / NULLIF(COUNT(*), 0)
-                FROM dbo.gold_customer_360
+                    CAST(COUNT(CASE WHEN order_count > 1 THEN 1 END) * 100.0 / NULLIF(COUNT(*), 0) AS DECIMAL(5,2))
+                FROM CustomerOrders
             """)
             conversion_rate = float(cursor.fetchone()[0] or 0)
 
-            # Average sales cycle from customer tenure data
+            # Average sales cycle: days between first and most recent order
             cursor.execute("""
-                SELECT 
-                    AVG(CASE 
-                        WHEN total_orders > 1 AND customer_tenure_days > 0 
-                        THEN customer_tenure_days * 1.0 / total_orders 
-                        ELSE 30 
-                    END) as avg_days_between_orders
-                FROM dbo.gold_customer_360
-                WHERE total_orders > 0
+                WITH CustomerDates AS (
+                    SELECT 
+                        CustomerID,
+                        MIN(OrderDate) as FirstOrder,
+                        MAX(OrderDate) as LastOrder,
+                        COUNT(DISTINCT OrderID) as OrderCount
+                    FROM SalesFact
+                    WHERE YEAR(OrderDate) = YEAR(GETDATE())
+                    GROUP BY CustomerID
+                    HAVING COUNT(DISTINCT OrderID) > 1
+                )
+                SELECT AVG(DATEDIFF(DAY, FirstOrder, LastOrder) * 1.0 / (OrderCount - 1))
+                FROM CustomerDates
             """)
             avg_sales_cycle = float(cursor.fetchone()[0] or 30)
 
@@ -292,7 +301,7 @@ async def get_timeseries_data(
             cursor.execute(query, (days, days))
             rows = cursor.fetchall()
 
-            result = [
+            return [
                 TimeSeriesData(
                     date=row[0].strftime("%Y-%m-%d") if row[0] else "",
                     revenue=float(row[1] or 0),
@@ -301,30 +310,6 @@ async def get_timeseries_data(
                 )
                 for row in rows
             ]
-            
-            # If no data, return mock data for demo purposes
-            if not result:
-                logger.info("No timeseries data in database, returning mock data")
-                
-                base_date = date.today() - timedelta(days=days)
-                result = []
-                base_revenue = 400000
-                base_deals = 35
-                
-                for i in range(days):
-                    current_date = base_date + timedelta(days=i)
-                    # Add some variation to make it look realistic
-                    revenue_variation = random.uniform(0.85, 1.15)
-                    deals_variation = random.randint(-8, 12)
-                    
-                    result.append(TimeSeriesData(
-                        date=current_date.strftime("%Y-%m-%d"),
-                        revenue=base_revenue * revenue_variation,
-                        deals=base_deals + deals_variation,
-                        customers=random.randint(20, 45)
-                    ))
-                
-            return result
 
     except Exception as e:
         logger.error(f"Error fetching timeseries data: {e}")
@@ -467,10 +452,11 @@ async def get_data_quality_metrics(
             ]
 
     except Exception as e:
-        logger.error(f"Error fetching data quality metrics: {e}, using mock data")
-        # Return mock data on error
-        mock_quality = generate_mock_data_quality()
-        return [DataQualityMetrics(**metric) for metric in mock_quality]
+        logger.error(f"Error fetching data quality metrics: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch data quality metrics: {str(e)}",
+        )
 
 
 @router.get("/products", response_model=List[ProductAnalytics])
@@ -489,36 +475,40 @@ async def get_product_analytics(
         with db_conn.get_connection() as conn:
             cursor = conn.cursor()
 
-            # Use actual Products and OrderItems tables
+            # Query ProductDim and SalesFact from Fabric lakehouse for 2026
             query = """
                 SELECT TOP 20
                     p.ProductName as product_name,
-                    ISNULL(SUM(oi.LineTotal), 0) as total_revenue,
-                    ISNULL(SUM(oi.Quantity), 0) as units_sold,
-                    ISNULL(AVG(oi.UnitPrice), 0) as avg_price,
+                    ISNULL(SUM(s.TotalAmount), 0) as total_revenue,
+                    ISNULL(SUM(s.Quantity), 0) as units_sold,
+                    ISNULL(AVG(s.UnitPrice), 0) as avg_price,
                     CASE 
-                        WHEN SUM(oi.Quantity) > 0 
-                        THEN (SUM(oi.LineTotal) * 100.0 / NULLIF((SELECT SUM(LineTotal) FROM dbo.OrderItems), 0))
+                        WHEN SUM(s.Quantity) > 0 
+                        THEN (SUM(s.TotalAmount) * 100.0 / NULLIF((SELECT SUM(TotalAmount) FROM SalesFact WHERE YEAR(OrderDate) = YEAR(GETDATE())), 0))
                         ELSE 0 
                     END as market_share,
-                    0.0 as growth_rate
-                FROM dbo.Products p
-                LEFT JOIN dbo.OrderItems oi ON p.ProductID = oi.ProductID
-                LEFT JOIN dbo.Orders o ON oi.OrderID = o.OrderID
-                WHERE p.IsActive = 1
+                    CASE 
+                        WHEN SUM(CASE WHEN DATEPART(QUARTER, s.OrderDate) = DATEPART(QUARTER, GETDATE()) - 1 THEN s.TotalAmount ELSE 0 END) > 0
+                        THEN ((SUM(CASE WHEN DATEPART(QUARTER, s.OrderDate) = DATEPART(QUARTER, GETDATE()) THEN s.TotalAmount ELSE 0 END) - 
+                               SUM(CASE WHEN DATEPART(QUARTER, s.OrderDate) = DATEPART(QUARTER, GETDATE()) - 1 THEN s.TotalAmount ELSE 0 END)) * 100.0 / 
+                              SUM(CASE WHEN DATEPART(QUARTER, s.OrderDate) = DATEPART(QUARTER, GETDATE()) - 1 THEN s.TotalAmount ELSE 0 END))
+                        ELSE 0
+                    END as growth_rate
+                FROM ProductDim p
+                INNER JOIN SalesFact s ON p.ProductID = s.ProductID
+                WHERE YEAR(s.OrderDate) = YEAR(GETDATE())
                 GROUP BY p.ProductID, p.ProductName
-                HAVING SUM(oi.LineTotal) > 0
-                ORDER BY SUM(oi.LineTotal) DESC
+                HAVING SUM(s.TotalAmount) > 0
+                ORDER BY SUM(s.TotalAmount) DESC
             """
 
             cursor.execute(query)
             rows = cursor.fetchall()
 
-            # If no data from database, use mock data
+            # If no data from database, log error but don't fallback to mock
             if not rows or len(rows) == 0:
-                logger.info("No product data found in database, using mock data")
-                mock_products = generate_mock_products(20)
-                return [ProductAnalytics(**product) for product in mock_products]
+                logger.warning("No product data found in Fabric lakehouse for 2026")
+                return []
 
             return [
                 ProductAnalytics(
@@ -533,10 +523,11 @@ async def get_product_analytics(
             ]
 
     except Exception as e:
-        logger.error(f"Error fetching product analytics: {e}, using mock data")
-        # Return mock data on error
-        mock_products = generate_mock_products(20)
-        return [ProductAnalytics(**product) for product in mock_products]
+        logger.error(f"Error fetching product analytics: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch product analytics: {str(e)}",
+        )
 
 
 @router.get("/customer-segments", response_model=List[CustomerSegment])
@@ -555,7 +546,7 @@ async def get_customer_segments(
         with db_conn.get_connection() as conn:
             cursor = conn.cursor()
 
-            # Create customer segments based on actual data
+            # Create customer segments from Fabric lakehouse data for 2026
             query = """
                 SELECT 
                     CASE 
@@ -571,11 +562,11 @@ async def get_customer_segments(
                 FROM (
                     SELECT 
                         c.CustomerID,
-                        SUM(o.TotalAmount) as CustomerRevenue,
-                        DATEDIFF(DAY, MAX(o.OrderDate), GETDATE()) as DaysSinceLastOrder
-                    FROM dbo.Customers c
-                    LEFT JOIN dbo.Orders o ON c.CustomerID = o.CustomerID
-                    WHERE o.OrderStatus IN ('Shipped', 'Delivered')
+                        SUM(s.TotalAmount) as CustomerRevenue,
+                        DATEDIFF(DAY, MAX(s.OrderDate), GETDATE()) as DaysSinceLastOrder
+                    FROM CustomerDim c
+                    INNER JOIN SalesFact s ON c.CustomerID = s.CustomerID
+                    WHERE YEAR(s.OrderDate) = YEAR(GETDATE())
                     GROUP BY c.CustomerID
                 ) AS CustomerStats
                 GROUP BY CASE 
@@ -590,13 +581,12 @@ async def get_customer_segments(
             cursor.execute(query)
             rows = cursor.fetchall()
 
-            # If no data from database, use mock data
+            # If no data from database, log warning but don't fallback to mock
             if not rows or len(rows) == 0:
-                logger.info(
-                    "No customer segment data found in database, using mock data"
+                logger.warning(
+                    "No customer segment data found in Fabric lakehouse for 2026"
                 )
-                mock_segments = generate_mock_customer_segments()
-                return [CustomerSegment(**segment) for segment in mock_segments]
+                return []
 
             return [
                 CustomerSegment(
@@ -610,10 +600,11 @@ async def get_customer_segments(
             ]
 
     except Exception as e:
-        logger.error(f"Error fetching customer segments: {e}, using mock data")
-        # Return mock data on error
-        mock_segments = generate_mock_customer_segments()
-        return [CustomerSegment(**segment) for segment in mock_segments]
+        logger.error(f"Error fetching customer segments: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch customer segments: {str(e)}",
+        )
 
 
 @router.get("/sales-rep-performance", response_model=List[SalesRepPerformance])
@@ -632,37 +623,36 @@ async def get_sales_rep_performance(
         with db_conn.get_connection() as conn:
             cursor = conn.cursor()
 
-            # Use actual Customers and Orders tables for geographic analysis
+            # Query SalesFact and CustomerDim from Fabric lakehouse for 2026 regional performance
             query = """
                 SELECT TOP 20
-                    ISNULL(c.State, 'Unknown') as rep_name,
-                    COUNT(DISTINCT o.OrderID) as deals_closed,
-                    SUM(o.TotalAmount) as total_revenue,
-                    CAST(COUNT(DISTINCT o.OrderID) * 100.0 / NULLIF(COUNT(DISTINCT c.CustomerID), 0) AS DECIMAL(5,2)) as win_rate,
-                    AVG(o.TotalAmount) as avg_deal_size,
+                    ISNULL(c.Region, 'Unknown Region') as rep_name,
+                    COUNT(DISTINCT s.OrderID) as deals_closed,
+                    SUM(s.TotalAmount) as total_revenue,
+                    CAST(COUNT(DISTINCT s.OrderID) * 100.0 / NULLIF(COUNT(DISTINCT c.CustomerID), 0) AS DECIMAL(5,2)) as win_rate,
+                    AVG(s.TotalAmount) as avg_deal_size,
                     CASE 
-                        WHEN SUM(o.TotalAmount) > 50000 THEN 100.0
-                        WHEN SUM(o.TotalAmount) > 25000 THEN 75.0
-                        WHEN SUM(o.TotalAmount) > 10000 THEN 50.0
+                        WHEN SUM(s.TotalAmount) > 50000 THEN 100.0
+                        WHEN SUM(s.TotalAmount) > 25000 THEN 75.0
+                        WHEN SUM(s.TotalAmount) > 10000 THEN 50.0
                         ELSE 25.0
                     END as quota_attainment
-                FROM dbo.Customers c
-                INNER JOIN dbo.Orders o ON c.CustomerID = o.CustomerID
-                WHERE c.State IS NOT NULL 
-                  AND o.OrderStatus IN ('Shipped', 'Delivered')
-                GROUP BY c.State
-                HAVING SUM(o.TotalAmount) > 0
-                ORDER BY SUM(o.TotalAmount) DESC
+                FROM CustomerDim c
+                INNER JOIN SalesFact s ON c.CustomerID = s.CustomerID
+                WHERE YEAR(s.OrderDate) = YEAR(GETDATE())
+                  AND c.Region IS NOT NULL
+                GROUP BY c.Region
+                HAVING SUM(s.TotalAmount) > 0
+                ORDER BY SUM(s.TotalAmount) DESC
             """
 
             cursor.execute(query)
             rows = cursor.fetchall()
 
-            # If no data from database, use mock data
+            # If no data from database, log warning but don't fallback to mock
             if not rows or len(rows) == 0:
-                logger.info("No sales rep data found in database, using mock data")
-                mock_reps = generate_mock_sales_reps(15)
-                return [SalesRepPerformance(**rep) for rep in mock_reps]
+                logger.warning("No regional sales data found in Fabric lakehouse for 2026")
+                return []
 
             return [
                 SalesRepPerformance(
@@ -677,10 +667,11 @@ async def get_sales_rep_performance(
             ]
 
     except Exception as e:
-        logger.error(f"Error fetching sales rep performance: {e}, using mock data")
-        # Return mock data on error
-        mock_reps = generate_mock_sales_reps(15)
-        return [SalesRepPerformance(**rep) for rep in mock_reps]
+        logger.error(f"Error fetching sales rep performance: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch sales rep performance: {str(e)}",
+        )
 
 
 @router.get("/predictive-insights", response_model=List[PredictiveInsight])
@@ -720,6 +711,29 @@ async def get_predictive_insights(
             growth_rate = (current_revenue - prev_revenue) / max(prev_revenue, 1)
             predicted_revenue = current_revenue * (1 + growth_rate)
 
+            # Deal close rate from gold_sales_performance
+            cursor.execute("""
+                SELECT TOP 1 metric_value
+                FROM dbo.gold_sales_performance
+                WHERE metric_name = 'Conversion Rate'
+            """)
+            close_row = cursor.fetchone()
+            close_rate = float(close_row[0]) if close_row else 0.0
+            close_rate_predicted = round(close_rate * 1.05, 1)
+
+            # Customer acquisition: new customers this month vs last month
+            cursor.execute("""
+                SELECT
+                    SUM(CASE WHEN MONTH(CreatedDate) = MONTH(GETDATE()) AND YEAR(CreatedDate) = YEAR(GETDATE()) THEN 1 ELSE 0 END),
+                    SUM(CASE WHEN MONTH(CreatedDate) = MONTH(DATEADD(MONTH,-1,GETDATE())) AND YEAR(CreatedDate) = YEAR(DATEADD(MONTH,-1,GETDATE())) THEN 1 ELSE 0 END)
+                FROM dbo.CustomerDim
+            """)
+            acq_row = cursor.fetchone()
+            acq_current = float(acq_row[0] or 0)
+            acq_prev = float(acq_row[1] or 0)
+            acq_growth = (acq_current - acq_prev) / max(acq_prev, 1)
+            acq_predicted = round(acq_current * (1 + acq_growth), 1)
+
             insights = [
                 PredictiveInsight(
                     metric="Monthly Revenue",
@@ -734,17 +748,17 @@ async def get_predictive_insights(
                 ),
                 PredictiveInsight(
                     metric="Deal Close Rate",
-                    current_value=35.0,
-                    predicted_value=38.5,
+                    current_value=close_rate,
+                    predicted_value=close_rate_predicted,
                     confidence=0.68,
-                    trend="up",
+                    trend="up" if close_rate > 30 else "stable",
                 ),
                 PredictiveInsight(
                     metric="Customer Acquisition",
-                    current_value=25.0,
-                    predicted_value=28.0,
+                    current_value=acq_current,
+                    predicted_value=acq_predicted,
                     confidence=0.72,
-                    trend="up",
+                    trend="up" if acq_growth > 0 else "down" if acq_growth < 0 else "stable",
                 ),
             ]
 

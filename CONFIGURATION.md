@@ -1,425 +1,252 @@
-# Configuration Guide
+# Configuration Reference
 
-This guide explains how to configure the Azure Intelligent Agent application before deployment.
-
-## Table of Contents
-
-- [Prerequisites](#prerequisites)
-- [Required Configuration](#required-configuration)
-- [Optional Configuration](#optional-configuration)
-- [Configuration Files](#configuration-files)
-- [Security Best Practices](#security-best-practices)
-- [Validation](#validation)
+All Bicep parameters and application environment variables for the Azure Intelligent Agent.
 
 ---
 
-## Prerequisites
+## `bicep/main.bicepparam` — Bicep Parameters
 
-Before configuring the application, ensure you have:
+### General
 
-1. **Azure Subscription** with appropriate permissions
-2. **Azure CLI** installed and authenticated (`az login`)
-3. **Azure OpenAI Service** deployed (or access to an existing instance)
-4. **Azure SQL Database** or **Microsoft Fabric SQL Database** (for data storage)
-5. **Service Principal** (optional, for Fabric/Power BI integration)
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `location` | No | Resource group location | Azure region for all resources |
+| `environment` | No | `prod` | Environment tag (`dev`, `staging`, `prod`) |
+
+> `appName` and `sqlServerName` are **auto-generated** from the resource group ID — do not set them unless you need a custom name prefix.
 
 ---
 
-## Required Configuration
+### Azure OpenAI
 
-### 1. Environment Variables
+| Parameter | Required | Description | Where to find |
+|-----------|----------|-------------|---------------|
+| `azureOpenAIEndpoint` | Yes* | Service endpoint URL | Portal → Azure OpenAI → Keys and Endpoint |
+| `azureOpenAIApiKey` | Yes* | API key | Portal → Azure OpenAI → Keys and Endpoint |
+| `azureOpenAIDeployment` | No (default: `gpt-4o`) | Model deployment name | Portal → Azure OpenAI → Model deployments |
+| `azureOpenAIApiVersion` | No (default: `2024-08-01-preview`) | API version | — |
+| `deployAzureOpenAI` | No (default: `false`) | Deploy a new OpenAI account via Bicep | — |
+| `azureOpenAIModelName` | Only if `deployAzureOpenAI = true` | Model to deploy | — |
+| `azureOpenAIModelVersion` | Only if `deployAzureOpenAI = true` | Model version (e.g. `2024-11-20`) | — |
+| `azureOpenAIModelCapacity` | Only if `deployAzureOpenAI = true` | Tokens per minute (thousands) | — |
 
-Copy the template and create your environment file:
+*Not required when `deployAzureOpenAI = true` — values are generated and injected automatically.
 
-```bash
-# In the app/ directory
-cp .env.template .env
-```
+**Models supported:** `gpt-4o`, `gpt-4o-mini`, `gpt-4`, `gpt-35-turbo`
 
-Or use the comprehensive example:
+---
 
-```bash
-cp .env.example .env
-```
+### Azure AI Foundry
 
-### 2. Azure Resource Names
+| Parameter | Required | Description | Where to find |
+|-----------|----------|-------------|---------------|
+| `projectEndpoint` | No | AI Foundry project endpoint | AI Foundry Portal → Project → Settings → Endpoint |
+| `connectionName` | No (default: `aoai-connection`) | Azure OpenAI connection name | AI Foundry Portal → Project → Connections |
+| `modelDeploymentName` | No (default: `gpt-4o`) | Model deployment name used by agents | — |
+| `deployAIFoundry` | No (default: `false`) | Deploy AI Foundry hub/project via Bicep (preview) | — |
 
-Resource names such as `appName` and `sqlServerName` are **auto-generated** from your resource group ID — no manual editing required.
+> AI Foundry **agents** cannot be deployed via Bicep — they must be created manually in the portal (see [docs/QUICK_START.md — Phase 3](docs/QUICK_START.md#phase-3--configure-ai-services)).
 
-- `appName` → `agent<8-char-unique-hash>` (e.g. `agent3f8a1b2c`)
-- `sqlServerName` → `<appName>-sql` (e.g. `agent3f8a1b2c-sql`)
+---
 
-**Optional override** — only needed if you want a custom name:
+### Microsoft Fabric
+
+| Parameter | Required | Description | Where to find |
+|-----------|----------|-------------|---------------|
+| `fabricWorkspaceId` | No | Workspace GUID | Fabric portal → Workspace → Settings → Properties |
+| `fabricOrchestratorAgentId` | No | Main routing agent ID | Fabric → Data Science → Agents |
+| `fabricSalesAgentId` | No | Sales specialist agent ID | Fabric → Data Science → Agents |
+| `fabricRealtimeAgentId` | No | Operations/real-time agent ID | Fabric → Data Science → Agents |
+| `fabricDocumentAgentId` | No | Document processing agent ID | Fabric → Data Science → Agents |
+| `fabricPowerBiAgentId` | No | Power BI query agent ID | Fabric → Data Science → Agents |
+| `fabricChartAgentId` | No | Chart generation agent ID | Fabric → Data Science → Agents |
+
+Agent ID format: `asst_xxxxxxxxxxxxxxxxxxxxx`
+
+Microsoft Fabric cannot be deployed via Bicep. See [docs/FABRIC_DEPLOYMENT.md](docs/FABRIC_DEPLOYMENT.md) for manual setup steps.
+
+---
+
+### Power BI
+
+| Parameter | Required | Description | Where to find |
+|-----------|----------|-------------|---------------|
+| `powerbiWorkspaceId` | No | Workspace GUID | Power BI → Workspace → Settings |
+| `powerbiReportId` | No | Report GUID to embed | Power BI → Report URL |
+| `powerbiClientId` | No | Service principal client ID | Azure AD → App Registrations → Application ID |
+| `powerbiTenantId` | No | Azure AD tenant ID | Azure Portal → Azure AD → Properties → Tenant ID |
+| `powerbiClientSecret` | No | Service principal secret | Azure AD → App Registrations → Certificates & secrets |
+
+For service principal setup instructions see [docs/QUICK_START.md](docs/QUICK_START.md) or the [Power BI Embedded docs](https://learn.microsoft.com/power-bi/developer/embedded/).
+
+---
+
+### SQL Database
+
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `sqlDatabaseName` | No | `aiagentsdb` | Database name |
+| `sqlDatabaseSku` | No | `Basic` | Pricing tier (`Basic` ~$5/mo, `S0` ~$15/mo, `S2` ~$120/mo, `P1` ~$465/mo) |
+| `sqlUseAzureAuth` | No | `true` | Use managed identity auth (recommended) |
+| `sqlAzureAdAdminLogin` | **Yes** | — | Azure AD admin UPN — `az ad signed-in-user show --query userPrincipalName -o tsv` |
+| `sqlAzureAdAdminSid` | **Yes** | — | Azure AD admin object ID — `az ad signed-in-user show --query id -o tsv` |
+| `sqlAdminUsername` | Only if `sqlUseAzureAuth = false` | `sqladmin` | SQL login username |
+| `sqlAdminPassword` | Only if `sqlUseAzureAuth = false` | — | SQL login password |
+
+> ⚠️ `sqlAzureAdAdminLogin` and `sqlAzureAdAdminSid` **cannot be empty**. Azure Policy blocks deployment if the inline `administrators` block is missing from the SQL server resource.
+
+> The App Service managed identity is granted database access (`CREATE USER ... FROM EXTERNAL PROVIDER`) **automatically on first startup** — no manual SQL step required. If auto-grant fails, see Phase 5 of [docs/QUICK_START.md](docs/QUICK_START.md#phase-5--sql-access) for the fallback manual steps.
+
+---
+
+### Authentication & Security
+
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `enableAuthentication` | No | `true` | Enable JWT auth and Row-Level Security |
+| `jwtSecretKey` | No | **Auto-generated** | JWT signing secret — Bicep generates `uniqueString(...)` if left blank; stored in Key Vault automatically |
+| `jwtAlgorithm` | No | `HS256` | JWT algorithm (`HS256`, `HS384`, `HS512`) |
+| `jwtExpirationMinutes` | No | `43200` (30 days) | Token lifetime (60=1h, 1440=1d, 10080=7d) |
+
+To use your own secret instead of the auto-generated one: `param jwtSecretKey = '<openssl rand -base64 32>'`
+
+---
+
+### Infrastructure
+
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `appServicePlanSku` | No | `B2` | App Service tier (`B1`=1c/1.75GB ~$13, `B2`=2c/3.5GB ~$26, `P1v2`=1c/3.5GB ~$145) |
+| `enableVnetIntegration` | No | `true` | Deploy VNet + private endpoint for SQL (required in policy-enforced subscriptions) |
+| `enableApplicationInsights` | No | `true` | Deploy Application Insights |
+| `enableKeyVault` | No | `true` | Deploy Key Vault for secrets management |
+| `enableContainerRegistry` | No | `false` | Deploy Azure Container Registry |
+
+---
+
+### Application Settings
+
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `logLevel` | No | `INFO` | Log level: `DEBUG`, `INFO`, `WARNING`, `ERROR` |
+| `enableTracing` | No | `true` | Enable OpenTelemetry distributed tracing |
+| `appPort` | No | `8000` | Internal application port |
+
+---
+
+## Environment Variables (App Service Settings)
+
+These are set in Azure App Service → Configuration → Application settings. For local development, set them in `app/.env`.
+
+Set via CLI:
 
 ```powershell
-# PowerShell (azd)
-azd env set AZURE_APP_NAME "myagent-app"
-# Then uncomment and set param appName in bicep/main.bicepparam
+az webapp config appsettings set --name <app-name> -g <rg-name> --settings KEY=VALUE
 ```
 
-Only `AZURE_RESOURCE_GROUP` is still required:
+### Core (Required for chat to work)
 
-```powershell
-$env:AZURE_RESOURCE_GROUP = "rg-myagent-prod"
-```
+| Variable | Description |
+|----------|-------------|
+| `AZURE_OPENAI_ENDPOINT` | Azure OpenAI endpoint URL |
+| `AZURE_OPENAI_DEPLOYMENT` | Model deployment name (e.g. `gpt-4o`) |
+| `AZURE_OPENAI_API_VERSION` | API version (e.g. `2024-08-01-preview`) |
+| `JWT_SECRET` | JWT signing key |
+| `SQL_SERVER` | SQL server FQDN (e.g. `myserver.database.windows.net`) |
+| `SQL_DATABASE` | Database name |
 
-### 3. Azure OpenAI Configuration
+### Optional
 
-In your `.env` file, configure Azure OpenAI:
-
-```env
-AZURE_OPENAI_ENDPOINT=https://your-openai-resource.openai.azure.com/
-AZURE_OPENAI_DEPLOYMENT=gpt-4o  # Your model deployment name
-AZURE_OPENAI_API_VERSION=2024-08-01-preview
-```
-
-**Where to find these values:**
-- Portal: Azure OpenAI Service → Keys and Endpoint
-- Deployment name: Azure OpenAI Service → Model deployments
-
-### 4. Database Configuration
-
-Configure your SQL database connection:
-
-```env
-SQL_SERVER=your-server.database.windows.net
-SQL_DATABASE=your-database-name
-SQL_USE_AZURE_AUTH=true  # Recommended: Use Azure AD authentication
-SQL_USERNAME=  # Leave empty if using Azure AD
-SQL_PASSWORD=  # Leave empty if using Azure AD
-```
-
-**For Azure SQL:**
-- Portal: SQL Database → Connection strings
-- Recommended: Use Azure AD authentication (no username/password)
-
-**For Microsoft Fabric SQL:**
-- Fabric portal: Workspace → SQL analytics endpoint
-- Format: `xyz-abc123.datawarehouse.fabric.microsoft.com`
-
-### 5. JWT Secret
-
-Generate a secure random string for JWT token signing:
-
-```bash
-# Python
-python -c "import secrets; print(secrets.token_urlsafe(32))"
-
-# PowerShell
--join ((65..90) + (97..122) + (48..57) | Get-Random -Count 32 | ForEach-Object {[char]$_})
-```
-
-Add to `.env`:
-
-```env
-JWT_SECRET=your-generated-secure-random-string
-```
+| Variable | Description |
+|----------|-------------|
+| `ENABLE_AUTHENTICATION` | `true` / `false` (default `true`) |
+| `SQL_USE_AZURE_AUTH` | `true` to use managed identity (recommended) |
+| `PROJECT_ENDPOINT` | Azure AI Foundry project endpoint |
+| `PROJECT_CONNECTION_STRING` | AI Foundry project connection string (preferred over `PROJECT_ENDPOINT`) |
+| `USE_FOUNDRY_AGENTS` | `true` to route chat through Azure AI Foundry agents (default `false`) |
+| `FABRIC_WORKSPACE_ID` | Fabric workspace GUID |
+| `FABRIC_ORCHESTRATOR_AGENT_ID` | Orchestrator agent ID (`asst_...`) |
+| `FABRIC_SALES_AGENT_ID` | Sales agent ID |
+| `FABRIC_REALTIME_AGENT_ID` | Operations/real-time agent ID |
+| `POWERBI_WORKSPACE_ID` | Power BI workspace GUID |
+| `POWERBI_REPORT_ID` | Power BI report GUID |
+| `POWERBI_CLIENT_ID` | Service principal client ID |
+| `POWERBI_CLIENT_SECRET` | Service principal secret |
+| `POWERBI_TENANT_ID` | Azure AD tenant ID |
+| `LOG_LEVEL` | `DEBUG`, `INFO`, `WARNING`, `ERROR` |
+| `WEBSITES_CONTAINER_START_TIME_LIMIT` | `1800` — increase container start timeout |
 
 ---
 
-## Optional Configuration
+## Network Architecture
 
-### Azure AI Foundry (Optional)
+Azure Policy requires SQL servers to have `publicNetworkAccess` disabled. This template satisfies that requirement with a private network topology:
 
-If using Azure AI Foundry native agents:
-
-```env
-PROJECT_ENDPOINT=https://your-project.api.azureml.ms
-PROJECT_CONNECTION_STRING=your-connection-string
-MODEL_DEPLOYMENT_NAME=gpt-4o
+```
+Azure Virtual Network (10.100.0.0/16)
+├── appservice-subnet (10.100.1.0/24)    ← App Service outbound VNet integration
+└── private-endpoint-subnet (10.100.2.0/24)
+        └── SQL Private Endpoint
+                ↕  private IP, no public internet
+            Azure SQL Server (publicNetworkAccess: Disabled)
 ```
 
-**Where to find:**
-- Azure AI Foundry portal → Project → Settings → Connection string
+All four components are deployed together when `enableVnetIntegration = true`:
 
-### Microsoft Fabric Integration (Optional)
+| Resource | Purpose |
+|----------|---------|
+| Virtual Network | Isolates SQL from the internet |
+| App Service VNet Integration | Routes App Service outbound traffic through the VNet |
+| SQL Private Endpoint | Assigns SQL a private IP inside the VNet |
+| Private DNS Zone | Resolves `*.database.windows.net` to the private IP |
 
-If integrating with Microsoft Fabric agents:
-
-```env
-FABRIC_WORKSPACE_ID=your-workspace-id
-FABRIC_ORCHESTRATOR_AGENT_ID=your-agent-id
-# ... other Fabric agent IDs
-```
-
-**Where to find:**
-- Fabric portal → Workspace → Settings → Workspace ID
-- Fabric portal → Agent → Settings → Agent ID
-
-### Power BI Embedding (Optional)
-
-If embedding Power BI reports:
-
-1. **Create Service Principal:**
-   ```bash
-   az ad sp create-for-rbac --name "myagent-powerbi-sp"
-   ```
-
-2. **Grant Power BI permissions:**
-   - Power BI Admin portal → Tenant settings
-   - Enable "Service principals can use Power BI APIs"
-   - Add your service principal to the enabled list
-
-3. **Configure in `.env`:**
-   ```env
-   POWERBI_WORKSPACE_ID=your-workspace-id
-   POWERBI_REPORT_ID=your-report-id
-   POWERBI_CLIENT_ID=your-sp-client-id
-   POWERBI_CLIENT_SECRET=your-sp-secret
-   POWERBI_TENANT_ID=your-tenant-id
-   ```
-
-### Fabric SQL Analytics (Optional)
-
-If querying Fabric lakehouse data:
-
-```env
-FABRIC_SQL_SERVER=xyz-abc123.datawarehouse.fabric.microsoft.com
-FABRIC_SQL_DATABASE=MyLakehouse
-FABRIC_CLIENT_ID=your-sp-client-id
-FABRIC_CLIENT_SECRET=your-sp-secret
-FABRIC_SQL_USE_AZURE_AUTH=true
-```
+> Set `enableVnetIntegration = false` only in sandbox subscriptions without Azure Policy enforcement.
 
 ---
 
-## Configuration Files
+## Security Checklist
 
-### `.env` Files
-
-- **`.env`**: Your actual configuration (NEVER commit to git)
-- **`.env.template`**: Basic template with minimal required variables
-- **`.env.example`**: Comprehensive example with all variables and comments
-
-### Bicep Parameter Files
-
-For Infrastructure as Code deployment:
-
-1. **Copy template:**
-   ```bash
-   cp bicep/main.bicepparam.template bicep/main.bicepparam
-   ```
-
-2. **Edit `bicep/main.bicepparam`** — only set external service credentials:
-   ```bicep
-   using './main.bicep'
-   
-   // appName and sqlServerName are AUTO-GENERATED — no need to set them
-   // Only set external service values:
-   param azureOpenAIEndpoint = 'https://your-openai.openai.azure.com/'
-   param azureOpenAIApiKey   = '<your-api-key>'
-   param projectEndpoint     = '<your-ai-foundry-endpoint>'
-   // ... Fabric, Power BI, SQL AD admin params
-   ```
-
-3. **NEVER commit `*.bicepparam` files** - they contain secrets!
-
-### Azure Developer CLI
-
-For `azd` deployment, configure in `.azure/`:
-
-```bash
-# Initialize azd
-azd init
-
-# Configure environment
-azd env set AZURE_OPENAI_ENDPOINT "https://your-openai.openai.azure.com/"
-azd env set SQL_SERVER "your-server.database.windows.net"
-```
+- [ ] `bicep/main.bicepparam` is in `.gitignore` — never commit secrets
+- [ ] `app/.env` is in `.gitignore`
+- [ ] JWT secret is a randomly generated 32+ character string
+- [ ] `sqlUseAzureAuth = true` — SQL uses managed identity, no passwords
+- [ ] `enableAuthentication = true` for all non-demo environments
+- [ ] Key Vault enabled (`enableKeyVault = true`) for production
+- [ ] Rotate JWT secret every 90 days
+- [ ] Rotate Power BI service principal secret every 6 months
 
 ---
 
-## Security Best Practices
+## Example Parameter Files
 
-### 1. Never Commit Secrets
+### Minimal development
 
-Ensure `.gitignore` includes:
-```
-.env
-.env.local
-.env.*.local
-*.bicepparam
-local.settings.json
-```
+```bicep
+using './main.bicep'
 
-### 2. Use Azure Key Vault (Recommended for Production)
-
-Instead of environment variables, store secrets in Key Vault:
-
-```bash
-# Store secrets in Key Vault
-az keyvault secret set --vault-name your-keyvault --name "JwtSecret" --value "your-secret"
-az keyvault secret set --vault-name your-keyvault --name "SqlPassword" --value "your-password"
+param azureOpenAIEndpoint  = 'https://your-openai.openai.azure.com/'
+param azureOpenAIApiKey    = '<key>'
+param sqlAzureAdAdminLogin = 'dev@yourcompany.com'
+param sqlAzureAdAdminSid   = '<object-id>'
+param appServicePlanSku    = 'B1'
+param sqlDatabaseSku       = 'Basic'
+param enableAuthentication = false
+param logLevel             = 'DEBUG'
 ```
 
-Update App Service to reference Key Vault:
+### Production
 
-```bash
-az webapp config appsettings set --name your-app --resource-group your-rg \
-  --settings JWT_SECRET="@Microsoft.KeyVault(SecretUri=https://your-keyvault.vault.azure.net/secrets/JwtSecret/)"
+```bicep
+using './main.bicep'
+
+param azureOpenAIEndpoint  = 'https://your-openai.openai.azure.com/'
+param azureOpenAIApiKey    = '<key>'
+param sqlAzureAdAdminLogin = 'admin@yourcompany.com'
+param sqlAzureAdAdminSid   = '<object-id>'
+param appServicePlanSku    = 'P1v2'
+param sqlDatabaseSku       = 'S2'
+param enableAuthentication = true
+param enableKeyVault       = true
+param sqlUseAzureAuth      = true
+param logLevel             = 'INFO'
 ```
-
-### 3. Use Managed Identity
-
-Enable managed identity for your App Service:
-
-```bash
-az webapp identity assign --name your-app --resource-group your-rg
-```
-
-Grant permissions to access resources (SQL, Key Vault, etc.) without passwords.
-
-### 4. Rotate Secrets Regularly
-
-- Generate new JWT secrets every 90 days
-- Rotate service principal secrets every 6 months
-- Use Azure Key Vault automatic rotation when possible
-
----
-
-## Validation
-
-### Validate Configuration File
-
-```python
-# Run from app/ directory
-python -c "
-from dotenv import load_dotenv
-import os
-
-load_dotenv()
-
-required = ['AZURE_OPENAI_ENDPOINT', 'AZURE_OPENAI_DEPLOYMENT', 'SQL_SERVER', 'SQL_DATABASE', 'JWT_SECRET']
-missing = [var for var in required if not os.getenv(var)]
-
-if missing:
-    print(f'❌ Missing required variables: {missing}')
-    exit(1)
-else:
-    print('✅ All required variables configured')
-"
-```
-
-### Test Database Connection
-
-```python
-# Run from app/ directory
-python -c "
-import pyodbc
-from dotenv import load_dotenv
-import os
-
-load_dotenv()
-
-server = os.getenv('SQL_SERVER')
-database = os.getenv('SQL_DATABASE')
-
-conn_str = f'Driver={{ODBC Driver 18 for SQL Server}};Server={server};Database={database};Encrypt=yes;TrustServerCertificate=no;Connection Timeout=30;'
-
-if os.getenv('SQL_USE_AZURE_AUTH') == 'true':
-    conn_str += 'Authentication=ActiveDirectoryDefault;'
-else:
-    conn_str += f'UID={os.getenv(\"SQL_USERNAME\")};PWD={os.getenv(\"SQL_PASSWORD\")};'
-
-try:
-    conn = pyodbc.connect(conn_str)
-    print('✅ Database connection successful')
-    conn.close()
-except Exception as e:
-    print(f'❌ Database connection failed: {e}')
-"
-```
-
-### Test Azure OpenAI Connection
-
-```python
-# Run from app/ directory
-python -c "
-from openai import AzureOpenAI
-from dotenv import load_dotenv
-import os
-
-load_dotenv()
-
-client = AzureOpenAI(
-    api_version=os.getenv('AZURE_OPENAI_API_VERSION'),
-    azure_endpoint=os.getenv('AZURE_OPENAI_ENDPOINT')
-)
-
-try:
-    response = client.chat.completions.create(
-        model=os.getenv('AZURE_OPENAI_DEPLOYMENT'),
-        messages=[{'role': 'user', 'content': 'Hello'}],
-        max_tokens=10
-    )
-    print('✅ Azure OpenAI connection successful')
-except Exception as e:
-    print(f'❌ Azure OpenAI connection failed: {e}')
-"
-```
-
----
-
-## Next Steps
-
-After configuration:
-
-1. **Local Testing:** Run the application locally to verify configuration
-   ```bash
-   cd app
-   python main.py
-   ```
-
-2. **Deploy to Azure:** Use your preferred deployment method
-   ```bash
-   # Azure Developer CLI
-   azd up
-   
-   # PowerShell script
-   .\deploy.ps1
-   ```
-
-3. **Verify Deployment:** Check the deployed application
-   ```bash
-   curl https://your-app.azurewebsites.net/health
-   ```
-
----
-
-## Troubleshooting
-
-### Configuration Not Loading
-
-**Problem:** Application can't read configuration
-
-**Solution:**
-1. Verify `.env` file exists in `app/` directory
-2. Check file permissions (should be readable)
-3. Ensure no syntax errors (no spaces around `=`)
-
-### Authentication Failures
-
-**Problem:** Can't authenticate to Azure resources
-
-**Solution:**
-1. Verify credentials are correct
-2. Check service principal has required permissions
-3. For Azure AD auth, ensure managed identity is configured
-4. Run `az login` to refresh Azure CLI authentication
-
-### Database Connection Errors
-
-**Problem:** Can't connect to SQL database
-
-**Solution:**
-1. Verify SQL Server firewall allows your IP
-2. Check if Azure services can access server
-3. Confirm connection string format is correct
-4. For Azure AD auth, verify managed identity has SQL permissions
-
----
-
-For more help, see:
-- [Deployment Guide](DEPLOYMENT.md)
-- [Azure Developer CLI Guide](docs/AZD_DEPLOYMENT_GUIDE.md)
-- [Troubleshooting Guide](docs/TROUBLESHOOTING.md)

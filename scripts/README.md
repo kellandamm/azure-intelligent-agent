@@ -145,7 +145,7 @@ Before running any deployment script:
    ```
 
 3. **Parameters file configured**
-   - Copy `bicep/main.bicepparam.template` → `bicep/main.bicepparam`
+   - Create `bicep/main.bicepparam` from the sample in [docs/QUICK_START.md](../docs/QUICK_START.md)
    - Update all `<REPLACE_WITH_*>` placeholders
 
 4. **Application code available** (for first deployment)
@@ -193,7 +193,7 @@ azure-deployment-template/
    - Python application files
    - Dependencies installed from requirements.txt
    - Environment variables configured
-   - Startup command: `gunicorn main:app`
+   - Startup command: `bash startup.sh`
 
 ---
 
@@ -321,8 +321,8 @@ Or run manually:
 
 - Main README: [`../README.md`](../README.md)
 - Quick Start Guide: [`../docs/QUICK_START.md`](../docs/QUICK_START.md)
-- Parameters Reference: [`../docs/PARAMETERS.md`](../docs/PARAMETERS.md)
-- Azure Services Guide: [`../docs/AZURE_SERVICES_DEPLOYMENT.md`](../docs/AZURE_SERVICES_DEPLOYMENT.md)
+- Configuration Reference: [`../CONFIGURATION.md`](../CONFIGURATION.md)
+- Deployment Guide: [`../docs/QUICK_START.md`](../docs/QUICK_START.md)
 
 ---
 

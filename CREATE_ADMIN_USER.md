@@ -6,9 +6,10 @@ For security reasons, the default admin user with password `Admin@123` has been 
 
 ## Prerequisites
 
-1. Database schema deployed (`auth_schema.sql`)
-2. Application running with authentication enabled
-3. Access to the application API
+1. Python 3.11+ installed (`python --version`)
+2. Database schema deployed (`auth_schema.sql`)
+3. Application running with authentication enabled
+4. Access to the application API
 
 ---
 
@@ -21,7 +22,7 @@ import requests
 import bcrypt
 
 # Configuration
-API_URL = "http://localhost:8080"  # Change to your deployment URL
+API_URL = "http://localhost:8000"  # Change to your deployment URL
 ADMIN_USERNAME = "admin"
 ADMIN_EMAIL = "admin@yourcompany.com"
 ADMIN_PASSWORD = "YourSecurePassword123!"  # Change this!
@@ -295,7 +296,7 @@ After creating the admin user, test authentication:
 
 ```bash
 # Test login
-curl -X POST http://localhost:8080/api/auth/login \
+curl -X POST http://localhost:8000/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{
     "username": "youradmin",

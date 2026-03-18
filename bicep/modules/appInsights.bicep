@@ -32,6 +32,9 @@ param applicationType string = 'web'
 ])
 param ingestionMode string = 'ApplicationInsights'
 
+@description('Log Analytics workspace resource ID. When provided, ingestionMode is automatically set to LogAnalytics for workspace-based App Insights (recommended by MCSB).')
+param logAnalyticsWorkspaceId string = ''
+
 // ========================================
 // Resources
 // ========================================
@@ -44,7 +47,9 @@ resource applicationInsights 'Microsoft.Insights/components@2020-02-02' = {
   properties: {
     Application_Type: applicationType
     RetentionInDays: retentionInDays
-    IngestionMode: ingestionMode
+    // Use workspace-based mode when a Log Analytics workspace is provided (required by MCSB)
+    IngestionMode: empty(logAnalyticsWorkspaceId) ? ingestionMode : 'LogAnalytics'
+    WorkspaceResourceId: empty(logAnalyticsWorkspaceId) ? null : logAnalyticsWorkspaceId
     publicNetworkAccessForIngestion: 'Enabled'
     publicNetworkAccessForQuery: 'Enabled'
   }

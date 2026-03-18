@@ -42,98 +42,68 @@ class FabricDataTools:
         user_region: Optional[str] = None
         if user_context:
             user_region = user_context.get("region")
-            
-            # DEBUG: Log what we received
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.info(f"🔍 RLS FILTER - user_region: {user_region}, user_context keys: {list(user_context.keys())}")
 
         # --- Query Fabric Gold Lakehouse directly -------------------------
         sales_by_region: Dict[str, Dict[str, Any]] = {}
 
-        settings = Settings()
-        conn_str = settings.fabric_connection_string
-
-        db = DatabaseConnection(
-            connection_string=conn_str,
-            use_access_token=settings.fabric_sql_use_azure_auth,
-            client_id=settings.fabric_client_id,
-            client_secret=settings.fabric_client_secret,
-            tenant_id=settings.fabric_tenant_id,
-        )
-
-        # Use Gold Lakehouse geographic sales as the source for
-        # regional sales aggregation. We treat "region" as State.
-        #
-        # time_period mapping:
-        #   - "last_month": latest month in gold_sales_time_series
-        #   - "last_quarter": latest quarter
-        #   - "last_year": latest year
-        #   - "ytd": current year
-
-        period_query = (
-            "SELECT MAX(year) AS year, MAX(quarter) AS quarter, MAX(month) AS month "
-            "FROM dbo.gold_sales_time_series"
-        )
-        period_row = db.execute_query(period_query, fetch=True)
-        year = quarter = month = None
-        if period_row:
-            year = int(period_row[0].get("year") or 0)
-            quarter = int(period_row[0].get("quarter") or 0)
-            month = int(period_row[0].get("month") or 0)
-
-        # Build WHERE clause based on requested time_period
-        where_clause = []
-        params: list[Any] = []
-
-        if time_period == "last_month" and year and month:
-            where_clause.append("year = ? AND month = ?")
-            params.extend([year, month])
-        elif time_period == "last_quarter" and year and quarter:
-            where_clause.append("year = ? AND quarter = ?")
-            params.extend([year, quarter])
-        elif time_period in ("last_year", "ytd") and year:
-            where_clause.append("year = ?")
-            params.append(year)
-
-        # RLS by region (State)
-        if user_region:
-            where_clause.append("LOWER(State) = LOWER(?)")
-            params.append(user_region)
-
-        where_sql = ""
-        if where_clause:
-            where_sql = " WHERE " + " AND ".join(where_clause)
-
-        base_query = (
-            "SELECT State AS region, "
-            "       SUM(total_revenue) AS total_revenue, "
-            "       SUM(total_orders) AS total_units, "
-            "       AVG(avg_order_value) AS avg_order_value "
-            "FROM dbo.gold_geographic_sales" + where_sql + " GROUP BY State"
-        )
-
-        rows = (
-            db.execute_query(base_query, params=tuple(params) or None, fetch=True) or []
-        )
-
-        # Build region map from rows to match existing structure
-        for row in rows:
-            key = str(row.get("region", "")).lower()
-            if not key:
-                continue
-            sales_by_region[key] = {
-                "time_period": time_period,
-                "total_revenue": float(row.get("total_revenue", 0) or 0),
-                "total_units": int(row.get("total_units", 0) or 0),
-                "avg_order_value": float(row.get("avg_order_value", 0) or 0),
-                # NOTE: "top_products" is not derived here in the fast
-                # path. You can extend the SQL or add a secondary query
-                # to populate it from your schema.
-                "top_products": [],
-                "region": row.get("region"),
-                "growth_rate": float(row.get("growth_rate", 0) or 0),
-            }
+        try:
+            settings = Settings()
+            conn_str = settings.fabric_connection_string
+            db = DatabaseConnection(
+                connection_string=conn_str,
+                use_access_token=settings.fabric_sql_use_azure_auth,
+                client_id=settings.fabric_client_id,
+                client_secret=settings.fabric_client_secret,
+                tenant_id=settings.fabric_tenant_id,
+            )
+            period_query = (
+                "SELECT MAX(year) AS year, MAX(quarter) AS quarter, MAX(month) AS month "
+                "FROM dbo.gold_sales_time_series"
+            )
+            period_row = db.execute_query(period_query, fetch=True)
+            year = quarter = month = None
+            if period_row:
+                year = int(period_row[0].get("year") or 0)
+                quarter = int(period_row[0].get("quarter") or 0)
+                month = int(period_row[0].get("month") or 0)
+            where_clause = []
+            params: list[Any] = []
+            if time_period == "last_month" and year and month:
+                where_clause.append("year = ? AND month = ?")
+                params.extend([year, month])
+            elif time_period == "last_quarter" and year and quarter:
+                where_clause.append("year = ? AND quarter = ?")
+                params.extend([year, quarter])
+            elif time_period in ("last_year", "ytd") and year:
+                where_clause.append("year = ?")
+                params.append(year)
+            if user_region:
+                where_clause.append("LOWER(State) = LOWER(?)")
+                params.append(user_region)
+            where_sql = (" WHERE " + " AND ".join(where_clause)) if where_clause else ""
+            base_query = (
+                "SELECT State AS region, "
+                "       SUM(total_revenue) AS total_revenue, "
+                "       SUM(total_orders) AS total_units, "
+                "       AVG(avg_order_value) AS avg_order_value "
+                "FROM dbo.gold_geographic_sales" + where_sql + " GROUP BY State"
+            )
+            rows = db.execute_query(base_query, params=tuple(params) or None, fetch=True) or []
+            for row in rows:
+                key = str(row.get("region", "")).lower()
+                if not key:
+                    continue
+                sales_by_region[key] = {
+                    "time_period": time_period,
+                    "total_revenue": float(row.get("total_revenue", 0) or 0),
+                    "total_units": int(row.get("total_units", 0) or 0),
+                    "avg_order_value": float(row.get("avg_order_value", 0) or 0),
+                    "top_products": [],
+                    "region": row.get("region"),
+                    "growth_rate": float(row.get("growth_rate", 0) or 0),
+                }
+        except Exception:
+            pass  # sales_by_region stays empty; falls through to the zero-result return
 
         # If we successfully got at least one region from the DB,
         # compute the response from that.
@@ -198,59 +168,43 @@ class FabricDataTools:
         if user_context:
             user_region = user_context.get("region")
 
-        # --- Query Fabric Gold Lakehouse directly -------------------------
-        settings = Settings()
-        conn_str = settings.fabric_connection_string
-
-        db = DatabaseConnection(
-            connection_string=conn_str,
-            use_access_token=settings.fabric_sql_use_azure_auth,
-            client_id=settings.fabric_client_id,
-            client_secret=settings.fabric_client_secret,
-            tenant_id=settings.fabric_tenant_id,
-        )
-
-        # Example schema assumption: aggregated customer demographics by region
-        base_query = (
-            "SELECT State AS region, "
-            "       customer_segment, "
-            "       COUNT(*) AS total_customers "
-            "FROM dbo.gold_customer_360 "
-            "WHERE (? IS NULL OR customer_segment = ?) "
-        )
-        params: list[Any] = [segment, segment]
-
-        if user_region:
-            base_query += " AND LOWER(State) = LOWER(?)"
-            params.append(user_region)
-
-        base_query += " GROUP BY State, customer_segment"
-
-        rows = db.execute_query(base_query, params=tuple(params), fetch=True) or []
-
-        regional_data: Dict[str, Dict[str, Any]] = {}
-        for row in rows:
-            key = str(row.get("region", "")).lower()
-            if not key:
-                continue
-            total_customers = int(row.get("total_customers", 0) or 0)
-            regional_data[key] = {
-                "total_customers": total_customers,
-                "segment": row.get("customer_segment") or segment or "all",
-                "region": row.get("region"),
-                # We don't have age buckets in this table; these can be
-                # refined later if an age column is added.
-                "age_distribution": {
-                    "18-25": 0,
-                    "26-35": 0,
-                    "36-45": 0,
-                    "46-55": 0,
-                    "55+": 0,
-                },
-                "geographic_distribution": {
-                    row.get("region", "Unknown"): 100.0,
-                },
-            }
+        try:
+            settings = Settings()
+            conn_str = settings.fabric_connection_string
+            db = DatabaseConnection(
+                connection_string=conn_str,
+                use_access_token=settings.fabric_sql_use_azure_auth,
+                client_id=settings.fabric_client_id,
+                client_secret=settings.fabric_client_secret,
+                tenant_id=settings.fabric_tenant_id,
+            )
+            base_query = (
+                "SELECT State AS region, "
+                "       customer_segment, "
+                "       COUNT(*) AS total_customers "
+                "FROM dbo.gold_customer_360 "
+                "WHERE (? IS NULL OR customer_segment = ?) "
+            )
+            params: list[Any] = [segment, segment]
+            if user_region:
+                base_query += " AND LOWER(State) = LOWER(?)"
+                params.append(user_region)
+            base_query += " GROUP BY State, customer_segment"
+            rows = db.execute_query(base_query, params=tuple(params), fetch=True) or []
+            for row in rows:
+                key = str(row.get("region", "")).lower()
+                if not key:
+                    continue
+                total_customers = int(row.get("total_customers", 0) or 0)
+                regional_data[key] = {
+                    "total_customers": total_customers,
+                    "segment": row.get("customer_segment") or segment or "all",
+                    "region": row.get("region"),
+                    "age_distribution": {"18-25": 0, "26-35": 0, "36-45": 0, "46-55": 0, "55+": 0},
+                    "geographic_distribution": {row.get("region", "Unknown"): 100.0},
+                }
+        except Exception:
+            pass  # regional_data stays empty; falls through to the zero-result return
 
         if regional_data:
             if user_region:
@@ -313,48 +267,43 @@ class FabricDataTools:
             user_region = user_context.get("region")
 
         # --- Query Fabric Gold Lakehouse directly -------------------------
-        settings = Settings()
-        conn_str = settings.fabric_connection_string
-
-        db = DatabaseConnection(
-            connection_string=conn_str,
-            use_access_token=settings.fabric_sql_use_azure_auth,
-            client_id=settings.fabric_client_id,
-            client_secret=settings.fabric_client_secret,
-            tenant_id=settings.fabric_tenant_id,
-        )
-
-        base_query = (
-            "SELECT CategoryName AS category, "
-            "       COUNT(*) AS total_sku_count, "
-            "       SUM(CASE WHEN stock_status = 'In Stock' THEN 1 ELSE 0 END) AS in_stock, "
-            "       SUM(CASE WHEN stock_status = 'Low Stock' THEN 1 ELSE 0 END) AS low_stock, "
-            "       SUM(CASE WHEN stock_status = 'Out of Stock' THEN 1 ELSE 0 END) AS out_of_stock "
-            "FROM dbo.gold_inventory_analysis "
-            "WHERE (? IS NULL OR CategoryName = ?) "
-        )
-        params: list[Any] = [product_category, product_category]
-
-        base_query += " GROUP BY CategoryName"
-
-        rows = db.execute_query(base_query, params=tuple(params), fetch=True) or []
-
-        # Note: gold_inventory_analysis is not region-specific; we
-        # treat this as global inventory. RLS by region is a no-op
-        # here unless a region dimension is added later.
         regional_inventory: Dict[str, Dict[str, Any]] = {}
-        for row in rows:
-            key = "global"
-            regional_inventory[key] = {
-                "category": row.get("category") or product_category or "all",
-                "region": "Global",
-                "total_sku_count": int(row.get("total_sku_count", 0) or 0),
-                "in_stock": int(row.get("in_stock", 0) or 0),
-                "low_stock": int(row.get("low_stock", 0) or 0),
-                "out_of_stock": int(row.get("out_of_stock", 0) or 0),
-                "avg_stock_days": 0.0,
-                "reorder_alerts": [],
-            }
+        try:
+            settings = Settings()
+            conn_str = settings.fabric_connection_string
+            db = DatabaseConnection(
+                connection_string=conn_str,
+                use_access_token=settings.fabric_sql_use_azure_auth,
+                client_id=settings.fabric_client_id,
+                client_secret=settings.fabric_client_secret,
+                tenant_id=settings.fabric_tenant_id,
+            )
+            base_query = (
+                "SELECT CategoryName AS category, "
+                "       COUNT(*) AS total_sku_count, "
+                "       SUM(CASE WHEN stock_status = 'In Stock' THEN 1 ELSE 0 END) AS in_stock, "
+                "       SUM(CASE WHEN stock_status = 'Low Stock' THEN 1 ELSE 0 END) AS low_stock, "
+                "       SUM(CASE WHEN stock_status = 'Out of Stock' THEN 1 ELSE 0 END) AS out_of_stock "
+                "FROM dbo.gold_inventory_analysis "
+                "WHERE (? IS NULL OR CategoryName = ?) "
+            )
+            params: list[Any] = [product_category, product_category]
+            base_query += " GROUP BY CategoryName"
+            rows = db.execute_query(base_query, params=tuple(params), fetch=True) or []
+            for row in rows:
+                key = "global"
+                regional_inventory[key] = {
+                    "category": row.get("category") or product_category or "all",
+                    "region": "Global",
+                    "total_sku_count": int(row.get("total_sku_count", 0) or 0),
+                    "in_stock": int(row.get("in_stock", 0) or 0),
+                    "low_stock": int(row.get("low_stock", 0) or 0),
+                    "out_of_stock": int(row.get("out_of_stock", 0) or 0),
+                    "avg_stock_days": 0.0,
+                    "reorder_alerts": [],
+                }
+        except Exception:
+            pass  # regional_inventory stays empty; falls through to the zero-result return
 
         if regional_inventory:
             # Region filter is currently a no-op for global inventory
@@ -417,83 +366,69 @@ class FabricDataTools:
             user_region = user_context.get("region")
 
         # --- Query Fabric Gold Lakehouse directly -------------------------
-        settings = Settings()
-        conn_str = settings.fabric_connection_string
-
-        db = DatabaseConnection(
-            connection_string=conn_str,
-            use_access_token=settings.fabric_sql_use_azure_auth,
-            client_id=settings.fabric_client_id,
-            client_secret=settings.fabric_client_secret,
-            tenant_id=settings.fabric_tenant_id,
-        )
-
-        # Map metric_type to specific metrics from Gold tables.
-        metrics_map = {
-            "sales": [
-                "Total Revenue",
-                "Conversion Rate",
-                "Average Deal Size",
-                "Win Rate",
-            ],
-            "operations": [
-                "Avg Days to Ship",
-            ],
-            "customer_service": [
-                "Avg Resolution Time",
-                "Total Tickets",
-            ],
-        }
-
-        metrics = metrics_map.get(metric_type, [])
         results: Dict[str, float] = {}
-
-        if metric_type == "sales" and metrics:
-            sales_query = (
-                "SELECT metric, actual_value "
-                "FROM dbo.gold_sales_performance "
-                "WHERE metric IN (" + ",".join("?" for _ in metrics) + ")"
+        try:
+            settings = Settings()
+            conn_str = settings.fabric_connection_string
+            db = DatabaseConnection(
+                connection_string=conn_str,
+                use_access_token=settings.fabric_sql_use_azure_auth,
+                client_id=settings.fabric_client_id,
+                client_secret=settings.fabric_client_secret,
+                tenant_id=settings.fabric_tenant_id,
             )
-            rows = (
-                db.execute_query(sales_query, params=tuple(metrics), fetch=True) or []
-            )
-            for row in rows:
-                name = str(row.get("metric", "")).lower()
-                value = float(row.get("actual_value", 0) or 0)
-                if "conversion" in name:
-                    results["conversion_rate"] = value
-                elif "average deal" in name:
-                    results["avg_deal_size"] = value
-                elif "win rate" in name:
-                    results["win_rate"] = value
-                elif "revenue" in name:
-                    results.setdefault("revenue", value)
-
-        elif metric_type == "operations":
-            ship_query = (
-                "SELECT AVG(avg_days_to_ship) AS avg_days_to_ship "
-                "FROM dbo.gold_shipping_performance"
-            )
-            rows = db.execute_query(ship_query, fetch=True) or []
-            if rows:
-                results["order_fulfillment_time"] = float(
-                    rows[0].get("avg_days_to_ship", 0) or 0
+            metrics_map = {
+                "sales": ["Total Revenue", "Conversion Rate", "Average Deal Size", "Win Rate"],
+                "operations": ["Avg Days to Ship"],
+                "customer_service": ["Avg Resolution Time", "Total Tickets"],
+            }
+            metrics = metrics_map.get(metric_type, [])
+            if metric_type == "sales" and metrics:
+                sales_query = (
+                    "SELECT metric, actual_value "
+                    "FROM dbo.gold_sales_performance "
+                    "WHERE metric IN (" + ",".join("?" for _ in metrics) + ")"
                 )
-
-        elif metric_type == "customer_service":
-            support_query = (
-                "SELECT "
-                "  AVG(avg_resolution_time) AS avg_resolution_time, "
-                "  SUM(total_tickets) AS total_tickets "
-                "FROM dbo.gold_support_metrics"
-            )
-            rows = db.execute_query(support_query, fetch=True) or []
-            if rows:
-                results["avg_response_time_minutes"] = float(
-                    rows[0].get("avg_resolution_time", 0) or 0
+                rows = (
+                    db.execute_query(sales_query, params=tuple(metrics), fetch=True) or []
                 )
-                results["resolution_rate"] = 0.0
-                results["csat_score"] = 0.0
+                for row in rows:
+                    name = str(row.get("metric", "")).lower()
+                    value = float(row.get("actual_value", 0) or 0)
+                    if "conversion" in name:
+                        results["conversion_rate"] = value
+                    elif "average deal" in name:
+                        results["avg_deal_size"] = value
+                    elif "win rate" in name:
+                        results["win_rate"] = value
+                    elif "revenue" in name:
+                        results.setdefault("revenue", value)
+            elif metric_type == "operations":
+                ship_query = (
+                    "SELECT AVG(avg_days_to_ship) AS avg_days_to_ship "
+                    "FROM dbo.gold_shipping_performance"
+                )
+                rows = db.execute_query(ship_query, fetch=True) or []
+                if rows:
+                    results["order_fulfillment_time"] = float(
+                        rows[0].get("avg_days_to_ship", 0) or 0
+                    )
+            elif metric_type == "customer_service":
+                support_query = (
+                    "SELECT "
+                    "  AVG(avg_resolution_time) AS avg_resolution_time, "
+                    "  SUM(total_tickets) AS total_tickets "
+                    "FROM dbo.gold_support_metrics"
+                )
+                rows = db.execute_query(support_query, fetch=True) or []
+                if rows:
+                    results["avg_response_time_minutes"] = float(
+                        rows[0].get("avg_resolution_time", 0) or 0
+                    )
+                    results["resolution_rate"] = 0.0
+                    results["csat_score"] = 0.0
+        except Exception:
+            pass  # results stays empty; falls through to the zero-result return
 
         if results:
             return results
@@ -735,46 +670,7 @@ class WeatherTools:
         return {"location": location, "forecast_days": days, "forecasts": forecasts}
 
 
-# Tool definitions for Local Sales Tools with RLS Support
-SALES_TOOLS = [
-    {
-        "type": "function",
-        "function": {
-            "name": "get_sales_summary",
-            "description": "Get sales summary and metrics for a specified time period with Row-Level Security (RLS) filtering based on user permissions",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "time_period": {
-                        "type": "string",
-                        "description": "Time period to analyze (e.g., 'last_quarter', 'last_month', 'ytd')",
-                        "enum": ["last_quarter", "last_month", "last_year", "ytd"],
-                    }
-                },
-                "required": [],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_customer_demographics",
-            "description": "Get customer demographic information with RLS filtering",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "segment": {
-                        "type": "string",
-                        "description": "Optional customer segment to filter by",
-                    }
-                },
-                "required": [],
-            },
-        },
-    },
-]
-
-# Tool definitions for Azure AI Agents (Fabric - No RLS)
+# Tool definitions for Azure AI Agents
 FABRIC_TOOLS = [
     {
         "type": "function",

@@ -243,6 +243,26 @@
             background: #005a9e;
         }
         
+        .quick-question-btn {
+            background: rgba(255, 255, 255, 0.9);
+            color: #0078d4;
+            border: 1px solid rgba(0, 120, 212, 0.3);
+            padding: 6px 12px;
+            border-radius: 15px;
+            cursor: pointer;
+            font-size: 11px;
+            font-weight: 600;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+        
+        .quick-question-btn:hover {
+            background: #0078d4;
+            color: white;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 4px rgba(0, 120, 212, 0.3);
+        }
+        
         .filters {
             margin-top: 20px;
         }
@@ -541,13 +561,30 @@
                         <span class="ai-icon">🤖</span>
                         AI Shopping Assistant
                     </h3>
-                    <p style="font-size: 14px; margin-bottom: 15px;">
-                        Ask me anything about products!
+                    <p style="font-size: 13px; margin-bottom: 12px; color: #666;">
+                        Ask about orders, returns, products, or get help!
                     </p>
+                    
+                    <!-- Quick action buttons -->
+                    <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px;">
+                        <button class="quick-question-btn" onclick="document.getElementById('agentInput').value='How do I reset my password?'; askAgent();">
+                            🔐 Reset Password
+                        </button>
+                        <button class="quick-question-btn" onclick="document.getElementById('agentInput').value='What is your return policy?'; askAgent();">
+                            📦 Return Policy
+                        </button>
+                        <button class="quick-question-btn" onclick="document.getElementById('agentInput').value='Track my order'; askAgent();">
+                            📍 Track Order
+                        </button>
+                        <button class="quick-question-btn" onclick="document.getElementById('agentInput').value='What payment methods do you accept?'; askAgent();">
+                            💳 Payment Info
+                        </button>
+                    </div>
+                    
                     <input 
                         type="text" 
                         id="agentInput" 
-                        placeholder="e.g., Show me laptops under $1000"
+                        placeholder="e.g., How do I return an item?"
                         onkeypress="if(event.key==='Enter') askAgent()"
                     />
                     <button class="btn" onclick="askAgent()">Ask AI</button>
@@ -843,7 +880,7 @@
             loadProducts();
         }
         
-        // AI Agent
+        // AI Agent - Updated to use enhanced Customer Support agent
         async function askAgent() {
             const input = document.getElementById('agentInput');
             const query = input.value.trim();
@@ -851,35 +888,67 @@
             if (!query) return;
             
             const responseDiv = document.getElementById('agentResponse');
-            responseDiv.innerHTML = '<div class="agent-response loading">AI is thinking...</div>';
+            responseDiv.innerHTML = '<div class="agent-response loading">🤔 AI is thinking...</div>';
             
             try {
-                const response = await fetch('/api/ecommerce/agent/search', {
+                // Get auth token
+                const token = localStorage.getItem('auth_token') || sessionStorage.getItem('auth_token');
+                const headers = { 'Content-Type': 'application/json' };
+                if (token) {
+                    headers['Authorization'] = `Bearer ${token}`;
+                }
+                
+                // Use the main chat endpoint with support agent
+                const response = await fetch('/api/chat', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ query })
+                    headers: headers,
+                    credentials: 'include',
+                    body: JSON.stringify({ 
+                        message: query,
+                        agent_type: 'support' // Use enhanced support agent
+                    })
                 });
+                
+                if (!response.ok) {
+                    if (response.status === 401) {
+                        window.location.href = '/login';
+                        return;
+                    }
+                    throw new Error('HTTP error! status: ' + response.status);
+                }
                 
                 const result = await response.json();
                 
+                // Display the agent's response with markdown support
                 responseDiv.innerHTML = `
                     <div class="agent-response">
-                        <strong>AI Assistant:</strong><br/>
-                        ${result.response}
-                        ${result.products && result.products.length > 0 ? 
-                            '<div style="margin-top: 10px;"><strong>Found Products:</strong></div>' : ''}
+                        <div style="margin-bottom: 8px;">
+                            <span style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 4px 12px; border-radius: 12px; font-size: 0.8em; font-weight: 600;">
+                                Customer Support
+                            </span>
+                        </div>
+                        <div style="line-height: 1.6;">${formatResponse(result.response)}</div>
                     </div>
                 `;
-                
-                if (result.products && result.products.length > 0) {
-                    displayProducts(result.products);
-                }
                 
                 input.value = '';
             } catch (error) {
                 console.error('Error asking agent:', error);
-                responseDiv.innerHTML = '<div class="agent-response">Sorry, I had trouble processing that.</div>';
+                responseDiv.innerHTML = '<div class="agent-response">❌ Sorry, I had trouble processing that. Please try again.</div>';
             }
+        }
+        
+        // Helper function to format response (basic markdown support)
+        function formatResponse(text) {
+            // Convert markdown to HTML (basic support)
+            let formatted = text
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // Bold
+                .replace(/\*(.*?)\*/g, '<em>$1</em>') // Italic
+                .replace(/\n\n/g, '</p><p>') // Paragraphs
+                .replace(/\n- /g, '<br/>• ') // List items
+                .replace(/\n(\d+)\. /g, '<br/>$1. '); // Numbered lists
+            
+            return '<p>' + formatted + '</p>';
         }
         
         // Cart functions
