@@ -1,137 +1,166 @@
-# Azure AI Foundry + MCP Server Deployment
+# Azure AI Foundry Agents — App Service Deployment Guide
 
-> **Alternative architecture.** This deploys the application to **Azure Container Apps** instead of Azure App Service. Use this path if you want native Azure AI Foundry agents with a dedicated MCP (Model Context Protocol) server for centralized function calling. If you just need to connect Foundry agent IDs to an App Service deployment, use the `set-agent-ids.ps1` script from [QUICK_START.md](QUICK_START.md) instead.
+Explains how to activate the Azure AI Foundry agent backend on the standard **App Service** deployment.
+By default the app uses a code-based agent loop (`AgentFrameworkManager`). Setting `USE_FOUNDRY_AGENTS=true` switches all chat traffic to pre-created Foundry agents without any code change.
 
 ---
 
-## Architecture
+## How the two backends compare
 
-```
-Browser / API clients
-        │
-        ▼
-Azure Container Apps — Main App (FastAPI)
-        │
-        ├── Azure AI Foundry (agents via AIProjectClient)
-        │
-        └── MCP Server (Container App, internal only)
-             ├── POST /tools/sales/query
-             ├── POST /tools/deals/detail
-             ├── POST /tools/fabric/query
-             └── POST /tools/user/scope
-```
+| | Code-based (default) | Azure AI Foundry |
+|---|---|---|
+| System prompts | Defined in `agent_framework_manager.py` | Defined in AI Foundry portal per agent |
+| Thread state | In-memory (lost on restart) | Server-side (persists across restarts) |
+| Tool routing | Local Python functions in `agent_tools.py` | Foundry tool calls or MCP server |
+| Requires Foundry project | No | Yes |
+| Feature flag | `USE_FOUNDRY_AGENTS=false` (default) | `USE_FOUNDRY_AGENTS=true` |
 
-**Key files:**
-
-| File | Purpose |
-|------|---------|
-| `app/app/azure_foundry_agent_manager.py` | Azure AI Foundry agent client |
-| `app/mcp_server_app.py` | MCP server — exposes tool endpoints to agents |
-| `app/Dockerfile.mcp` | Container image for MCP server |
-| `bicep/main-foundry-mcp.bicep` | Infrastructure template (Container Apps) |
+The `/api/chat` endpoint, authentication, RLS, and the entire UI are **identical on both paths**.
 
 ---
 
 ## Prerequisites
 
-- Azure AI Foundry project with agents created at [ai.azure.com](https://ai.azure.com)
-- Existing Azure Container Apps environment and Container Registry
-  _(or set `createNewEnvironment = true` in `main-foundry-mcp.bicep` to create new ones — ~$80/month vs ~$30/month reusing existing)_
-- `azd` CLI installed
+- App Service deployment complete (see [QUICK_START.md](QUICK_START.md))
+- Azure AI Foundry project created ([ai.azure.com](https://ai.azure.com))
+- Your managed identity (or service principal) has the **Azure AI Developer** role on the Foundry project
 
 ---
 
-## Deploy
+## Step 1 — Create agents in the AI Foundry portal
 
-**1. Create agents in Azure AI Foundry portal**
+1. Open [https://ai.azure.com](https://ai.azure.com) and select your project
+2. Go to **Agents** → **+ New agent** and create one agent for each role:
 
-Navigate to [ai.azure.com](https://ai.azure.com) → your project → Agents → + New agent. Create one per required role and copy each agent ID (`asst_xxx...`).
+| Agent name (suggested) | Role |
+|---|---|
+| `RetailAssistantOrchestrator` | Orchestrator — routes to specialists |
+| `SalesAssistant` | Revenue, top products, sales trends |
+| `OperationsAssistant` | Real-time metrics, system health |
+| `AnalyticsAssistant` | KPI analysis, business intelligence |
+| `FinancialAdvisor` | ROI, forecasting, profitability |
+| `CustomerSupportAssistant` | Support and troubleshooting |
+| `CustomerSuccessAgent` | Retention, satisfaction, growth |
+| `OperationsExcellenceAgent` | Process efficiency and optimisation |
 
-**2. Configure the azd environment**
-
-```powershell
-azd env new production
-azd env set AZURE_LOCATION eastus2
-azd env set PROJECT_ENDPOINT            "<your-foundry-endpoint>"
-azd env set PROJECT_CONNECTION_STRING   "<your-connection-string>"
-
-# Agent IDs
-azd env set FABRIC_ORCHESTRATOR_AGENT_ID    "asst_..."
-azd env set FABRIC_SALES_AGENT_ID           "asst_..."
-azd env set FABRIC_REALTIME_AGENT_ID        "asst_..."
-azd env set FABRIC_ANALYTICS_AGENT_ID       "asst_..."
-azd env set FABRIC_FINANCIAL_AGENT_ID       "asst_..."
-azd env set FABRIC_SUPPORT_AGENT_ID         "asst_..."
-azd env set FABRIC_OPERATIONS_AGENT_ID      "asst_..."
-```
-
-**3. Deploy**
-
-```powershell
-azd up
-```
+3. For each agent, configure the system prompt in the **Instructions** field (see the role descriptions above)
+4. Copy each agent's **ID** (format: `asst_xxx...`)
+5. Copy the **Project connection string** from **Project** → **Settings** → **Connection string**
 
 ---
 
-## Configuration reference
+## Step 2 — Apply IDs and activate the Foundry backend
 
-All can be set as Azure App Settings or in `.env`:
+Run the helper script — it prompts for all IDs, stores them as App Settings, and sets `USE_FOUNDRY_AGENTS=true` automatically:
 
-```env
-# Azure AI Foundry
-PROJECT_ENDPOINT=https://your-project.services.ai.azure.com/api/projects/your-project
-PROJECT_CONNECTION_STRING=<your-connection-string>
-
-# MCP Server (defaults — override only if needed)
-ENABLE_MCP=true
-MCP_SERVER_HOST=mcp-server
-MCP_SERVER_PORT=3000
+```powershell
+.\scripts\set-agent-ids.ps1 `
+    -ResourceGroupName "rg-myagents-prod" `
+    -AppName "<app-name>" `
+    -ProjectConnectionString "<connection-string>" `
+    -OrchestratorAgentId "asst_..." `
+    -SalesAgentId "asst_..." `
+    -RealtimeAgentId "asst_..." `
+    -AnalyticsAgentId "asst_..." `
+    -FinancialAgentId "asst_..." `
+    -SupportAgentId "asst_..." `
+    -CustomerSuccessAgentId "asst_..." `
+    -OperationsExcellenceAgentId "asst_..."
 ```
 
-The MCP server defaults (`host=localhost`, `port=3000`, `enable_mcp=true`) work out of the box in the Container Apps environment where the MCP server is registered as an internal service named `mcp-server`.
+The script applies all settings and restarts the app automatically. Run it interactively (omit the flags) to be prompted for each value.
+
+### What gets set in App Settings
+
+| Setting | Value |
+|---|---|
+| `PROJECT_CONNECTION_STRING` | Foundry project connection string |
+| `PROJECT_ENDPOINT` | Foundry project endpoint (alternative to connection string) |
+| `FABRIC_ORCHESTRATOR_AGENT_ID` | Orchestrator `asst_xxx` ID |
+| `FABRIC_SALES_AGENT_ID` | Sales agent ID |
+| `FABRIC_REALTIME_AGENT_ID` | Operations / real-time agent ID |
+| `FABRIC_ANALYTICS_AGENT_ID` | Analytics agent ID |
+| `FABRIC_FINANCIAL_AGENT_ID` | Financial agent ID |
+| `FABRIC_SUPPORT_AGENT_ID` | Support agent ID |
+| `FABRIC_CUSTOMER_SUCCESS_AGENT_ID` | Customer success agent ID |
+| `FABRIC_OPERATIONS_EXCELLENCE_AGENT_ID` | Operations excellence agent ID |
+| `USE_FOUNDRY_AGENTS` | `true` — activates the Foundry backend |
 
 ---
 
-## Verify the deployment
+## Step 3 — Grant the managed identity access
 
-Check the MCP server is responding:
+The App Service managed identity must be able to call the Foundry project APIs.
+
+In the Foundry workspace → **Access control (IAM)** → **+ Add role assignment**:
+- Role: **Azure AI Developer**
+- Assign access to: **Managed Identity**
+- Select the App Service's managed identity
+
+---
+
+## Step 4 — Verify
+
+Check the App Service startup log:
 
 ```powershell
-# Get the main app URL from the deployment output, then:
-curl https://<app-url>/health
+az webapp log tail --name <app-name> --resource-group rg-myagents-prod
+```
 
-# MCP server is internal-only — test via the app's agent call
-# or tail Container App logs:
-azd logs
-azd logs mcp-server
+Look for:
+```
+🤖 Agent backend: Azure AI Foundry
+```
+
+Make a chat request from the UI or via API:
+
+```bash
+curl -X POST https://<app-url>/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Show me total revenue", "agent_type": "orchestrator"}'
+```
+
+If the response is returned successfully, the Foundry backend is active.
+
+---
+
+## Rollback
+
+Revert to the code-based backend instantly — no data loss, no code change:
+
+```powershell
+az webapp config appsettings set `
+  --name <app-name> --resource-group rg-myagents-prod `
+  --settings USE_FOUNDRY_AGENTS=false
+az webapp restart --name <app-name> --resource-group rg-myagents-prod
 ```
 
 ---
 
 ## Troubleshooting
 
-**MCP server not responding**
+| Issue | Fix |
+|---|---|
+| `RuntimeError: USE_FOUNDRY_AGENTS=true but ... failed to initialise` | `PROJECT_CONNECTION_STRING` or `PROJECT_ENDPOINT` is missing or malformed. Verify in App Settings. |
+| `Login failed` / 401 from Foundry | The managed identity is missing the **Azure AI Developer** role on the Foundry project. |
+| Agent returns empty response | Check the agent ID in App Settings matches the `asst_xxx` ID shown in the Foundry portal. |
+| App crashes on startup | Check `az webapp log tail`. If `AzureAIFoundryAgentManager unavailable` appears, fall back to `USE_FOUNDRY_AGENTS=false` and investigate the error. |
+| Threads don't persist after restart (code-based path) | Expected — the code-based backend stores threads in memory. Use the Foundry backend for persistent thread state. |
 
-```powershell
-# Check container is running
-az containerapp show -n mcp-server -g <rg-name> --query "properties.runningStatus"
+---
 
-# Tail logs
-azd logs mcp-server
-```
+## Key files
 
-Common causes: incorrect `MCP_SERVER_HOST` (must match the Container App name), or the MCP container failed to start (check for missing env vars).
+| File | Purpose |
+|---|---|
+| `app/app/azure_foundry_agent_manager.py` | Foundry agent client (`AzureAIFoundryAgentManager`) |
+| `app/app/config.py` | `use_foundry_agents` feature flag field |
+| `app/main.py` | Conditional backend import at startup |
+| `app/mcp_server_app.py` | MCP server — exposes tool endpoints |
+| `scripts/set-agent-ids.ps1` | Helper to apply agent IDs + activate Foundry |
 
-**Agents not working**
+---
 
-- Verify agent IDs — copy from AI Foundry portal → Agents → select agent → ID field
-- Confirm `PROJECT_CONNECTION_STRING` is set (required for `AIProjectClient` to authenticate)
-- Ensure the managed identity has `Azure AI Developer` role on the AI Foundry project
+## Container Apps alternative
 
-**Container App won't start**
-
-```powershell
-az containerapp logs show -n <app-name> -g <rg-name> --follow
-```
-
-Check that the Container Registry is accessible and the image was pushed successfully during `azd up`.
+If you need the MCP server running as a separate container alongside the main app (for advanced scenarios), a Container Apps deployment template exists. This is a non-standard path — most deployments use App Service. See the `bicep/` directory for infrastructure templates if you need this path.

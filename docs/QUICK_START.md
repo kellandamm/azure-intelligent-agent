@@ -11,7 +11,7 @@ Have these ready before starting:
 - [ ] **Azure CLI** installed and logged in (`az login`)
 - [ ] **Python 3.11+** installed
 - [ ] **Azure subscription** with Contributor access to a resource group
-- [ ] **Microsoft Foundry** resource with a GPT-5.X model deployed
+- [ ] **Azure OpenAI** resource with a GPT-4o model deployed
   - _Or set `deployAzureOpenAI = true` in parameters to deploy one as part of the Bicep template_
 - [ ] Your **Azure AD UPN**: `az ad signed-in-user show --query userPrincipalName -o tsv`
 - [ ] Your **Azure AD object ID**: `az ad signed-in-user show --query id -o tsv`
@@ -156,18 +156,47 @@ az keyvault secret show \
 ### Azure AI Foundry agents
 
 AI Foundry agents cannot be provisioned via Bicep — they must be created in the AI Foundry portal.
+By default the app uses the **code-based agent backend** (no Foundry required). Follow Stage A + B below to switch to the Foundry backend.
+
+#### Stage A — Create agents and store their IDs
 
 1. Open [https://ai.azure.com](https://ai.azure.com) and navigate to your project
 2. Go to **Agents** → **+ New agent**
-3. Create one agent for each role: Orchestrator, Sales, Operations, Analytics, Financial, Support
-4. Copy each agent ID (`asst_xxx...`)
+3. Create one agent for each role: Orchestrator, Sales, Operations, Analytics, Financial, Support, Customer Success, Operations Excellence
+4. Copy each agent ID (`asst_xxx...`) and the **Project connection string** from **Project** → **Settings** → **Connection string**
 5. Run the helper script — it prompts for each ID and applies them all in one step:
 
 ```powershell
 .\scripts\set-agent-ids.ps1 -ResourceGroupName "rg-myagents-prod" -AppName "<app-name>"
 ```
 
-The script sets all App Settings and restarts the app automatically. Re-run it at any time to add or update IDs.
+The script sets all App Settings, automatically sets `USE_FOUNDRY_AGENTS=true`, and restarts the app. Re-run at any time to add or update IDs.
+
+#### Stage B — Activate the Foundry backend
+
+The script above sets `USE_FOUNDRY_AGENTS=true` automatically when at least one agent ID is provided. If you need to toggle it manually:
+
+```powershell
+# Enable Foundry backend
+az webapp config appsettings set `
+  --name <app-name> --resource-group rg-myagents-prod `
+  --settings USE_FOUNDRY_AGENTS=true
+az webapp restart --name <app-name> --resource-group rg-myagents-prod
+
+# Revert to code-based backend at any time (no data loss)
+az webapp config appsettings set `
+  --name <app-name> --resource-group rg-myagents-prod `
+  --settings USE_FOUNDRY_AGENTS=false
+az webapp restart --name <app-name> --resource-group rg-myagents-prod
+```
+
+Confirm the active backend in the startup log:
+```
+🤖 Agent backend: Azure AI Foundry        ← Foundry path active
+🤖 Agent backend: AgentFramework (code-based)  ← default path
+```
+
+> **Note:** without `USE_FOUNDRY_AGENTS=true` the agent IDs are stored but the app continues using the code-based backend. All chat endpoints, auth logic, and UI remain identical regardless of which backend is active.
 
 ### Power BI service principal _(optional)_
 
@@ -223,24 +252,25 @@ param enableAuthentication = false
 
 ### Assign Managed Identity for Webapp to Azure OpenAI Resource
 
-### Get the App Service principal ID
-$principalId = az webapp identity show \
-  
-  --name <app-name> \
-  --resource-group <resource-group> \
+```powershell
+# Get the App Service principal ID
+$principalId = az webapp identity show `
+  --name <app-name> `
+  --resource-group <resource-group> `
   --query principalId -o tsv
 
-### Get the OpenAI resource ID
-$openaiId = az cognitiveservices account show \
-  --name <your-openai-resource-name> \
-  --resource-group <resource-group> \
+# Get the OpenAI resource ID
+$openaiId = az cognitiveservices account show `
+  --name <your-openai-resource-name> `
+  --resource-group <resource-group> `
   --query id -o tsv
 
-### Assign Cognitive Services OpenAI User role
-az role assignment create \
-  --assignee $principalId \
-  --role "Cognitive Services OpenAI User" \
+# Assign Cognitive Services OpenAI User role
+az role assignment create `
+  --assignee $principalId `
+  --role "Cognitive Services OpenAI User" `
   --scope $openaiId
+```
 
 
 
@@ -249,11 +279,14 @@ az role assignment create \
 With authentication on, you need an initial admin account. See [CREATE_ADMIN_USER.md](../CREATE_ADMIN_USER.md) for full options.
 
 In your terminal:
-pip install bcrypt
-Copy the command below and change YourPassword123! to your own password
-py -c "import bcrypt; print(bcrypt.hashpw(b'YourPassword123!', bcrypt.gensalt()).decode())"
 
-Copy the output and copy it too: <bcrypt-hash> in the SQL query below
+```bash
+pip install bcrypt
+# Change 'YourPassword123!' to your own password
+py -c "import bcrypt; print(bcrypt.hashpw(b'YourPassword123!', bcrypt.gensalt()).decode())"
+```
+
+Copy the hash output and paste it in place of `<bcrypt-hash>` in the SQL query below
 
 Quick path via Azure Portal → SQL Database → Query Editor:
 

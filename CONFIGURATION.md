@@ -162,6 +162,8 @@ az webapp config appsettings set --name <app-name> -g <rg-name> --settings KEY=V
 | `ENABLE_AUTHENTICATION` | `true` / `false` (default `true`) |
 | `SQL_USE_AZURE_AUTH` | `true` to use managed identity (recommended) |
 | `PROJECT_ENDPOINT` | Azure AI Foundry project endpoint |
+| `PROJECT_CONNECTION_STRING` | AI Foundry project connection string (preferred over `PROJECT_ENDPOINT`) |
+| `USE_FOUNDRY_AGENTS` | `true` to route chat through Azure AI Foundry agents (default `false`) |
 | `FABRIC_WORKSPACE_ID` | Fabric workspace GUID |
 | `FABRIC_ORCHESTRATOR_AGENT_ID` | Orchestrator agent ID (`asst_...`) |
 | `FABRIC_SALES_AGENT_ID` | Sales agent ID |

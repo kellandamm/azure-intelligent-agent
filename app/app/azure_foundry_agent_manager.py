@@ -334,36 +334,36 @@ class AzureAIFoundryAgentManager:
                     role="user",
                     content=message
                 )
-                
+
                 # Run the agent
                 run = await asyncio.to_thread(
                     self.client.agents.create_and_process_run,
                     thread_id=actual_thread_id,
                     agent_id=agent_id
                 )
-                
-            if run.status == "failed":
-                logger.error(f"❌ Agent run failed: {run.last_error}")
-                # Detect content-filter failures reported via run.last_error
-                last_error = run.last_error or {}
-                error_code = getattr(last_error, 'code', None) or (last_error.get('code') if isinstance(last_error, dict) else None) or ""
-                if error_code in _CONTENT_FILTER_CODES or any(kw in str(last_error).lower() for kw in ("content_filter", "responsibleaipolicy")):
-                    logger.warning(f"⚠️ Content safety filter triggered for thread={actual_thread_id}")
-                    return ChatResult(
-                        response=_content_safety_message(),
-                        thread_id=actual_thread_id,
-                        agent_id=agent_id,
-                        run_id=run.id,
-                        metadata={"content_filtered": True, "agent_type": normalized_type}
-                    )
-                raise RuntimeError(f"Agent run failed: {run.last_error}")
-                
+
+                if run.status == "failed":
+                    logger.error(f"❌ Agent run failed: {run.last_error}")
+                    # Detect content-filter failures reported via run.last_error
+                    last_error = run.last_error or {}
+                    error_code = getattr(last_error, 'code', None) or (last_error.get('code') if isinstance(last_error, dict) else None) or ""
+                    if error_code in _CONTENT_FILTER_CODES or any(kw in str(last_error).lower() for kw in ("content_filter", "responsibleaipolicy")):
+                        logger.warning(f"⚠️ Content safety filter triggered for thread={actual_thread_id}")
+                        return ChatResult(
+                            response=_content_safety_message(),
+                            thread_id=actual_thread_id,
+                            agent_id=agent_id,
+                            run_id=run.id,
+                            metadata={"content_filtered": True, "agent_type": normalized_type}
+                        )
+                    raise RuntimeError(f"Agent run failed: {run.last_error}")
+
                 # Get the response messages
                 messages = await asyncio.to_thread(
                     self.client.agents.list_messages,
                     thread_id=actual_thread_id
                 )
-                
+
                 # Extract the latest assistant response
                 response_text = ""
                 for msg in messages.data:
@@ -374,9 +374,9 @@ class AzureAIFoundryAgentManager:
                                 break
                         if response_text:
                             break
-                
+
                 logger.info(f"✅ Chat complete - Response: {response_text[:200]}")
-                
+
                 return ChatResult(
                     response=response_text,
                     thread_id=actual_thread_id,
@@ -409,5 +409,9 @@ class AzureAIFoundryAgentManager:
         logger.info("🧹 Cleaned up Azure AI Foundry Agent Manager resources")
 
 
-# Global instance
-agent_framework_manager = AzureAIFoundryAgentManager()
+# Global instance — guarded so import succeeds even without PROJECT_ENDPOINT configured
+try:
+    foundry_agent_manager = AzureAIFoundryAgentManager()
+except Exception as _e:
+    logger.warning("AzureAIFoundryAgentManager unavailable: %s", _e)
+    foundry_agent_manager = None

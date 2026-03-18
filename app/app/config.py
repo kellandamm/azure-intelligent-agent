@@ -57,7 +57,10 @@ class Settings(BaseSettings):
     app_port: int = 8080
     log_level: str = "INFO"
     enable_tracing: bool = True
-    
+
+    # Agent backend selection
+    use_foundry_agents: bool = False  # Set USE_FOUNDRY_AGENTS=true to route chat through Azure AI Foundry
+
     # MCP Server Configuration
     mcp_server_host: str = "localhost"
     mcp_server_port: int = 3000

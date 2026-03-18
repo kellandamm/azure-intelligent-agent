@@ -40,6 +40,15 @@
 .PARAMETER SupportAgentId
     Customer support agent ID.
 
+.PARAMETER CustomerSuccessAgentId
+    Customer success specialist agent ID.
+
+.PARAMETER OperationsExcellenceAgentId
+    Operations excellence specialist agent ID.
+
+.PARAMETER ProjectConnectionString
+    Azure AI Foundry project connection string (preferred over ProjectEndpoint for authentication).
+
 .PARAMETER FabricWorkspaceId
     Microsoft Fabric workspace GUID.
 
@@ -68,6 +77,9 @@ param(
     [Parameter(Mandatory = $false)] [string]$AnalyticsAgentId,
     [Parameter(Mandatory = $false)] [string]$FinancialAgentId,
     [Parameter(Mandatory = $false)] [string]$SupportAgentId,
+    [Parameter(Mandatory = $false)] [string]$CustomerSuccessAgentId,
+    [Parameter(Mandatory = $false)] [string]$OperationsExcellenceAgentId,
+    [Parameter(Mandatory = $false)] [string]$ProjectConnectionString,
     [Parameter(Mandatory = $false)] [string]$FabricWorkspaceId,
     [Parameter(Mandatory = $false)] [switch]$NoRestart
 )
@@ -112,27 +124,42 @@ function Prompt-IfEmpty {
     return $input.Trim()
 }
 
-$ProjectEndpoint      = Prompt-IfEmpty $ProjectEndpoint      "AI Foundry project endpoint" "https://<project>.<region>.api.azureml.ms/..."
-$OrchestratorAgentId  = Prompt-IfEmpty $OrchestratorAgentId  "Orchestrator agent ID"
-$SalesAgentId         = Prompt-IfEmpty $SalesAgentId         "Sales agent ID"
-$RealtimeAgentId      = Prompt-IfEmpty $RealtimeAgentId      "Operations / real-time agent ID"
-$AnalyticsAgentId     = Prompt-IfEmpty $AnalyticsAgentId     "Analytics agent ID"
-$FinancialAgentId     = Prompt-IfEmpty $FinancialAgentId     "Financial agent ID"
-$SupportAgentId       = Prompt-IfEmpty $SupportAgentId       "Support agent ID"
-$FabricWorkspaceId    = Prompt-IfEmpty $FabricWorkspaceId    "Fabric workspace ID" "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+$ProjectEndpoint            = Prompt-IfEmpty $ProjectEndpoint            "AI Foundry project endpoint" "https://<project>.<region>.api.azureml.ms/..."
+$ProjectConnectionString    = Prompt-IfEmpty $ProjectConnectionString    "AI Foundry connection string (preferred)" "<region>.api.azureml.ms;..."
+$OrchestratorAgentId        = Prompt-IfEmpty $OrchestratorAgentId        "Orchestrator agent ID"
+$SalesAgentId               = Prompt-IfEmpty $SalesAgentId               "Sales agent ID"
+$RealtimeAgentId            = Prompt-IfEmpty $RealtimeAgentId            "Operations / real-time agent ID"
+$AnalyticsAgentId           = Prompt-IfEmpty $AnalyticsAgentId           "Analytics agent ID"
+$FinancialAgentId           = Prompt-IfEmpty $FinancialAgentId           "Financial agent ID"
+$SupportAgentId             = Prompt-IfEmpty $SupportAgentId             "Support agent ID"
+$CustomerSuccessAgentId     = Prompt-IfEmpty $CustomerSuccessAgentId     "Customer success agent ID"
+$OperationsExcellenceAgentId = Prompt-IfEmpty $OperationsExcellenceAgentId "Operations excellence agent ID"
+$FabricWorkspaceId          = Prompt-IfEmpty $FabricWorkspaceId          "Fabric workspace ID" "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
 
 # ── Build settings array ───────────────────────────────────────────────────────
 
 $settings = @()
 
-if ($ProjectEndpoint)     { $settings += "PROJECT_ENDPOINT=$ProjectEndpoint" }
-if ($OrchestratorAgentId) { $settings += "FABRIC_ORCHESTRATOR_AGENT_ID=$OrchestratorAgentId" }
-if ($SalesAgentId)        { $settings += "FABRIC_SALES_AGENT_ID=$SalesAgentId" }
-if ($RealtimeAgentId)     { $settings += "FABRIC_REALTIME_AGENT_ID=$RealtimeAgentId" }
-if ($AnalyticsAgentId)    { $settings += "FABRIC_ANALYTICS_AGENT_ID=$AnalyticsAgentId" }
-if ($FinancialAgentId)    { $settings += "FABRIC_FINANCIAL_AGENT_ID=$FinancialAgentId" }
-if ($SupportAgentId)      { $settings += "FABRIC_SUPPORT_AGENT_ID=$SupportAgentId" }
-if ($FabricWorkspaceId)   { $settings += "FABRIC_WORKSPACE_ID=$FabricWorkspaceId" }
+if ($ProjectConnectionString) { $settings += "PROJECT_CONNECTION_STRING=$ProjectConnectionString" }
+if ($ProjectEndpoint)         { $settings += "PROJECT_ENDPOINT=$ProjectEndpoint" }
+if ($OrchestratorAgentId)     { $settings += "FABRIC_ORCHESTRATOR_AGENT_ID=$OrchestratorAgentId" }
+if ($SalesAgentId)            { $settings += "FABRIC_SALES_AGENT_ID=$SalesAgentId" }
+if ($RealtimeAgentId)         { $settings += "FABRIC_REALTIME_AGENT_ID=$RealtimeAgentId" }
+if ($AnalyticsAgentId)        { $settings += "FABRIC_ANALYTICS_AGENT_ID=$AnalyticsAgentId" }
+if ($FinancialAgentId)        { $settings += "FABRIC_FINANCIAL_AGENT_ID=$FinancialAgentId" }
+if ($SupportAgentId)          { $settings += "FABRIC_SUPPORT_AGENT_ID=$SupportAgentId" }
+if ($CustomerSuccessAgentId)  { $settings += "FABRIC_CUSTOMER_SUCCESS_AGENT_ID=$CustomerSuccessAgentId" }
+if ($OperationsExcellenceAgentId) { $settings += "FABRIC_OPERATIONS_EXCELLENCE_AGENT_ID=$OperationsExcellenceAgentId" }
+if ($FabricWorkspaceId)       { $settings += "FABRIC_WORKSPACE_ID=$FabricWorkspaceId" }
+
+# Activate the Foundry backend automatically when at least one agent ID is provided
+$anyAgentId = $OrchestratorAgentId -or $SalesAgentId -or $RealtimeAgentId -or $AnalyticsAgentId `
+              -or $FinancialAgentId -or $SupportAgentId -or $CustomerSuccessAgentId `
+              -or $OperationsExcellenceAgentId
+if ($anyAgentId) {
+    $settings += "USE_FOUNDRY_AGENTS=true"
+    Write-Info "USE_FOUNDRY_AGENTS will be set to true (agent IDs provided)"
+}
 
 if ($settings.Count -eq 0) {
     Write-Warn "No values provided — nothing to apply."
@@ -170,7 +197,7 @@ if (-not $NoRestart) {
 
 Write-Step "Done"
 Write-Info "Verify settings are active:"
-Write-Host "  az webapp config appsettings list --name $AppName -g $ResourceGroupName --query ""[?starts_with(name,'FABRIC') || name=='PROJECT_ENDPOINT']"" -o table"
+Write-Host "  az webapp config appsettings list --name $AppName -g $ResourceGroupName --query ""[?starts_with(name,'FABRIC') || name=='PROJECT_ENDPOINT' || name=='PROJECT_CONNECTION_STRING' || name=='USE_FOUNDRY_AGENTS']"" -o table"
 Write-Host ""
 Write-Info "View live logs:"
 Write-Host "  az webapp log tail --name $AppName --resource-group $ResourceGroupName"

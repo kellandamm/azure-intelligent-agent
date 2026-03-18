@@ -50,7 +50,7 @@ param environment = 'prod'
 
 // Azure OpenAI service endpoint
 // Format: https://<your-resource-name>.openai.azure.com/
-param azureOpenAIEndpoint = ''
+param azureOpenAIEndpoint = 'https://demosaifoundry9257402771.services.ai.azure.com/'
 
 // Model deployment name in Azure OpenAI
 // Example: 'gpt-4o', 'gpt-35-turbo', 'gpt-4'
@@ -148,8 +148,8 @@ param sqlAdminPassword = ''
 // This user/group will have admin access to the SQL database
 // Get from Azure AD: Users/Groups → Object ID
 // Run: az ad signed-in-user show --query id -o tsv
-param sqlAzureAdAdminLogin = ''
-param sqlAzureAdAdminSid = ''
+param sqlAzureAdAdminLogin = 'admin@MngEnv180378.onmicrosoft.com'
+param sqlAzureAdAdminSid = '0230cab2-5323-49cd-a9c8-c5a7a51ca9ff'
 
 // ========================================
 // Authentication & Security
