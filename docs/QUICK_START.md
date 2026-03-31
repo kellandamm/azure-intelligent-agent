@@ -76,7 +76,18 @@ param powerbiClientSecret   = '<secret>'
 
 Choose **one** method:
 
-### Option A: PowerShell (recommended)
+### Option A: Azure Developer CLI (recommended)
+
+```bash
+# Install azd if needed: https://learn.microsoft.com/azure/developer/azure-developer-cli/install-azd
+azd init
+azd env set AZURE_LOCATION westus3
+azd up
+```
+
+For full azd details see [AZD_DEPLOYMENT_GUIDE.md](AZD_DEPLOYMENT_GUIDE.md).
+
+### Option A: PowerShell 
 
 ```powershell
 # Create resource group
@@ -93,17 +104,6 @@ To update only the app code after changes (no infra rebuild):
                      -AppName "<your-app-name>" `
                      -SkipInfrastructure
 ```
-
-### Option B: Azure Developer CLI
-
-```bash
-# Install azd if needed: https://learn.microsoft.com/azure/developer/azure-developer-cli/install-azd
-azd init
-azd env set AZURE_LOCATION westus3
-azd up
-```
-
-For full azd details see [AZD_DEPLOYMENT_GUIDE.md](AZD_DEPLOYMENT_GUIDE.md).
 
 ### Confirm a healthy start
 
