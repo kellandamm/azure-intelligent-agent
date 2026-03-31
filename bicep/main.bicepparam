@@ -53,7 +53,7 @@ param environment = 'prod'
 // Azure AI Foundry project endpoint URL
 // Find in: AI Foundry portal → Project → Settings → Endpoint
 // Format: https://<resource>.services.ai.azure.com/api/projects/<project-name>
-param projectEndpoint = ''
+param projectEndpoint = 'https://demosaifoundry9257402771.services.ai.azure.com/api/projects/demosaifoundry925740277-project'
 
 // Model deployment name in AI Foundry
 // Example: 'gpt-4o', 'gpt-5.2'
@@ -92,8 +92,8 @@ param deployAzureOpenAI = false
 param azureOpenAIEndpoint = ''
 
 // Model deployment name in Azure OpenAI
-// Example: 'gpt-5', 'gpt4.1'
-param azureOpenAIDeployment = 'gpt-5.1'
+// Example: 'gpt-4o', 'gpt-35-turbo', 'gpt-4'
+param azureOpenAIDeployment = 'gpt-4o'
 
 // Azure OpenAI API version
 param azureOpenAIApiVersion = '2024-08-01-preview'
@@ -111,14 +111,6 @@ param azureOpenAIApiKey = ''
 // Find in Fabric: Workspace Settings → Properties
 param fabricWorkspaceId = '<REPLACE_WITH_YOUR_FABRIC_WORKSPACE_ID>'
 
-// Fabric Agent IDs - Create these agents in your Fabric workspace
-// Each agent handles specific functionality in the application
-param fabricOrchestratorAgentId = '<REPLACE_WITH_ORCHESTRATOR_AGENT_ID>'
-param fabricDocumentAgentId = '<REPLACE_WITH_DOCUMENT_AGENT_ID>'
-param fabricPowerBiAgentId = '<REPLACE_WITH_POWERBI_AGENT_ID>'
-param fabricChartAgentId = '<REPLACE_WITH_CHART_AGENT_ID>'
-param fabricSalesAgentId = '<REPLACE_WITH_SALES_AGENT_ID>'
-param fabricRealtimeAgentId = '<REPLACE_WITH_REALTIME_AGENT_ID>'
 
 // ========================================
 // Power BI Configuration
@@ -172,8 +164,8 @@ param sqlAdminPassword = ''
 // This user/group will have admin access to the SQL database
 // Get from Azure AD: Users/Groups → Object ID
 // Run: az ad signed-in-user show --query id -o tsv
-param sqlAzureAdAdminLogin = ''
-param sqlAzureAdAdminSid = ''
+param sqlAzureAdAdminLogin = 'admin@MngEnv180378.onmicrosoft.com'
+param sqlAzureAdAdminSid = '0230cab2-5323-49cd-a9c8-c5a7a51ca9ff'
 
 // ========================================
 // Authentication & Security
