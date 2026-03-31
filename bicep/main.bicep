@@ -218,9 +218,8 @@ param enableTracing bool = true
 ])
 param logLevel string = 'INFO'
 
-@description('Web App startup command. Uses fallback paths for startup.sh in common zip layouts.')
-param appCommandLine string = 'bash -c "if [ -f /home/site/wwwroot/startup.sh ]; then bash /home/site/wwwroot/startup.sh; elif [ -f /home/site/wwwroot/app/startup.sh ]; then bash /home/site/wwwroot/app/startup.sh; else echo startup.sh not found under /home/site/wwwroot; ls -la /home/site/wwwroot; exit 1; fi"'
-
+description('Web App startup command. Uses fallback paths for startup.sh in common zip layouts.')
+param appCommandLine string = 'bash -c "if [ -f startup.sh ]; then bash startup.sh; elif [ -f app/startup.sh ]; then bash app/startup.sh; elif [ -f /home/site/wwwroot/startup.sh ]; then bash /home/site/wwwroot/startup.sh; elif [ -f /home/site/wwwroot/app/startup.sh ]; then bash /home/site/wwwroot/app/startup.sh; else echo startup.sh not found in working directory or /home/site/wwwroot; echo Working directory: $(pwd); echo Contents of working directory:; ls -la; echo Contents of /home/site/wwwroot:; ls -la /home/site/wwwroot; exit 1; fi"'
 @description('Enable Key Vault for secrets management')
 param enableKeyVault bool = true
 

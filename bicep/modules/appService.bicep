@@ -41,7 +41,7 @@ param enableSystemManagedIdentity bool = true
 param healthCheckPath string = '/health'
 
 @description('App command line (startup script)')
-param appCommandLine string = 'bash -c "if [ -f /home/site/wwwroot/startup.sh ]; then bash /home/site/wwwroot/startup.sh; elif [ -f /home/site/wwwroot/app/startup.sh ]; then bash /home/site/wwwroot/app/startup.sh; else echo startup.sh not found under /home/site/wwwroot; ls -la /home/site/wwwroot; exit 1; fi"'
+param appCommandLine string = 'bash -c "if [ -f startup.sh ]; then bash startup.sh; elif [ -f app/startup.sh ]; then bash app/startup.sh; elif [ -f /home/site/wwwroot/startup.sh ]; then bash /home/site/wwwroot/startup.sh; elif [ -f /home/site/wwwroot/app/startup.sh ]; then bash /home/site/wwwroot/app/startup.sh; else echo startup.sh not found in working directory or /home/site/wwwroot; echo Working directory: $(pwd); echo Contents of working directory:; ls -la; echo Contents of /home/site/wwwroot:; ls -la /home/site/wwwroot; exit 1; fi"'
 
 @description('Log Analytics Workspace resource ID for diagnostic settings. Leave empty to skip.')
 param logAnalyticsWorkspaceId string = ''

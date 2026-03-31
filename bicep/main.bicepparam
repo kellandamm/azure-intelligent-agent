@@ -53,7 +53,7 @@ param environment = 'prod'
 // Azure AI Foundry project endpoint URL
 // Find in: AI Foundry portal → Project → Settings → Endpoint
 // Format: https://<resource>.services.ai.azure.com/api/projects/<project-name>
-param projectEndpoint = 'https://demosaifoundry9257402771.services.ai.azure.com/api/projects/demosaifoundry925740277-project'
+param projectEndpoint = ''
 
 // Model deployment name in AI Foundry
 // Example: 'gpt-4o', 'gpt-5.2'
@@ -164,8 +164,8 @@ param sqlAdminPassword = ''
 // This user/group will have admin access to the SQL database
 // Get from Azure AD: Users/Groups → Object ID
 // Run: az ad signed-in-user show --query id -o tsv
-param sqlAzureAdAdminLogin = 'admin@MngEnv180378.onmicrosoft.com'
-param sqlAzureAdAdminSid = '0230cab2-5323-49cd-a9c8-c5a7a51ca9ff'
+param sqlAzureAdAdminLogin = ''
+param sqlAzureAdAdminSid = ''
 
 // ========================================
 // Authentication & Security
@@ -201,7 +201,7 @@ param appServicePlanSku = 'B2'
 // Enable Application Insights for monitoring, logging, and diagnostics
 param enableApplicationInsights = true
 
-param appCommandLine = 'bash -c "if [ -f /home/site/wwwroot/startup.sh ]; then bash /home/site/wwwroot/startup.sh; elif [ -f /home/site/wwwroot/app/startup.sh ]; then bash /home/site/wwwroot/app/startup.sh; else echo startup.sh not found under /home/site/wwwroot; ls -la /home/site/wwwroot; exit 1; fi"'
+param appCommandLine = 'bash -c "if [ -f startup.sh ]; then bash startup.sh; elif [ -f app/startup.sh ]; then bash app/startup.sh; elif [ -f /home/site/wwwroot/startup.sh ]; then bash /home/site/wwwroot/startup.sh; elif [ -f /home/site/wwwroot/app/startup.sh ]; then bash /home/site/wwwroot/app/startup.sh; else echo startup.sh not found in working directory or /home/site/wwwroot; echo Working directory: $(pwd); echo Contents of working directory:; ls -la; echo Contents of /home/site/wwwroot:; ls -la /home/site/wwwroot; exit 1; fi"'
 
 // Enable Azure Key Vault for secure secrets management (recommended)
 // If true: All secrets stored in Key Vault, Web App accesses via managed identity
