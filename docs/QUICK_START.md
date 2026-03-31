@@ -80,7 +80,7 @@ Choose **one** method:
 
 ```powershell
 # Create resource group
-az group create --name rg-myagents-prod --location westus2
+az group create --name rg-myagents-prod --location westus3
 
 # Deploy infrastructure + app code
 .\scripts\deploy.ps1 -ResourceGroupName "rg-myagents-prod"
@@ -99,7 +99,7 @@ To update only the app code after changes (no infra rebuild):
 ```bash
 # Install azd if needed: https://learn.microsoft.com/azure/developer/azure-developer-cli/install-azd
 azd init
-azd env set AZURE_LOCATION westus2
+azd env set AZURE_LOCATION westus3
 azd up
 ```
 

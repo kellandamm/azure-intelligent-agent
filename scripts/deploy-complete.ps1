@@ -19,7 +19,7 @@
     Name of the Azure resource group (will be created if it doesn't exist)
 
 .PARAMETER Location
-    Azure region for deployment (default: eastus2)
+    Azure region for deployment (default: westus3)
 
 .PARAMETER ParametersFile
     Path to Bicep parameters file (default: ../bicep/main.bicepparam)
@@ -52,7 +52,7 @@
     .\deploy-complete.ps1 -ResourceGroupName "rg-myagents-prod"
     
 .EXAMPLE
-    .\deploy-complete.ps1 -ResourceGroupName "rg-myagents-dev" -Location "westus2" -AutoConfirmSql
+    .\deploy-complete.ps1 -ResourceGroupName "rg-myagents-dev" -Location "westus3" -AutoConfirmSql
     
 .EXAMPLE
     .\deploy-complete.ps1 -ResourceGroupName "rg-myagents-prod" -DeployFabric -GenerateInitialData
@@ -63,7 +63,7 @@ param(
     [string]$ResourceGroupName,
     
     [Parameter(Mandatory = $false)]
-    [string]$Location = "eastus2",
+    [string]$Location = "westus3",
     
     [Parameter(Mandatory = $false)]
     [string]$ParametersFile = "",

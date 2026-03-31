@@ -13,7 +13,7 @@
     Name of the Azure resource group (will be created if it doesn't exist)
 
 .PARAMETER Location
-    Azure region for deployment (default: eastus2)
+    Azure region for deployment (default: westus3)
 
 .PARAMETER ParametersFile
     Path to Bicep parameters file (default: main.bicepparam)
@@ -25,7 +25,7 @@
     Skip application code deployment and only deploy infrastructure
 
 .EXAMPLE
-    .\deploy.ps1 -ResourceGroupName "rg-myagents-prod" -Location "eastus2"
+    .\deploy.ps1 -ResourceGroupName "rg-myagents-prod" -Location "westus3"
     
 .EXAMPLE
     .\deploy.ps1 -ResourceGroupName "rg-myagents-dev" -SkipInfrastructure
@@ -36,7 +36,7 @@ param(
     [string]$ResourceGroupName,
 
     [Parameter(Mandatory = $false)]
-    [string]$Location = "eastus2",
+    [string]$Location = "westus3",
 
     [Parameter(Mandatory = $false)]
     [string]$ParametersFile = "main.bicepparam",

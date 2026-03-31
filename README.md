@@ -30,7 +30,7 @@ param sqlAzureAdAdminSid   = '<az ad signed-in-user show --query id -o tsv>'
 **2. Create resource group and deploy**
 
 ```powershell
-az group create --name rg-myagents-prod --location westus2
+az group create --name rg-myagents-prod --location westus3
 .\scripts\deploy.ps1 -ResourceGroupName "rg-myagents-prod"
 ```
 

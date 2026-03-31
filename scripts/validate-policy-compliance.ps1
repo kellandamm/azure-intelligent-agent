@@ -10,7 +10,7 @@
 # Usage:
 #   .\scripts\validate-policy-compliance.ps1 `
 #       -ResourceGroup  <rg-name>         `
-#       -Location       eastus2           `
+#       -Location       westus3         `
 #       -ParametersFile bicep\main.bicepparam
 #
 # Optional flags:
@@ -26,7 +26,7 @@ param(
     [Parameter(Mandatory)]
     [string]$ResourceGroup,
 
-    [string]$Location       = 'eastus2',
+    [string]$Location       = 'westus3',
     [string]$TemplateFile   = 'bicep\main.bicep',
     [string]$ParametersFile = 'bicep\main.bicepparam',
 
