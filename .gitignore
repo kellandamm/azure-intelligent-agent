@@ -50,7 +50,7 @@ agent_configs.json.backup
 database/*.db
 
 # IDE
-.vscode/
+
 !.vscode/extensions.json
 !.vscode/settings.json.template
 .idea/

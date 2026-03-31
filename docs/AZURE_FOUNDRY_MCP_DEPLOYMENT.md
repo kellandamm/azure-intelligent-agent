@@ -1,7 +1,8 @@
-# Azure AI Foundry Agents — App Service Deployment Guide
+# Azure AI Foundry Agents — Deployment Guide
 
-Explains how to activate the Azure AI Foundry agent backend on the standard **App Service** deployment.
-By default the app uses a code-based agent loop (`AgentFrameworkManager`). Setting `USE_FOUNDRY_AGENTS=true` switches all chat traffic to pre-created Foundry agents without any code change.
+This guide explains how to create agents in the **Azure AI Foundry portal** and activate the
+Foundry backend in the App Service. By default the app uses a local code-based agent loop.
+Setting `USE_FOUNDRY_AGENTS=true` switches all chat traffic to your Foundry-hosted agents.
 
 ---
 
@@ -9,9 +10,9 @@ By default the app uses a code-based agent loop (`AgentFrameworkManager`). Setti
 
 | | Code-based (default) | Azure AI Foundry |
 |---|---|---|
-| System prompts | Defined in `agent_framework_manager.py` | Defined in AI Foundry portal per agent |
+| System prompts | Defined in `agent_framework_manager.py` | Defined per agent in the Foundry portal |
 | Thread state | In-memory (lost on restart) | Server-side (persists across restarts) |
-| Tool routing | Local Python functions in `agent_tools.py` | Foundry tool calls or MCP server |
+| Tool routing | Local Python functions in `agent_tools.py` | Tool calls managed by Foundry |
 | Requires Foundry project | No | Yes |
 | Feature flag | `USE_FOUNDRY_AGENTS=false` (default) | `USE_FOUNDRY_AGENTS=true` |
 
@@ -22,84 +23,170 @@ The `/api/chat` endpoint, authentication, RLS, and the entire UI are **identical
 ## Prerequisites
 
 - App Service deployment complete (see [QUICK_START.md](QUICK_START.md))
-- Azure AI Foundry project created ([ai.azure.com](https://ai.azure.com))
-- Your managed identity (or service principal) has the **Azure AI Developer** role on the Foundry project
+- Azure subscription with an **Azure AI Foundry** resource
+- Your App Service managed identity has the **Azure AI Developer** role on the Foundry project
 
 ---
 
-## Step 1 — Create agents in the AI Foundry portal
+## Step 1 — Create an Azure AI Foundry project
 
-1. Open [https://ai.azure.com](https://ai.azure.com) and select your project
-2. Go to **Agents** → **+ New agent** and create one agent for each role:
-
-| Agent name (suggested) | Role |
-|---|---|
-| `RetailAssistantOrchestrator` | Orchestrator — routes to specialists |
-| `SalesAssistant` | Revenue, top products, sales trends |
-| `OperationsAssistant` | Real-time metrics, system health |
-| `AnalyticsAssistant` | KPI analysis, business intelligence |
-| `FinancialAdvisor` | ROI, forecasting, profitability |
-| `CustomerSupportAssistant` | Support and troubleshooting |
-| `CustomerSuccessAgent` | Retention, satisfaction, growth |
-| `OperationsExcellenceAgent` | Process efficiency and optimisation |
-
-3. For each agent, configure the system prompt in the **Instructions** field (see the role descriptions above)
-4. Copy each agent's **ID** (format: `asst_xxx...`)
-5. Copy the **Project connection string** from **Project** → **Settings** → **Connection string**
+1. Open [https://ai.azure.com](https://ai.azure.com) and sign in
+2. Select **+ Create project** if you do not already have one
+3. Choose an existing **AI Hub** or create a new one, then name your project
+4. Once the project is created, navigate to **Project settings** (gear icon, bottom-left)
+5. Copy the **Endpoint** — it looks like:
+   ```
+   https://<resource-name>.services.ai.azure.com/api/projects/<project-name>
+   ```
+   This is your `PROJECT_ENDPOINT`.
 
 ---
 
-## Step 2 — Apply IDs and activate the Foundry backend
+## Step 2 — Create the agents
 
-Run the helper script — it prompts for all IDs, stores them as App Settings, and sets `USE_FOUNDRY_AGENTS=true` automatically:
+In your Foundry project, go to **Agents** (left sidebar) → **+ New agent**.
+
+Create one agent for each role in the table below. For each agent:
+- Set the **Name** as shown
+- Paste the **Instructions** (system prompt) for that role
+- Choose your **Model** deployment (e.g. `gpt-4o`)
+- Save the agent, then copy its **Agent ID** (format: `asst_...`)
+
+| # | Agent name | Role key in config | Role description |
+|---|---|---|---|
+| 1 | `RetailAssistantOrchestrator` | orchestrator | Routes questions to the correct specialist |
+| 2 | `SalesAssistant` | sales | Revenue, top products, and sales trends |
+| 3 | `OperationsAssistant` | operations | Real-time metrics and system health |
+| 4 | `AnalyticsAssistant` | analytics | KPI analysis and business intelligence |
+| 5 | `FinancialAdvisor` | financial | ROI, forecasting, and profitability |
+| 6 | `CustomerSupportAssistant` | support | Customer support and troubleshooting |
+| 7 | `OperationsCoordinator` | coordinator | Logistics, supply chain, and coordination |
+| 8 | `CustomerSuccessAgent` | customer\_success | Retention, satisfaction, and growth |
+| 9 | `OperationsExcellenceAgent` | operations\_excellence | Process efficiency and optimisation |
+
+### Suggested system prompts
+
+Below are starting points. Customise them to match your business scenario.
+
+**RetailAssistantOrchestrator**
+```
+You are a retail business orchestrator. Your job is to understand the user's question and
+route it to the correct specialist. You have access to specialists for: sales data, operations
+metrics, analytics, financial planning, customer support, logistics, customer success, and
+operations excellence. Respond concisely and delegate complex questions to the right expert.
+```
+
+**SalesAssistant**
+```
+You are a sales intelligence specialist for a retail business. You answer questions about
+revenue, top-performing products, sales trends, regional performance, and customer purchasing
+behaviour. Provide data-driven insights and actionable recommendations. Be concise and precise.
+```
+
+**OperationsAssistant**
+```
+You are an operations monitoring specialist. You answer questions about real-time system
+health, uptime, order processing status, fulfilment rates, and operational KPIs.
+Highlight anomalies and surface actionable findings.
+```
+
+**AnalyticsAssistant**
+```
+You are a business intelligence analyst. You answer questions about customer demographics,
+cohort analysis, conversion funnels, seasonal patterns, and performance benchmarking.
+Provide clear, data-backed conclusions.
+```
+
+**FinancialAdvisor**
+```
+You are a financial planning specialist. You answer questions about ROI calculations, revenue
+forecasting, margin analysis, cost optimisation, and profitability. Apply sound financial
+reasoning and present findings clearly.
+```
+
+**CustomerSupportAssistant**
+```
+You are a customer support specialist. You help customers with product questions, order
+issues, returns, and general troubleshooting. Be empathetic, concise, and solution-focused.
+Escalate complex cases when appropriate.
+```
+
+**OperationsCoordinator**
+```
+You are a logistics and supply chain coordinator. You answer questions about inventory levels,
+supplier lead times, shipping status, and supply chain optimisation. Identify bottlenecks and
+recommend practical solutions.
+```
+
+**CustomerSuccessAgent**
+```
+You are a customer success specialist. You analyse customer satisfaction data, churn signals,
+retention strategies, and growth opportunities. Provide proactive recommendations to improve
+customer lifetime value and loyalty.
+```
+
+**OperationsExcellenceAgent**
+```
+You are an operations excellence specialist. You identify inefficiencies, analyse process
+metrics, and recommend improvements. Apply continuous-improvement frameworks (Lean, Six Sigma)
+where relevant and quantify the expected impact of changes.
+```
+
+---
+
+## Step 3 — Apply IDs and activate the Foundry backend
+
+Run the helper script — it prompts for each ID, stores them as App Settings, and sets
+`USE_FOUNDRY_AGENTS=true` automatically:
 
 ```powershell
 .\scripts\set-agent-ids.ps1 `
     -ResourceGroupName "rg-myagents-prod" `
     -AppName "<app-name>" `
-    -ProjectConnectionString "<connection-string>" `
+    -ProjectEndpoint "https://<resource>.services.ai.azure.com/api/projects/<project>" `
     -OrchestratorAgentId "asst_..." `
     -SalesAgentId "asst_..." `
     -RealtimeAgentId "asst_..." `
     -AnalyticsAgentId "asst_..." `
     -FinancialAgentId "asst_..." `
     -SupportAgentId "asst_..." `
+    -OperationsCoordinatorAgentId "asst_..." `
     -CustomerSuccessAgentId "asst_..." `
     -OperationsExcellenceAgentId "asst_..."
 ```
 
-The script applies all settings and restarts the app automatically. Run it interactively (omit the flags) to be prompted for each value.
+Run it without parameters to be prompted interactively for each value.
 
-### What gets set in App Settings
+### What gets written to App Settings
 
-| Setting | Value |
+| App Setting | Description |
 |---|---|
-| `PROJECT_CONNECTION_STRING` | Foundry project connection string |
-| `PROJECT_ENDPOINT` | Foundry project endpoint (alternative to connection string) |
-| `FABRIC_ORCHESTRATOR_AGENT_ID` | Orchestrator `asst_xxx` ID |
-| `FABRIC_SALES_AGENT_ID` | Sales agent ID |
-| `FABRIC_REALTIME_AGENT_ID` | Operations / real-time agent ID |
-| `FABRIC_ANALYTICS_AGENT_ID` | Analytics agent ID |
-| `FABRIC_FINANCIAL_AGENT_ID` | Financial agent ID |
-| `FABRIC_SUPPORT_AGENT_ID` | Support agent ID |
-| `FABRIC_CUSTOMER_SUCCESS_AGENT_ID` | Customer success agent ID |
-| `FABRIC_OPERATIONS_EXCELLENCE_AGENT_ID` | Operations excellence agent ID |
+| `PROJECT_ENDPOINT` | Foundry project endpoint URL |
+| `ORCHESTRATOR_AGENT_ID` | Orchestrator agent ID |
+| `SALES_AGENT_ID` | Sales agent ID |
+| `REALTIME_AGENT_ID` | Operations / real-time agent ID |
+| `ANALYTICS_AGENT_ID` | Analytics agent ID |
+| `FINANCIAL_AGENT_ID` | Financial agent ID |
+| `SUPPORT_AGENT_ID` | Customer support agent ID |
+| `OPERATIONS_AGENT_ID` | Operations coordinator agent ID |
+| `CUSTOMER_SUCCESS_AGENT_ID` | Customer success agent ID |
+| `OPERATIONS_EXCELLENCE_AGENT_ID` | Operations excellence agent ID |
 | `USE_FOUNDRY_AGENTS` | `true` — activates the Foundry backend |
 
 ---
 
-## Step 3 — Grant the managed identity access
+## Step 4 — Grant the managed identity access
 
 The App Service managed identity must be able to call the Foundry project APIs.
 
-In the Foundry workspace → **Access control (IAM)** → **+ Add role assignment**:
+In the Azure portal → your **AI Hub resource** → **Access control (IAM)** → **+ Add role assignment**:
 - Role: **Azure AI Developer**
 - Assign access to: **Managed Identity**
-- Select the App Service's managed identity
+- Select the App Service's system-assigned managed identity
 
 ---
 
-## Step 4 — Verify
+## Step 5 — Verify
 
 Check the App Service startup log:
 
@@ -112,7 +199,7 @@ Look for:
 🤖 Agent backend: Azure AI Foundry
 ```
 
-Make a chat request from the UI or via API:
+Test a chat request:
 
 ```bash
 curl -X POST https://<app-url>/api/chat \
@@ -120,13 +207,11 @@ curl -X POST https://<app-url>/api/chat \
   -d '{"message": "Show me total revenue", "agent_type": "orchestrator"}'
 ```
 
-If the response is returned successfully, the Foundry backend is active.
-
 ---
 
 ## Rollback
 
-Revert to the code-based backend instantly — no data loss, no code change:
+Switch back to the code-based backend instantly — no data loss, no code change:
 
 ```powershell
 az webapp config appsettings set `
@@ -141,11 +226,12 @@ az webapp restart --name <app-name> --resource-group rg-myagents-prod
 
 | Issue | Fix |
 |---|---|
-| `RuntimeError: USE_FOUNDRY_AGENTS=true but ... failed to initialise` | `PROJECT_CONNECTION_STRING` or `PROJECT_ENDPOINT` is missing or malformed. Verify in App Settings. |
-| `Login failed` / 401 from Foundry | The managed identity is missing the **Azure AI Developer** role on the Foundry project. |
-| Agent returns empty response | Check the agent ID in App Settings matches the `asst_xxx` ID shown in the Foundry portal. |
-| App crashes on startup | Check `az webapp log tail`. If `AzureAIFoundryAgentManager unavailable` appears, fall back to `USE_FOUNDRY_AGENTS=false` and investigate the error. |
-| Threads don't persist after restart (code-based path) | Expected — the code-based backend stores threads in memory. Use the Foundry backend for persistent thread state. |
+| `ValueError: PROJECT_ENDPOINT is required` | `PROJECT_ENDPOINT` is missing or blank in App Settings. |
+| `USE_FOUNDRY_AGENTS=true but ... failed to initialise` | Check `PROJECT_ENDPOINT` is the full URL from Foundry project settings. |
+| 401 / authentication error from Foundry | The managed identity is missing **Azure AI Developer** role on the AI Hub. |
+| Agent returns empty response | Verify the agent ID in App Settings matches the `asst_...` ID shown in the Foundry portal. |
+| App crashes on startup | Run `az webapp log tail`. If `AzureAIFoundryAgentManager unavailable` appears, fall back to `USE_FOUNDRY_AGENTS=false` and fix the reported error. |
+| Threads don't persist after restart (code-based path) | Expected — code-based backend stores threads in memory only. Use the Foundry backend for persistent threads. |
 
 ---
 
@@ -154,13 +240,7 @@ az webapp restart --name <app-name> --resource-group rg-myagents-prod
 | File | Purpose |
 |---|---|
 | `app/app/azure_foundry_agent_manager.py` | Foundry agent client (`AzureAIFoundryAgentManager`) |
-| `app/app/config.py` | `use_foundry_agents` feature flag field |
+| `app/app/config.py` | Agent ID settings fields |
 | `app/main.py` | Conditional backend import at startup |
-| `app/mcp_server_app.py` | MCP server — exposes tool endpoints |
-| `scripts/set-agent-ids.ps1` | Helper to apply agent IDs + activate Foundry |
-
----
-
-## Container Apps alternative
-
-If you need the MCP server running as a separate container alongside the main app (for advanced scenarios), a Container Apps deployment template exists. This is a non-standard path — most deployments use App Service. See the `bicep/` directory for infrastructure templates if you need this path.
+| `scripts/set-agent-ids.ps1` | Helper script to push agent IDs to App Settings |
+| `.env.example` | Local development template with all env var names |

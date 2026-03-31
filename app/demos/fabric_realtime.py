@@ -121,8 +121,7 @@ async def run_realtime_ops_demo(query: str = "What is the current system health 
                 "response": response_text,
                 "agent_id": agent.id,
                 "thread_id": thread.id,
-                "run_id": run.id,
-                "fabric_endpoint": settings.fabric_realtime_agent_endpoint
+                "run_id": run.id
             }
     
     except Exception as e:

@@ -9,10 +9,12 @@ Deploy the Azure Intelligent Agent from zero to running in approximately 20 minu
 Have these ready before starting:
 
 - [ ] **Azure CLI** installed and logged in (`az login`)
-- [ ] **Python 3.11+** installed
+- [ ] **PowerShell 7.0+** installed (`pwsh` command available)
 - [ ] **Azure subscription** with Contributor access to a resource group
-- [ ] **Azure OpenAI** resource with a GPT-4o model deployed
-  - _Or set `deployAzureOpenAI = true` in parameters to deploy one as part of the Bicep template_
+- [ ] **Microsoft AI Foundry** project with agents deployed
+  - Navigate to [https://ai.azure.com](https://ai.azure.com) and create a project
+  - Deploy a GPT-4.1 or GPT-5.2 model in your Foundry project
+  - Note: Azure OpenAI endpoint and API key will be retrieved from Foundry project settings
 - [ ] Your **Azure AD UPN**: `az ad signed-in-user show --query userPrincipalName -o tsv`
 - [ ] Your **Azure AD object ID**: `az ad signed-in-user show --query id -o tsv`
 
@@ -27,18 +29,21 @@ Open `bicep/main.bicepparam` and fill in your values. Most fields are optional �
 ```bicep
 using './main.bicep'
 
-// Azure OpenAI — Azure Portal → AI Services → Keys and Endpoint
-param azureOpenAIEndpoint = 'https://your-openai.openai.azure.com/'
-param azureOpenAIApiKey   = '<your-api-key>'
+// Microsoft AI Foundry Project — Required for default agent backend
+// Find in Azure AI Foundry portal → Project → Settings → Endpoint
+param projectEndpoint = 'https://<your-resource>.services.ai.azure.com/api/projects/<your-project>'
+
+// Model deployment name in your Foundry project
+param modelDeploymentName = 'gpt-4o'  // or 'gpt-5.2'
 
 // SQL Azure AD admin — cannot be blank (Azure Policy enforces this)
 param sqlAzureAdAdminLogin = 'admin@yourcompany.com'   // az ad signed-in-user show --query userPrincipalName -o tsv
 param sqlAzureAdAdminSid   = '<your-object-id>'        // az ad signed-in-user show --query id -o tsv
 ```
 
-### Deploy a new Azure OpenAI instead (optional)
+### Optional: Deploy Azure OpenAI (not recommended)
 
-If you do not have an existing Azure OpenAI resource, let Bicep deploy one:
+If you want to deploy a separate Azure OpenAI resource instead of using Foundry's built-in models:
 
 ```bicep
 param deployAzureOpenAI        = true
@@ -47,33 +52,23 @@ param azureOpenAIModelVersion  = '2024-11-20'
 param azureOpenAIModelCapacity = 10   // tokens per minute (thousands)
 ```
 
-Remove the `azureOpenAIEndpoint` and `azureOpenAIApiKey` lines — the endpoint and key are injected into App Settings automatically after deployment.
+> ⚠️ **Recommended**: Use Microsoft AI Foundry models directly. Only deploy Azure OpenAI if you have specific requirements for a separate endpoint.
 
 ### Optional integrations
 
-Fill these in now if you have them, or return to add them in Phase 3 (AI Foundry) and Phase 6 (Fabric):
+Fill these in now if you have additional services, or return to add them later:
 
 ```bicep
-// Azure AI Foundry — AI Foundry Portal → Project → Settings → Endpoint
-param projectEndpoint = 'https://<project>.<region>.api.azureml.ms/agents/v1.0/...'
+// Microsoft Fabric (optional - for advanced analytics)
+param fabricWorkspaceId = '<workspace-GUID>'
 
-// Microsoft Fabric
-param fabricWorkspaceId         = '<workspace-GUID>'
-param fabricOrchestratorAgentId = 'asst_...'
-param fabricSalesAgentId        = 'asst_...'
-param fabricRealtimeAgentId     = 'asst_...'
-
-// Power BI embedding
+// Power BI embedding (optional)
 param powerbiWorkspaceId    = '<GUID>'
 param powerbiReportId       = '<GUID>'
 param powerbiClientId       = '<GUID>'
 param powerbiTenantId       = '<GUID>'
 param powerbiClientSecret   = '<secret>'
 ```
-
-> ⚠️ Never commit `bicep/main.bicepparam` to git — it contains secrets. It is already in `.gitignore`.
-
-See [CONFIGURATION.md](../CONFIGURATION.md) for a complete reference of every parameter.
 
 ---
 
@@ -130,73 +125,197 @@ If you see errors, jump to [Troubleshooting](#troubleshooting) below.
 
 ---
 
-## Phase 3 — Configure AI Services
+## Phase 3 — Configure Microsoft AI Foundry Agents
 
-### Using an existing Azure OpenAI
+This application uses **Microsoft AI Foundry native agents** by default for enterprise-grade AI capabilities with built-in governance, monitoring, and deployment workflows.
 
-If you set `azureOpenAIEndpoint` and `azureOpenAIApiKey` in Phase 1, the Bicep template pushes those into App Settings automatically. Verify:
+### Verify Foundry Configuration
+
+The deployment automatically configures your app to use Microsoft AI Foundry. Verify the settings:
 
 ```powershell
 az webapp config appsettings list \
   --name <app-name> --resource-group rg-myagents-prod \
-  --query "[?name=='AZURE_OPENAI_ENDPOINT'].value" -o tsv
+  --query "[?name=='PROJECT_ENDPOINT'].value" -o tsv
 ```
 
-### Deploying a new Azure OpenAI (`deployAzureOpenAI = true`)
-
-The endpoint is wired up automatically. The API key is written to Key Vault and referenced by App Settings. To retrieve the key if needed:
+You should see your Foundry project endpoint. If not set, add it:
 
 ```powershell
-az keyvault secret show \
-  --vault-name <keyvault-name> \
-  --name azureOpenAIApiKey \
-  --query value -o tsv
+az webapp config appsettings set \
+  --name <app-name> --resource-group rg-myagents-prod \
+  --settings PROJECT_ENDPOINT="https://<your-resource>.services.ai.azure.com/api/projects/<your-project>"
 ```
 
-### Azure AI Foundry agents
+#### Create Agents in Microsoft AI Foundry
 
-AI Foundry agents cannot be provisioned via Bicep — they must be created in the AI Foundry portal.
-By default the app uses the **code-based agent backend** (no Foundry required). Follow Stage A + B below to switch to the Foundry backend.
+**Step 1: Access Microsoft AI Foundry Portal**
 
-#### Stage A — Create agents and store their IDs
+1. Navigate to [https://ai.azure.com](https://ai.azure.com)
+2. Sign in with your Azure account
+3. Select your AI Foundry project (or create one if needed)
+4. Click **"Agents"** in the left navigation menu
 
-1. Open [https://ai.azure.com](https://ai.azure.com) and navigate to your project
-2. Go to **Agents** → **+ New agent**
-3. Create one agent for each role: Orchestrator, Sales, Operations, Analytics, Financial, Support, Customer Success, Operations Excellence
-4. Copy each agent ID (`asst_xxx...`) and the **Project connection string** from **Project** → **Settings** → **Connection string**
-5. Run the helper script — it prompts for each ID and applies them all in one step:
+**Step 2: Create All 9 Required Agents**
 
-```powershell
-.\scripts\set-agent-ids.ps1 -ResourceGroupName "rg-myagents-prod" -AppName "<app-name>"
+Click **"+ New agent"** and create each agent below **using the exact names** (case-sensitive). For each agent:
+- **Model**: Select `gpt-41` or `gpt-5-mini` (or `gpt-5.2` if available)
+- **Instructions**: Copy the system prompt provided below
+- Click **"Save"** after entering the instructions
+
+---
+
+**Agent 1: RetailAssistantOrchestrator**
+
+```
+You are a retail business orchestrator. Your job is to understand the user's question and
+route it to the correct specialist. You have access to specialists for: sales data, operations
+metrics, analytics, financial planning, customer support, logistics, customer success, and
+operations excellence. Respond concisely and delegate complex questions to the right expert.
 ```
 
-The script sets all App Settings, automatically sets `USE_FOUNDRY_AGENTS=true`, and restarts the app. Re-run at any time to add or update IDs.
+---
 
-#### Stage B — Activate the Foundry backend
+**Agent 2: SalesAssistant**
 
-The script above sets `USE_FOUNDRY_AGENTS=true` automatically when at least one agent ID is provided. If you need to toggle it manually:
+```
+You are a sales specialist. You provide deep insights into sales data, revenue trends,
+product performance, and customer purchasing patterns. Use data to answer questions about
+sales metrics, top products, regional performance, and growth opportunities. Be specific
+and quantitative when presenting findings.
+```
+
+---
+
+**Agent 3: OperationsAssistant**
+
+```
+You are a real-time operations specialist. You monitor operational KPIs, track inventory
+levels, analyze supply chain metrics, and provide alerts on operational issues. Focus on
+current state and immediate issues requiring attention.
+```
+
+---
+
+**Agent 4: AnalyticsAssistant**
+
+```
+You are a business intelligence analyst. You perform advanced analytics, identify trends,
+create forecasts, and provide data-driven recommendations. Use statistical analysis and
+visualization suggestions to help users understand complex business patterns.
+```
+
+---
+
+**Agent 5: FinancialAdvisor**
+
+```
+You are a financial analyst specializing in retail business finance. You analyze profitability,
+ROI, cost structures, pricing strategies, and financial forecasts. Provide actionable financial
+insights and recommendations backed by data.
+```
+
+---
+
+**Agent 6: CustomerSupportAssistant**
+
+```
+You are a customer support specialist. You analyze customer inquiries, complaints, satisfaction
+scores, and support ticket trends. Provide insights on common issues, resolution times, and
+recommendations for improving customer experience.
+```
+
+---
+
+**Agent 7: OperationsCoordinator**
+
+```
+You are an operations coordinator focused on logistics, fulfillment, and supply chain efficiency.
+You analyze delivery performance, warehouse operations, vendor relationships, and identify
+bottlenecks in the operational flow.
+```
+
+---
+
+**Agent 8: CustomerSuccessAgent**
+
+```
+You are a customer success specialist. You analyse customer satisfaction data, churn signals,
+retention strategies, and growth opportunities. Provide proactive recommendations to improve
+customer lifetime value and loyalty.
+```
+
+---
+
+**Agent 9: OperationsExcellenceAgent**
+
+```
+You are an operations excellence specialist. You identify inefficiencies, analyse process
+metrics, and recommend improvements. Apply continuous-improvement frameworks (Lean, Six Sigma)
+where relevant and quantify the expected impact of changes.
+```
+
+---
+
+**Step 3: Retrieve Agent IDs and Configure App**
+
+After creating all 9 agents, run this script to automatically retrieve their IDs and configure your App Service:
 
 ```powershell
-# Enable Foundry backend
-az webapp config appsettings set `
-  --name <app-name> --resource-group rg-myagents-prod `
-  --settings USE_FOUNDRY_AGENTS=true
-az webapp restart --name <app-name> --resource-group rg-myagents-prod
+.\scripts\get-agent-ids.ps1 `
+  -ProjectEndpoint "https://<your-resource>.services.ai.azure.com/api/projects/<your-project>" `
+  -ResourceGroupName "rg-myagents-prod" `
+  -AppName "<app-name>" `
+  -Apply
+```
 
-# Revert to code-based backend at any time (no data loss)
+**What this script does:**
+- ✅ Retrieves all 9 agent IDs by name from Microsoft AI Foundry
+- ✅ Maps them to the correct environment variables
+- ✅ Configures App Service settings with all agent IDs
+- ✅ Sets `USE_FOUNDRY_AGENTS=true`
+- ✅ Restarts the app
+
+**To find your PROJECT_ENDPOINT:**
+1. In AI Foundry portal, navigate to your project
+2. Click **"Settings"** in the left menu
+3. Copy the **"Project endpoint"** URL
+4. Format: `https://<resource>.services.ai.azure.com/api/projects/<project-name>`
+
+> ⚠️ **Important**: Agent names must match **exactly** (case-sensitive) for the script to find them. If the script cannot find an agent, double-check the spelling and capitalization in the portal.
+
+**Troubleshooting**
+- If script reports "Not found" for agents, verify you created them with the exact names listed above
+- If authentication fails, ensure you're logged in: `az login`
+- If you get 404 errors, confirm your PROJECT_ENDPOINT is correct by copying it from Settings in the portal
+
+---
+
+#### Verify Active Backend
+
+Check the startup log to confirm which backend is active:
+
+```bash
+az webapp log tail --name <app-name> --resource-group rg-myagents-prod
+```
+
+Look for:
+```
+🤖 Agent backend: Azure AI Foundry        ← Foundry agents active (default)
+```
+
+#### Optional: Switch to Code-Based Backend
+
+To use the built-in code-based agent backend instead of Foundry (not recommended):
+
+```powershell
 az webapp config appsettings set `
   --name <app-name> --resource-group rg-myagents-prod `
   --settings USE_FOUNDRY_AGENTS=false
 az webapp restart --name <app-name> --resource-group rg-myagents-prod
 ```
 
-Confirm the active backend in the startup log:
-```
-🤖 Agent backend: Azure AI Foundry        ← Foundry path active
-🤖 Agent backend: AgentFramework (code-based)  ← default path
-```
-
-> **Note:** without `USE_FOUNDRY_AGENTS=true` the agent IDs are stored but the app continues using the code-based backend. All chat endpoints, auth logic, and UI remain identical regardless of which backend is active.
+> **Note:** The app seamlessly switches between backends without data loss. All chat endpoints, auth logic, and UI remain identical.
 
 ### Power BI service principal _(optional)_
 

@@ -20,17 +20,15 @@ param existingAppInsightsName string
 
 // Configuration parameters
 param projectEndpoint string
-@secure()
-param projectConnectionString string
-param fabricOrchestratorAgentId string
-param fabricSalesAgentId string
-param fabricRealtimeAgentId string
-param fabricAnalyticsAgentId string
-param fabricFinancialAgentId string
-param fabricSupportAgentId string
-param fabricOperationsAgentId string
-param fabricCustomerSuccessAgentId string
-param fabricOperationsExcellenceAgentId string
+param orchestratorAgentId string
+param salesAgentId string
+param realtimeAgentId string
+param analyticsAgentId string
+param financialAgentId string
+param supportAgentId string
+param operationsAgentId string
+param customerSuccessAgentId string
+param operationsExcellenceAgentId string
 param fabricWorkspaceId string
 param powerbiTenantId string
 param powerbiWorkspaceId string
@@ -200,48 +198,44 @@ resource mainApp 'Microsoft.App/containerApps@2023-05-01' = {
               name: 'PROJECT_ENDPOINT'
               value: projectEndpoint
             }
+            // Azure AI Foundry Agent IDs
             {
-              name: 'PROJECT_CONNECTION_STRING'
-              secretRef: 'project-connection-string'
-            }
-            // Agent IDs
-            {
-              name: 'FABRIC_ORCHESTRATOR_AGENT_ID'
-              value: fabricOrchestratorAgentId
+              name: 'ORCHESTRATOR_AGENT_ID'
+              value: orchestratorAgentId
             }
             {
-              name: 'FABRIC_SALES_AGENT_ID'
-              value: fabricSalesAgentId
+              name: 'SALES_AGENT_ID'
+              value: salesAgentId
             }
             {
-              name: 'FABRIC_REALTIME_AGENT_ID'
-              value: fabricRealtimeAgentId
+              name: 'REALTIME_AGENT_ID'
+              value: realtimeAgentId
             }
             {
-              name: 'FABRIC_ANALYTICS_AGENT_ID'
-              value: fabricAnalyticsAgentId
+              name: 'ANALYTICS_AGENT_ID'
+              value: analyticsAgentId
             }
             {
-              name: 'FABRIC_FINANCIAL_AGENT_ID'
-              value: fabricFinancialAgentId
+              name: 'FINANCIAL_AGENT_ID'
+              value: financialAgentId
             }
             {
-              name: 'FABRIC_SUPPORT_AGENT_ID'
-              value: fabricSupportAgentId
+              name: 'SUPPORT_AGENT_ID'
+              value: supportAgentId
             }
             {
-              name: 'FABRIC_OPERATIONS_AGENT_ID'
-              value: fabricOperationsAgentId
+              name: 'OPERATIONS_AGENT_ID'
+              value: operationsAgentId
             }
             {
-              name: 'FABRIC_CUSTOMER_SUCCESS_AGENT_ID'
-              value: fabricCustomerSuccessAgentId
+              name: 'CUSTOMER_SUCCESS_AGENT_ID'
+              value: customerSuccessAgentId
             }
             {
-              name: 'FABRIC_OPERATIONS_EXCELLENCE_AGENT_ID'
-              value: fabricOperationsExcellenceAgentId
+              name: 'OPERATIONS_EXCELLENCE_AGENT_ID'
+              value: operationsExcellenceAgentId
             }
-            // Fabric & Power BI
+            // Microsoft Fabric (data platform)
             {
               name: 'FABRIC_WORKSPACE_ID'
               value: fabricWorkspaceId
@@ -317,14 +311,6 @@ resource mainApp 'Microsoft.App/containerApps@2023-05-01' = {
 // ============================================================================
 // Secrets for Main App
 // ============================================================================
-
-resource mainAppSecrets 'Microsoft.App/containerApps/secrets@2023-05-01' = {
-  name: 'project-connection-string'
-  parent: mainApp
-  properties: {
-    value: projectConnectionString
-  }
-}
 
 resource sqlConnectionStringSecret 'Microsoft.App/containerApps/secrets@2023-05-01' = if (enableSqlDatabase) {
   name: 'sql-connection-string'

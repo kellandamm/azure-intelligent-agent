@@ -59,7 +59,7 @@ class AgentFrameworkManager:
         self.specialist_profiles: Dict[str, Dict[str, Any]] = {
             "sales": {
                 "display_name": "SalesAssistant",
-                "id": settings.fabric_sales_agent_id,
+                "id": settings.sales_agent_id,
                 "prompt": (
                     "You are SalesAssistant with direct access to Fabric lakehouse data via Data Agents. "
                     "Provide revenue insights, top products, and sales trends using clear, metric-driven language. "
@@ -72,7 +72,7 @@ class AgentFrameworkManager:
             },
             "operations": {
                 "display_name": "OperationsAssistant",
-                "id": settings.fabric_realtime_agent_id,
+                "id": settings.realtime_agent_id,
                 "prompt": (
                     "You are OperationsAssistant with access to operational data in Fabric lakehouse. "
                     "Query InventoryFact, OrderFact, and FulfillmentMetrics tables for real-time operational metrics, "
@@ -82,7 +82,7 @@ class AgentFrameworkManager:
             },
             "analytics": {
                 "display_name": "AnalyticsAssistant",
-                "id": settings.fabric_analytics_agent_id or "analytics-agent-framework",
+                "id": settings.analytics_agent_id or "analytics-agent-framework",
                 "prompt": (
                     "You are AnalyticsAssistant with LIVE access to Microsoft Fabric lakehouse. You can query data RIGHT NOW.\n\n"
                     "🚫 FORBIDDEN RESPONSES:\n"
@@ -114,7 +114,7 @@ class AgentFrameworkManager:
             },
             "financial": {
                 "display_name": "FinancialAdvisor",
-                "id": settings.fabric_financial_agent_id or "financial-agent-framework",
+                "id": settings.financial_agent_id or "financial-agent-framework",
                 "prompt": (
                     "You are FinancialAdvisor with direct access to Microsoft Fabric lakehouse for financial analysis.\n\n"
                     "You have access to:\n"
@@ -140,7 +140,7 @@ class AgentFrameworkManager:
             },
             "support": {
                 "display_name": "CustomerSupportAssistant",
-                "id": settings.fabric_support_agent_id or "support-agent-framework",
+                "id": settings.support_agent_id or "support-agent-framework",
                 "prompt": (
                     "You are CustomerSupportAssistant, a friendly, empathetic, and highly capable customer support specialist.\n"
                     "You help customers with account issues, order inquiries, product questions, billing concerns, and general troubleshooting.\n\n"
@@ -162,7 +162,7 @@ class AgentFrameworkManager:
             },
             "customer_success": {
                 "display_name": "CustomerSuccessAgent",
-                "id": settings.fabric_support_agent_id or "customer-success-framework",
+                "id": settings.support_agent_id or "customer-success-framework",
                 "prompt": (
                     "You are CustomerSuccessAgent with DIRECT, IMMEDIATE access to Microsoft Fabric lakehouse.\n\n"
                     "🚫 NEVER say: 'data isn't directly available', 'can be calculated', 'need to run a report', 'need to access data'\n"
@@ -193,7 +193,7 @@ class AgentFrameworkManager:
             },
             "coordinator": {
                 "display_name": "OperationsCoordinator",
-                "id": settings.fabric_operations_agent_id or "operations-coordinator-framework",
+                "id": settings.operations_agent_id or "operations-coordinator-framework",
                 "prompt": (
                     "You are OperationsCoordinator overseeing logistics and supply chain status.\n"
                     "Combine Fabric metrics with weather insights when appropriate to anticipate disruptions."
@@ -202,7 +202,7 @@ class AgentFrameworkManager:
             },
             "customer_success": {
                 "display_name": "CustomerSuccessAgent",
-                "id": settings.fabric_customer_success_agent_id or "customer-success-framework",
+                "id": settings.customer_success_agent_id or "customer-success-framework",
                 "prompt": (
                     "You are CustomerSuccessAgent focused on customer satisfaction, retention, and growth.\n"
                     "Analyze customer health scores, engagement metrics, churn risk, and expansion opportunities. "
@@ -213,7 +213,7 @@ class AgentFrameworkManager:
             },
             "operations_excellence": {
                 "display_name": "OperationsExcellenceAgent",
-                "id": settings.fabric_operations_excellence_agent_id or "operations-excellence-framework",
+                "id": settings.operations_excellence_agent_id or "operations-excellence-framework",
                 "prompt": (
                     "You are OperationsExcellenceAgent dedicated to operational efficiency and process optimization.\n"
                     "Monitor KPIs related to productivity, quality, cost management, and process improvements. "
@@ -321,7 +321,7 @@ class AgentFrameworkManager:
             "call_operations_excellence_specialist": "operations_excellence",
         }
 
-        self.orchestrator_agent_id = settings.fabric_orchestrator_agent_id or "agent-framework-orchestrator"
+        self.orchestrator_agent_id = settings.orchestrator_agent_id or "agent-framework-orchestrator"
 
     def _get_data_agent_tools(self, tables: Optional[List[str]] = None) -> List[Dict[str, Any]]:
         """

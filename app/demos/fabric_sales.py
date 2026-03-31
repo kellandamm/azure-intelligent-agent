@@ -119,8 +119,7 @@ async def run_sales_intelligence_demo(query: str = "What are the top 5 products 
                 "response": response_text,
                 "agent_id": agent.id,
                 "thread_id": thread.id,
-                "run_id": run.id,
-                "fabric_endpoint": settings.fabric_sales_agent_endpoint
+                "run_id": run.id
             }
     
     except Exception as e:

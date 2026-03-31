@@ -18,29 +18,29 @@ class Settings(BaseSettings):
     azure_openai_endpoint: Optional[str] = None
     azure_openai_deployment: str = "gpt-4o"
     azure_openai_api_version: str = "2024-08-01-preview"
-    
-    # Legacy Azure AI Foundry settings (optional after reverting to Agent Framework)
+
+    # Azure AI Foundry settings (optional)
     project_endpoint: Optional[str] = None
-    project_connection_string: Optional[str] = None
     model_deployment_name: str = "gpt-4o"
     
-    # Microsoft Fabric Configuration
+    # Microsoft Fabric Configuration (data platform)
     fabric_workspace_id: Optional[str] = None
-    fabric_orchestrator_agent_id: Optional[str] = None  # RetailAssistantOrchestrator
-    fabric_orchestrator_agent_name: str = "RetailAssistantOrchestrator"
-    fabric_sales_agent_id: Optional[str] = None
-    fabric_realtime_agent_id: Optional[str] = None
-    fabric_analytics_agent_id: Optional[str] = None
-    fabric_financial_agent_id: Optional[str] = None
-    fabric_support_agent_id: Optional[str] = None
-    fabric_operations_agent_id: Optional[str] = None
-    fabric_customer_success_agent_id: Optional[str] = None
-    fabric_operations_excellence_agent_id: Optional[str] = None
     fabric_connection_id: Optional[str] = None
-    
+
+    # Azure AI Foundry Agent IDs (set these after creating agents in the Foundry portal)
+    orchestrator_agent_id: Optional[str] = None
+    orchestrator_agent_name: str = "RetailAssistantOrchestrator"
+    sales_agent_id: Optional[str] = None
+    realtime_agent_id: Optional[str] = None
+    analytics_agent_id: Optional[str] = None
+    financial_agent_id: Optional[str] = None
+    support_agent_id: Optional[str] = None
+    operations_agent_id: Optional[str] = None
+    customer_success_agent_id: Optional[str] = None
+    operations_excellence_agent_id: Optional[str] = None
+
     # Azure AI Foundry Data Agents Configuration
     ai_foundry_project_endpoint: Optional[str] = None  # Azure AI Foundry project endpoint
-    ai_foundry_project_connection_string: Optional[str] = None  # Project connection string
     fabric_lakehouse_id: Optional[str] = None  # Fabric lakehouse ID for Data Agents
     fabric_lakehouse_name: str = "RetailData"  # Fabric lakehouse name
     enable_data_agents: bool = False  # Enable Data Agents for querying Fabric (default: False until configured)
@@ -163,20 +163,6 @@ class Settings(BaseSettings):
             raise ValueError("JWT_SECRET is required when ENABLE_AUTHENTICATION=true")
         
         return True
-    
-    @property
-    def fabric_sales_agent_endpoint(self) -> Optional[str]:
-        """Generate Fabric Sales Agent endpoint URL."""
-        if not self.fabric_workspace_id or not self.fabric_sales_agent_id:
-            return None
-        return f"https://fabric.microsoft.com/groups/{self.fabric_workspace_id}/aiskills/{self.fabric_sales_agent_id}"
-
-    @property
-    def fabric_realtime_agent_endpoint(self) -> Optional[str]:
-        """Generate Fabric Realtime Agent endpoint URL."""
-        if not self.fabric_workspace_id or not self.fabric_realtime_agent_id:
-            return None
-        return f"https://fabric.microsoft.com/groups/{self.fabric_workspace_id}/aiskills/{self.fabric_realtime_agent_id}"
     
     @property
     def effective_fabric_tenant_id(self) -> Optional[str]:

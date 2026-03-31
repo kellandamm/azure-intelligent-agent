@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.38.33.27573",
-      "templateHash": "5291870106567639283"
+      "templateHash": "2574254226424979149"
     }
   },
   "parameters": {
@@ -45,11 +45,31 @@
         "description": "Current deployment timestamp"
       }
     },
+    "projectEndpoint": {
+      "type": "string",
+      "metadata": {
+        "description": "Azure AI Foundry project endpoint URL (Required). Find in AI Foundry portal → Project → Settings → Endpoint. Format: https://<resource>.services.ai.azure.com/api/projects/<project-name>"
+      }
+    },
+    "connectionName": {
+      "type": "string",
+      "defaultValue": "aoai-connection",
+      "metadata": {
+        "description": "Azure AI Foundry connection name for OpenAI"
+      }
+    },
+    "modelDeploymentName": {
+      "type": "string",
+      "defaultValue": "gpt-4o",
+      "metadata": {
+        "description": "Model deployment name in AI Foundry (e.g., gpt-4o, gpt-5.2)"
+      }
+    },
     "deployAzureOpenAI": {
       "type": "bool",
       "defaultValue": false,
       "metadata": {
-        "description": "Deploy new Azure OpenAI resource (true) or use existing (false)"
+        "description": "Deploy new Azure OpenAI resource (true) or use existing (false). Leave false to use Foundry models (recommended)."
       }
     },
     "azureOpenAIName": {
@@ -95,9 +115,9 @@
     },
     "azureOpenAIEndpoint": {
       "type": "string",
-      "defaultValue": "[if(parameters('deployAzureOpenAI'), '', '')]",
+      "defaultValue": "",
       "metadata": {
-        "description": "Azure OpenAI service endpoint URL (required when deployAzureOpenAI=false)"
+        "description": "Azure OpenAI service endpoint URL (optional - only needed when deployAzureOpenAI=false and using separate Azure OpenAI)"
       }
     },
     "azureOpenAIDeployment": {
@@ -118,69 +138,67 @@
       "type": "securestring",
       "defaultValue": "",
       "metadata": {
-        "description": "Azure OpenAI API Key (required when deployAzureOpenAI=false, will be retrieved from deployed resource if deployAzureOpenAI=true)"
-      }
-    },
-    "projectEndpoint": {
-      "type": "string",
-      "metadata": {
-        "description": "Azure AI Foundry project endpoint URL"
-      }
-    },
-    "connectionName": {
-      "type": "string",
-      "defaultValue": "aoai-connection",
-      "metadata": {
-        "description": "Azure AI Foundry connection name for OpenAI"
-      }
-    },
-    "modelDeploymentName": {
-      "type": "string",
-      "defaultValue": "gpt-4o",
-      "metadata": {
-        "description": "Model deployment name in AI Foundry"
+        "description": "Azure OpenAI API Key (optional - only needed when using separate Azure OpenAI)"
       }
     },
     "fabricWorkspaceId": {
       "type": "string",
       "metadata": {
-        "description": "Microsoft Fabric workspace ID"
+        "description": "Microsoft Fabric workspace ID (data platform)"
       }
     },
-    "fabricOrchestratorAgentId": {
+    "orchestratorAgentId": {
       "type": "string",
       "metadata": {
-        "description": "Fabric Orchestrator Agent ID"
+        "description": "Azure AI Foundry Orchestrator Agent ID (Required)"
       }
     },
-    "fabricDocumentAgentId": {
+    "salesAgentId": {
       "type": "string",
       "metadata": {
-        "description": "Fabric Document Agent ID"
+        "description": "Azure AI Foundry Sales Agent ID (Required)"
       }
     },
-    "fabricPowerBiAgentId": {
+    "realtimeAgentId": {
       "type": "string",
       "metadata": {
-        "description": "Fabric Power BI Agent ID"
+        "description": "Azure AI Foundry Realtime Agent ID (Required)"
       }
     },
-    "fabricChartAgentId": {
+    "analyticsAgentId": {
       "type": "string",
       "metadata": {
-        "description": "Fabric Chart Agent ID"
+        "description": "Azure AI Foundry Analytics Agent ID (Required)"
       }
     },
-    "fabricSalesAgentId": {
+    "financialAgentId": {
       "type": "string",
       "metadata": {
-        "description": "Fabric Sales Agent ID"
+        "description": "Azure AI Foundry Financial Agent ID (Required)"
       }
     },
-    "fabricRealtimeAgentId": {
+    "supportAgentId": {
       "type": "string",
       "metadata": {
-        "description": "Fabric Realtime Agent ID"
+        "description": "Azure AI Foundry Support Agent ID (Required)"
+      }
+    },
+    "operationsAgentId": {
+      "type": "string",
+      "metadata": {
+        "description": "Azure AI Foundry Operations Coordinator Agent ID (Required)"
+      }
+    },
+    "customerSuccessAgentId": {
+      "type": "string",
+      "metadata": {
+        "description": "Azure AI Foundry Customer Success Agent ID (Required)"
+      }
+    },
+    "operationsExcellenceAgentId": {
+      "type": "string",
+      "metadata": {
+        "description": "Azure AI Foundry Operations Excellence Agent ID (Required)"
       }
     },
     "powerbiWorkspaceId": {
@@ -399,6 +417,7 @@
       "ManagedBy": "Bicep-AVM",
       "DeployedDate": "[substring(parameters('deploymentTimestamp'), 0, 10)]"
     },
+    "webAppTags": "[union(variables('tags'), createObject('azd-service-name', 'web'))]",
     "generatedJwtSecret": "[uniqueString(resourceGroup().id, parameters('appName'), parameters('deploymentTimestamp'))]",
     "finalJwtSecret": "[if(empty(parameters('jwtSecretKey')), variables('generatedJwtSecret'), parameters('jwtSecretKey'))]",
     "sqlServerFqdn": "[format('{0}.database.windows.net', parameters('sqlServerName'))]"
@@ -2081,7 +2100,7 @@
             "value": "[parameters('location')]"
           },
           "tags": {
-            "value": "[variables('tags')]"
+            "value": "[variables('webAppTags')]"
           },
           "appServicePlanSku": {
             "value": "[parameters('appServicePlanSku')]"
@@ -2093,7 +2112,7 @@
             "value": true
           },
           "appSettings": {
-            "value": "[concat(createArray(createObject('name', 'AZURE_OPENAI_ENDPOINT', 'value', if(parameters('deployAzureOpenAI'), reference('azureOpenAIModule').outputs.endpoint.value, parameters('azureOpenAIEndpoint'))), createObject('name', 'AZURE_OPENAI_DEPLOYMENT', 'value', if(parameters('deployAzureOpenAI'), reference('azureOpenAIModule').outputs.deploymentName.value, parameters('azureOpenAIDeployment'))), createObject('name', 'AZURE_OPENAI_API_VERSION', 'value', parameters('azureOpenAIApiVersion')), createObject('name', 'AZURE_OPENAI_API_KEY', 'value', parameters('azureOpenAIApiKey')), createObject('name', 'PROJECT_ENDPOINT', 'value', parameters('projectEndpoint')), createObject('name', 'CONNECTION_NAME', 'value', parameters('connectionName')), createObject('name', 'MODEL_DEPLOYMENT_NAME', 'value', parameters('modelDeploymentName')), createObject('name', 'FABRIC_WORKSPACE_ID', 'value', parameters('fabricWorkspaceId')), createObject('name', 'FABRIC_ORCHESTRATOR_AGENT_ID', 'value', parameters('fabricOrchestratorAgentId')), createObject('name', 'FABRIC_DOCUMENT_AGENT_ID', 'value', parameters('fabricDocumentAgentId')), createObject('name', 'FABRIC_POWERBI_AGENT_ID', 'value', parameters('fabricPowerBiAgentId')), createObject('name', 'FABRIC_CHART_AGENT_ID', 'value', parameters('fabricChartAgentId')), createObject('name', 'FABRIC_SALES_AGENT_ID', 'value', parameters('fabricSalesAgentId')), createObject('name', 'FABRIC_REALTIME_AGENT_ID', 'value', parameters('fabricRealtimeAgentId')), createObject('name', 'POWERBI_WORKSPACE_ID', 'value', parameters('powerbiWorkspaceId')), createObject('name', 'POWERBI_REPORT_ID', 'value', parameters('powerbiReportId')), createObject('name', 'POWERBI_CLIENT_ID', 'value', parameters('powerbiClientId')), createObject('name', 'POWERBI_TENANT_ID', 'value', parameters('powerbiTenantId')), createObject('name', 'POWERBI_CLIENT_SECRET', 'value', parameters('powerbiClientSecret')), createObject('name', 'SQL_SERVER', 'value', variables('sqlServerFqdn')), createObject('name', 'SQL_DATABASE', 'value', parameters('sqlDatabaseName')), createObject('name', 'SQL_USE_AZURE_AUTH', 'value', string(parameters('sqlUseAzureAuth'))), createObject('name', 'SQL_USERNAME', 'value', if(parameters('sqlUseAzureAuth'), '', parameters('sqlAdminUsername'))), createObject('name', 'SQL_PASSWORD', 'value', if(parameters('sqlUseAzureAuth'), '', parameters('sqlAdminPassword'))), createObject('name', 'ENABLE_AUTHENTICATION', 'value', string(parameters('enableAuthentication'))), createObject('name', 'JWT_SECRET_KEY', 'value', variables('finalJwtSecret')), createObject('name', 'JWT_SECRET', 'value', variables('finalJwtSecret')), createObject('name', 'JWT_ALGORITHM', 'value', parameters('jwtAlgorithm')), createObject('name', 'JWT_EXPIRATION_MINUTES', 'value', string(parameters('jwtExpirationMinutes'))), createObject('name', 'JWT_EXPIRY_HOURS', 'value', string(div(parameters('jwtExpirationMinutes'), 60))), createObject('name', 'APP_PORT', 'value', string(parameters('appPort'))), createObject('name', 'ENABLE_TRACING', 'value', string(parameters('enableTracing'))), createObject('name', 'LOG_LEVEL', 'value', parameters('logLevel')), createObject('name', 'SCM_DO_BUILD_DURING_DEPLOYMENT', 'value', 'true'), createObject('name', 'ENABLE_ORYX_BUILD', 'value', 'true'), createObject('name', 'WEBSITES_CONTAINER_START_TIME_LIMIT', 'value', '1800'), createObject('name', 'WEBSITE_HTTPLOGGING_RETENTION_DAYS', 'value', '7')), if(parameters('enableApplicationInsights'), createArray(createObject('name', 'APPLICATIONINSIGHTS_CONNECTION_STRING', 'value', reference('appInsightsModule').outputs.connectionString.value), createObject('name', 'ApplicationInsightsAgent_EXTENSION_VERSION', 'value', '~3')), createArray()))]"
+            "value": "[concat(createArray(createObject('name', 'AZURE_OPENAI_ENDPOINT', 'value', if(parameters('deployAzureOpenAI'), reference('azureOpenAIModule').outputs.endpoint.value, parameters('azureOpenAIEndpoint'))), createObject('name', 'AZURE_OPENAI_DEPLOYMENT', 'value', if(parameters('deployAzureOpenAI'), reference('azureOpenAIModule').outputs.deploymentName.value, parameters('azureOpenAIDeployment'))), createObject('name', 'AZURE_OPENAI_API_VERSION', 'value', parameters('azureOpenAIApiVersion')), createObject('name', 'AZURE_OPENAI_API_KEY', 'value', parameters('azureOpenAIApiKey')), createObject('name', 'PROJECT_ENDPOINT', 'value', parameters('projectEndpoint')), createObject('name', 'CONNECTION_NAME', 'value', parameters('connectionName')), createObject('name', 'MODEL_DEPLOYMENT_NAME', 'value', parameters('modelDeploymentName')), createObject('name', 'FABRIC_WORKSPACE_ID', 'value', parameters('fabricWorkspaceId')), createObject('name', 'ORCHESTRATOR_AGENT_ID', 'value', parameters('orchestratorAgentId')), createObject('name', 'SALES_AGENT_ID', 'value', parameters('salesAgentId')), createObject('name', 'REALTIME_AGENT_ID', 'value', parameters('realtimeAgentId')), createObject('name', 'ANALYTICS_AGENT_ID', 'value', parameters('analyticsAgentId')), createObject('name', 'FINANCIAL_AGENT_ID', 'value', parameters('financialAgentId')), createObject('name', 'SUPPORT_AGENT_ID', 'value', parameters('supportAgentId')), createObject('name', 'OPERATIONS_AGENT_ID', 'value', parameters('operationsAgentId')), createObject('name', 'CUSTOMER_SUCCESS_AGENT_ID', 'value', parameters('customerSuccessAgentId')), createObject('name', 'OPERATIONS_EXCELLENCE_AGENT_ID', 'value', parameters('operationsExcellenceAgentId')), createObject('name', 'USE_FOUNDRY_AGENTS', 'value', 'true'), createObject('name', 'POWERBI_WORKSPACE_ID', 'value', parameters('powerbiWorkspaceId')), createObject('name', 'POWERBI_REPORT_ID', 'value', parameters('powerbiReportId')), createObject('name', 'POWERBI_CLIENT_ID', 'value', parameters('powerbiClientId')), createObject('name', 'POWERBI_TENANT_ID', 'value', parameters('powerbiTenantId')), createObject('name', 'POWERBI_CLIENT_SECRET', 'value', parameters('powerbiClientSecret')), createObject('name', 'SQL_SERVER', 'value', variables('sqlServerFqdn')), createObject('name', 'SQL_DATABASE', 'value', parameters('sqlDatabaseName')), createObject('name', 'SQL_USE_AZURE_AUTH', 'value', string(parameters('sqlUseAzureAuth'))), createObject('name', 'SQL_USERNAME', 'value', if(parameters('sqlUseAzureAuth'), '', parameters('sqlAdminUsername'))), createObject('name', 'SQL_PASSWORD', 'value', if(parameters('sqlUseAzureAuth'), '', parameters('sqlAdminPassword'))), createObject('name', 'ENABLE_AUTHENTICATION', 'value', string(parameters('enableAuthentication'))), createObject('name', 'JWT_SECRET_KEY', 'value', variables('finalJwtSecret')), createObject('name', 'JWT_SECRET', 'value', variables('finalJwtSecret')), createObject('name', 'JWT_ALGORITHM', 'value', parameters('jwtAlgorithm')), createObject('name', 'JWT_EXPIRATION_MINUTES', 'value', string(parameters('jwtExpirationMinutes'))), createObject('name', 'JWT_EXPIRY_HOURS', 'value', string(div(parameters('jwtExpirationMinutes'), 60))), createObject('name', 'APP_PORT', 'value', string(parameters('appPort'))), createObject('name', 'ENABLE_TRACING', 'value', string(parameters('enableTracing'))), createObject('name', 'LOG_LEVEL', 'value', parameters('logLevel')), createObject('name', 'SCM_DO_BUILD_DURING_DEPLOYMENT', 'value', 'true'), createObject('name', 'ENABLE_ORYX_BUILD', 'value', 'true'), createObject('name', 'WEBSITES_CONTAINER_START_TIME_LIMIT', 'value', '1800'), createObject('name', 'WEBSITE_HTTPLOGGING_RETENTION_DAYS', 'value', '7')), if(parameters('enableApplicationInsights'), createArray(createObject('name', 'APPLICATIONINSIGHTS_CONNECTION_STRING', 'value', reference('appInsightsModule').outputs.connectionString.value), createObject('name', 'ApplicationInsightsAgent_EXTENSION_VERSION', 'value', '~3')), createArray()))]"
           },
           "enableSystemManagedIdentity": {
             "value": true
@@ -2108,7 +2127,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.38.33.27573",
-              "templateHash": "17727709547619030170"
+              "templateHash": "10697934376636500183"
             }
           },
           "parameters": {
@@ -2514,98 +2533,6 @@
       "dependsOn": [
         "appServiceModule",
         "keyVaultModule"
-      ]
-    },
-    "sqlRoleAssignment": {
-      "condition": "[parameters('sqlUseAzureAuth')]",
-      "type": "Microsoft.Resources/deployments",
-      "apiVersion": "2025-04-01",
-      "name": "sql-roleAssignment",
-      "properties": {
-        "expressionEvaluationOptions": {
-          "scope": "inner"
-        },
-        "mode": "Incremental",
-        "parameters": {
-          "principalId": {
-            "value": "[reference('appServiceModule').outputs.managedIdentityPrincipalId.value]"
-          },
-          "roleDefinitionId": {
-            "value": "00000000-0000-0000-0000-000000000000"
-          },
-          "targetResourceId": {
-            "value": "[reference('sqlServerModule').outputs.resourceId.value]"
-          }
-        },
-        "template": {
-          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-          "contentVersion": "1.0.0.0",
-          "metadata": {
-            "_generator": {
-              "name": "bicep",
-              "version": "0.38.33.27573",
-              "templateHash": "5925712208084120879"
-            }
-          },
-          "parameters": {
-            "principalId": {
-              "type": "string",
-              "metadata": {
-                "description": "Principal ID (managed identity) to assign the role to"
-              }
-            },
-            "roleDefinitionId": {
-              "type": "string",
-              "metadata": {
-                "description": "Role definition ID (GUID of the built-in or custom role)"
-              }
-            },
-            "targetResourceId": {
-              "type": "string",
-              "metadata": {
-                "description": "Target resource ID to assign the role on"
-              }
-            },
-            "principalType": {
-              "type": "string",
-              "defaultValue": "ServicePrincipal",
-              "allowedValues": [
-                "ServicePrincipal",
-                "User",
-                "Group"
-              ],
-              "metadata": {
-                "description": "Principal type"
-              }
-            }
-          },
-          "resources": [
-            {
-              "condition": "[not(equals(parameters('roleDefinitionId'), '00000000-0000-0000-0000-000000000000'))]",
-              "type": "Microsoft.Authorization/roleAssignments",
-              "apiVersion": "2022-04-01",
-              "name": "[guid(parameters('principalId'), parameters('roleDefinitionId'), parameters('targetResourceId'))]",
-              "properties": {
-                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', parameters('roleDefinitionId'))]",
-                "principalId": "[parameters('principalId')]",
-                "principalType": "[parameters('principalType')]"
-              }
-            }
-          ],
-          "outputs": {
-            "resourceId": {
-              "type": "string",
-              "metadata": {
-                "description": "Role assignment resource ID"
-              },
-              "value": "[if(not(equals(parameters('roleDefinitionId'), '00000000-0000-0000-0000-000000000000')), resourceId('Microsoft.Authorization/roleAssignments', guid(parameters('principalId'), parameters('roleDefinitionId'), parameters('targetResourceId'))), '')]"
-            }
-          }
-        }
-      },
-      "dependsOn": [
-        "appServiceModule",
-        "sqlServerModule"
       ]
     }
   },

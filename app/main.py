@@ -38,7 +38,7 @@ if settings.use_foundry_agents:
     if agent_framework_manager is None:
         raise RuntimeError(
             "USE_FOUNDRY_AGENTS=true but Azure AI Foundry manager failed to initialise. "
-            "Check PROJECT_ENDPOINT / PROJECT_CONNECTION_STRING."
+            "Check PROJECT_ENDPOINT is configured correctly."
         )
 else:
     from app.agent_framework_manager import agent_framework_manager

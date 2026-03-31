@@ -4,7 +4,7 @@ using './main.bicep'
 // PARAMETERS FILE - Azure Agent Framework Application
 // ========================================
 // This file configures the deployment. Many resource names are AUTO-GENERATED and
-// do not need editing. Only external service credentials (OpenAI, Fabric, Power BI,
+// do not need editing. Only external service credentials (Foundry, Fabric, Power BI,
 // SQL AD admin) must be provided.
 //
 // AUTO-GENERATED (no edits required):
@@ -12,11 +12,13 @@ using './main.bicep'
 //   - sqlServerName  → '{appName}-sql'
 //
 // REQUIRED (must be set before deployment):
-//   - azureOpenAIEndpoint, azureOpenAIApiKey
-//   - projectEndpoint
-//   - fabricWorkspaceId, fabricOrchestratorAgentId, fabricDocumentAgentId,
-//     fabricPowerBiAgentId, fabricChartAgentId, fabricSalesAgentId, fabricRealtimeAgentId
-//   - powerbiWorkspaceId, powerbiReportId, powerbiClientId, powerbiTenantId, powerbiClientSecret
+//   - projectEndpoint (Microsoft AI Foundry)
+//   - orchestratorAgentId, salesAgentId, realtimeAgentId, analyticsAgentId,
+//     financialAgentId, supportAgentId, operationsAgentId, customerSuccessAgentId,
+//     operationsExcellenceAgentId
+//   - fabricWorkspaceId (optional - for Fabric integration)
+//   - powerbiWorkspaceId, powerbiReportId, powerbiClientId, powerbiTenantId,
+//     powerbiClientSecret (optional - for Power BI embedding)
 //   - sqlAzureAdAdminLogin, sqlAzureAdAdminSid  (if sqlUseAzureAuth = true)
 //
 // DEPLOY:
@@ -44,39 +46,61 @@ param location = 'westus2'
 param environment = 'prod'
 
 // ========================================
-// Azure OpenAI Configuration
+// Microsoft AI Foundry Configuration (Required)
 // ========================================
-// Get these values from your Azure OpenAI resource in Azure Portal
+// Get these from your Azure AI Foundry project at https://ai.azure.com
 
-// Azure OpenAI service endpoint
+// Azure AI Foundry project endpoint URL
+// Find in: AI Foundry portal → Project → Settings → Endpoint
+// Format: https://<resource>.services.ai.azure.com/api/projects/<project-name>
+param projectEndpoint = 'https://demosaifoundry9257402771.services.ai.azure.com/api/projects/demosaifoundry925740277-project'
+
+// Model deployment name in AI Foundry
+// Example: 'gpt-4o', 'gpt-5.2'
+param modelDeploymentName = 'gpt-5.2'
+
+// Connection name for Azure OpenAI in AI Foundry (usually leave as default)
+param connectionName = 'aoai-connection'
+
+// ========================================
+// Agent IDs (Required - create agents at https://ai.azure.com)
+// ========================================
+// These agents must be created manually in the AI Foundry portal
+// After creation, use: .\scripts\get-agent-ids.ps1 to retrieve and apply IDs
+
+param orchestratorAgentId = '<REPLACE_WITH_ORCHESTRATOR_AGENT_ID>'
+param salesAgentId = '<REPLACE_WITH_SALES_AGENT_ID>'
+param realtimeAgentId = '<REPLACE_WITH_REALTIME_AGENT_ID>'
+param analyticsAgentId = '<REPLACE_WITH_ANALYTICS_AGENT_ID>'
+param financialAgentId = '<REPLACE_WITH_FINANCIAL_AGENT_ID>'
+param supportAgentId = '<REPLACE_WITH_SUPPORT_AGENT_ID>'
+param operationsAgentId = '<REPLACE_WITH_OPERATIONS_AGENT_ID>'
+param customerSuccessAgentId = '<REPLACE_WITH_CUSTOMER_SUCCESS_AGENT_ID>'
+param operationsExcellenceAgentId = '<REPLACE_WITH_OPERATIONS_EXCELLENCE_AGENT_ID>'
+
+// ========================================
+// Azure OpenAI Configuration (Optional - only if not using Foundry models)
+// ========================================
+// Leave these empty to use Foundry's built-in models (recommended)
+// Only fill if you need a separate Azure OpenAI resource
+
+// Deploy a new Azure OpenAI resource (leave false for Foundry-only deployment)
+param deployAzureOpenAI = false
+
+// Azure OpenAI service endpoint (only needed if using separate Azure OpenAI)
 // Format: https://<your-resource-name>.openai.azure.com/
-param azureOpenAIEndpoint = 'https://demosaifoundry9257402771.services.ai.azure.com/'
+param azureOpenAIEndpoint = ''
 
 // Model deployment name in Azure OpenAI
 // Example: 'gpt-4o', 'gpt-35-turbo', 'gpt-4'
-param azureOpenAIDeployment = 'gpt-5.2'
+param azureOpenAIDeployment = 'gpt-4o'
 
 // Azure OpenAI API version
 param azureOpenAIApiVersion = '2024-08-01-preview'
 
-// Azure OpenAI API Key (from Azure Portal → Keys and Endpoint)
-// ⚠️ SENSITIVE: Store in Azure Key Vault or use --parameters @secure-params.json
+// Azure OpenAI API Key (only needed if using separate Azure OpenAI)
+// ⚠️ SENSITIVE: Store in Azure Key Vault or use--parameters @secure-params.json
 param azureOpenAIApiKey = ''
-
-// ========================================
-// Azure AI Foundry Configuration
-// ========================================
-// Get these from your Azure AI Foundry project
-
-// Azure AI Foundry project endpoint URL
-// Format: https://<project-name>.<region>.api.azureml.ms/agents/v1.0/subscriptions/<sub-id>/...
-param projectEndpoint = ''
-
-// Connection name for Azure OpenAI in AI Foundry
-param connectionName = 'aoai-connection'
-
-// Model deployment name in AI Foundry (usually same as Azure OpenAI deployment)
-param modelDeploymentName = 'gpt-5.2'
 
 // ========================================
 // Microsoft Fabric Configuration

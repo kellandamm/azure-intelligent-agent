@@ -1,35 +1,23 @@
-"""Azure AI Foundry Agents integration layer for the Fabric demo app."""
+"""Azure AI Foundry Agents integration layer for the demo app."""
 from __future__ import annotations
 
 import asyncio
-import json
-import uuid
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
-from datetime import datetime
 
 from azure.identity import DefaultAzureCredential, AzureCliCredential
-from azure.ai.projects import AIProjectClient
-from azure.ai.projects.models import (
-    Agent,
-    AgentThread,
-    MessageRole,
-    ThreadMessage,
-    RunStatus,
-    FunctionTool,
-    ToolSet
-)
+from azure.ai.agents import AgentsClient
+from azure.ai.agents.models import MessageRole, RunStatus
 
 from config import settings
 from utils.logging_config import logger
-from chart_generator import ResponseFormatter, ChartGenerator
+from chart_generator import ResponseFormatter
 import httpx
 
 
 Message = Dict[str, Any]
 
-# Error codes returned by Azure OpenAI / Azure AI Foundry when the
-# content-filter policy (Security Policy 5207647b) blocks a request.
+# Error codes returned by Azure AI Foundry when the content-filter policy blocks a request.
 _CONTENT_FILTER_CODES = frozenset([
     "content_filter",
     "ResponsibleAIPolicyViolation",
@@ -39,17 +27,14 @@ _CONTENT_FILTER_CODES = frozenset([
 
 def _is_content_safety_error(exc: Exception) -> bool:
     """Return True if *exc* was raised because the AI content filter blocked the request."""
-    # Azure AI Foundry / azure-core raises HttpResponseError
-    error_code = getattr(getattr(exc, 'error', None), 'code', None) or ""
+    error_code = getattr(getattr(exc, "error", None), "code", None) or ""
     if error_code in _CONTENT_FILTER_CODES:
         return True
-    # String fallback for wrapped or unexpected exception types
     msg = str(exc).lower()
     return any(kw in msg for kw in ("content_filter", "responsibleaipolicyviolation", "content_management"))
 
 
 def _content_safety_message() -> str:
-    """Return a user-facing message for content-filter blocks."""
     return (
         "I'm unable to respond to that request because it was flagged by the content safety "
         "policy. Please rephrase your question or contact your administrator if you believe "
@@ -73,114 +58,108 @@ class AzureAIFoundryAgentManager:
 
     def __init__(self) -> None:
         self.credential = self._create_credential()
-        
-        # Initialize Azure AI Foundry Project Client
-        if settings.project_connection_string:
-            self.client = AIProjectClient.from_connection_string(
-                credential=self.credential,
-                conn_str=settings.project_connection_string
-            )
-        else:
-            self.client = AIProjectClient(
-                endpoint=settings.project_endpoint,
-                credential=self.credential
+
+        if not settings.project_endpoint:
+            raise ValueError(
+                "PROJECT_ENDPOINT is required for the Azure AI Foundry agent backend. "
+                "Set it in App Settings or .env."
             )
 
-        self.sessions: Dict[str, str] = {}  # thread_id -> agent_id mapping
+        # AgentsClient connects directly to the Azure AI Foundry project endpoint.
+        self.client = AgentsClient(
+            endpoint=settings.project_endpoint,
+            credential=self.credential,
+        )
+
+        self.sessions: Dict[str, str] = {}  # thread_id -> agent_type mapping
         self._lock = asyncio.Lock()
-        
-        # MCP Client for tool calls
+
+        # Optional MCP client for external tool calls
         self.mcp_client = httpx.AsyncClient(base_url=settings.mcp_server_url)
         self.mcp_tools_cache: Optional[List[Dict[str, Any]]] = None
 
-        # Specialist agent definitions (use Foundry agent IDs)
+        # Specialist agent definitions — IDs sourced from App Settings (no Fabric prefix)
         self.specialist_profiles: Dict[str, Dict[str, Any]] = {
             "sales": {
                 "display_name": "SalesAssistant",
-                "id": settings.fabric_sales_agent_id,
+                "id": settings.sales_agent_id,
                 "description": "Revenue insights, top products, and sales trends specialist",
             },
             "operations": {
                 "display_name": "OperationsAssistant",
-                "id": settings.fabric_realtime_agent_id,
+                "id": settings.realtime_agent_id,
                 "description": "Real-time operational metrics and system health specialist",
             },
             "analytics": {
                 "display_name": "AnalyticsAssistant",
-                "id": settings.fabric_analytics_agent_id or "analytics-foundry-agent",
+                "id": settings.analytics_agent_id,
                 "description": "Business intelligence, patterns, and KPI analysis specialist",
             },
             "financial": {
                 "display_name": "FinancialAdvisor",
-                "id": settings.fabric_financial_agent_id or "financial-foundry-agent",
+                "id": settings.financial_agent_id,
                 "description": "ROI calculations, revenue forecasting, and profitability specialist",
             },
             "support": {
                 "display_name": "CustomerSupportAssistant",
-                "id": settings.fabric_support_agent_id or "support-foundry-agent",
+                "id": settings.support_agent_id,
                 "description": "Customer support and troubleshooting specialist",
             },
             "coordinator": {
                 "display_name": "OperationsCoordinator",
-                "id": settings.fabric_operations_agent_id or "operations-coordinator-foundry",
-                "description": "Logistics, supply chain, and weather coordination specialist",
+                "id": settings.operations_agent_id,
+                "description": "Logistics, supply chain, and coordination specialist",
             },
             "customer_success": {
                 "display_name": "CustomerSuccessAgent",
-                "id": settings.fabric_customer_success_agent_id or "customer-success-foundry",
+                "id": settings.customer_success_agent_id,
                 "description": "Customer satisfaction, retention, and growth specialist",
             },
             "operations_excellence": {
                 "display_name": "OperationsExcellenceAgent",
-                "id": settings.fabric_operations_excellence_agent_id or "operations-excellence-foundry",
-                "description": "Operational efficiency and process optimization specialist",
+                "id": settings.operations_excellence_agent_id,
+                "description": "Operational efficiency and process optimisation specialist",
             },
         }
 
-        # Orchestrator agent
-        self.orchestrator_agent_id = settings.fabric_orchestrator_agent_id
-        self.orchestrator_agent_name = settings.fabric_orchestrator_agent_name
+        self.orchestrator_agent_id = settings.orchestrator_agent_id
+        self.orchestrator_agent_name = settings.orchestrator_agent_name
 
     @staticmethod
     def _create_credential():
         try:
             return DefaultAzureCredential()
-        except Exception:  # pragma: no cover - fallback for local dev
+        except Exception:
             logger.info("ℹ️ Falling back to AzureCliCredential for Azure AI Foundry client")
             return AzureCliCredential()
 
+    # ── MCP helpers ────────────────────────────────────────────────────────────
+
     async def _get_mcp_tools(self) -> List[Dict[str, Any]]:
-        """Fetch available MCP tools from the MCP server."""
+        """Fetch available MCP tools from the MCP server (cached)."""
         if self.mcp_tools_cache:
             return self.mcp_tools_cache
-        
+
+        if not settings.enable_mcp:
+            return []
+
         try:
-            if not settings.enable_mcp:
-                logger.info("MCP is disabled, no tools available")
-                return []
-                
             response = await self.mcp_client.get("/mcp/tools")
             response.raise_for_status()
-            
-            data = response.json()
-            tools = data.get("tools", [])
-            
-            # Convert MCP tools to Azure AI Foundry function tool format
-            foundry_tools = []
-            for tool in tools:
-                foundry_tools.append({
+            tools = response.json().get("tools", [])
+            self.mcp_tools_cache = [
+                {
                     "type": "function",
                     "function": {
-                        "name": tool["name"],
-                        "description": tool["description"],
-                        "parameters": tool["inputSchema"]
-                    }
-                })
-            
-            self.mcp_tools_cache = foundry_tools
-            logger.info(f"✅ Loaded {len(foundry_tools)} MCP tools")
-            return foundry_tools
-            
+                        "name": t["name"],
+                        "description": t["description"],
+                        "parameters": t["inputSchema"],
+                    },
+                }
+                for t in tools
+            ]
+            logger.info(f"✅ Loaded {len(self.mcp_tools_cache)} MCP tools")
+            return self.mcp_tools_cache
         except Exception as e:
             logger.error(f"❌ Failed to fetch MCP tools: {e}")
             return []
@@ -190,106 +169,105 @@ class AzureAIFoundryAgentManager:
         try:
             response = await self.mcp_client.post(
                 "/mcp/call",
-                json={
-                    "name": tool_name,
-                    "arguments": arguments,
-                    "user_context": None  # Can be enhanced with RLS context
-                }
+                json={"name": tool_name, "arguments": arguments, "user_context": None},
             )
             response.raise_for_status()
-            
             result = response.json()
             if result.get("error"):
                 logger.error(f"MCP tool '{tool_name}' error: {result['error']}")
                 return {"error": result["error"]}
-            
             return result.get("result")
-            
         except Exception as e:
             logger.error(f"❌ Failed to call MCP tool '{tool_name}': {e}")
             return {"error": str(e)}
 
+    # ── Thread management ──────────────────────────────────────────────────────
+
     async def _create_or_get_thread(self, thread_id: Optional[str] = None) -> tuple[str, bool]:
-        """Create a new thread or get an existing one."""
+        """Create a new thread or reuse an existing one by ID."""
         if thread_id and thread_id in self.sessions:
             return thread_id, False
-        
-        # Create new thread
-        thread = await asyncio.to_thread(self.client.agents.create_thread)
-        new_thread_id = thread.id
-        
-        logger.info(f"📋 Created new thread: {new_thread_id}")
-        return new_thread_id, True
 
-    async def _route_to_specialist(self, specialist_type: str, question: str, thread_id: Optional[str] = None) -> str:
-        """Route a question to a specific specialist agent."""
+        thread = await asyncio.to_thread(self.client.threads.create)
+        logger.info(f"📋 Created new thread: {thread.id}")
+        return thread.id, True
+
+    # ── Specialist routing ─────────────────────────────────────────────────────
+
+    async def _route_to_specialist(
+        self, specialist_type: str, question: str, thread_id: Optional[str] = None
+    ) -> str:
+        """Route a question directly to a specialist agent."""
         logger.info(f"🎯 Routing to {specialist_type} specialist: {question[:100]}")
-        
+
         profile = self.specialist_profiles.get(specialist_type)
         if not profile:
             return f"Error: Unknown specialist type '{specialist_type}'"
-        
+
         try:
-            # Get or create thread
             agent_thread_id, _ = await self._create_or_get_thread(thread_id)
-            
-            # Create message
+
             await asyncio.to_thread(
-                self.client.agents.create_message,
+                self.client.messages.create,
                 thread_id=agent_thread_id,
-                role="user",
-                content=question
+                role=MessageRole.USER,
+                content=question,
             )
-            
-            # Run the specialist agent
+
             run = await asyncio.to_thread(
-                self.client.agents.create_and_process_run,
+                self.client.runs.create_and_process,
                 thread_id=agent_thread_id,
-                agent_id=profile["id"]
+                agent_id=profile["id"],
             )
-            
-            if run.status == "failed":
+
+            if run.status == RunStatus.FAILED:
                 logger.error(f"❌ Specialist run failed: {run.last_error}")
                 last_error = run.last_error or {}
-                error_code = getattr(last_error, 'code', None) or (last_error.get('code') if isinstance(last_error, dict) else None) or ""
-                if error_code in _CONTENT_FILTER_CODES or any(kw in str(last_error).lower() for kw in ("content_filter", "responsibleaipolicy")):
+                error_code = (
+                    getattr(last_error, "code", None)
+                    or (last_error.get("code") if isinstance(last_error, dict) else None)
+                    or ""
+                )
+                if error_code in _CONTENT_FILTER_CODES or any(
+                    kw in str(last_error).lower() for kw in ("content_filter", "responsibleaipolicy")
+                ):
                     logger.warning(f"⚠️ Content safety filter triggered for specialist={specialist_type}")
                     return _content_safety_message()
                 return f"Error: Specialist agent failed - {run.last_error}"
-            
-            # Get the response messages
-            messages = await asyncio.to_thread(
-                self.client.agents.list_messages,
-                thread_id=agent_thread_id
+
+            response_text = self._extract_response(
+                await asyncio.to_thread(self.client.messages.list, thread_id=agent_thread_id),
+                run.created_at,
             )
-            
-            # Get the latest assistant message
-            response_text = ""
-            for msg in messages.data:
-                if msg.role == "assistant" and msg.created_at >= run.created_at:
-                    for content in msg.content:
-                        if hasattr(content, 'text') and hasattr(content.text, 'value'):
-                            response_text = content.text.value
-                            break
-                    if response_text:
-                        break
-            
-            # Format the response
-            formatted_response = ResponseFormatter.format_specialist_response(
+
+            return ResponseFormatter.format_specialist_response(
                 specialist_name=profile["display_name"],
                 response_text=response_text,
                 data=None,
-                question=question
+                question=question,
             )
-            
-            return formatted_response
-            
+
         except Exception as e:
             if _is_content_safety_error(e):
                 logger.warning(f"⚠️ Content safety filter raised exception for specialist={specialist_type}: {e}")
                 return _content_safety_message()
             logger.error(f"❌ Error routing to {specialist_type}: {e}")
             return f"Error contacting {specialist_type}: {str(e)}"
+
+    @staticmethod
+    def _extract_response(messages, created_at) -> str:
+        """Extract the latest agent/assistant message from a message list."""
+        for msg in messages:
+            role = str(msg.role).lower()
+            if role in ("assistant", "agent"):
+                msg_time = getattr(msg, "created_at", None)
+                if msg_time is None or msg_time >= created_at:
+                    for content in msg.content:
+                        if hasattr(content, "text") and hasattr(content.text, "value"):
+                            return content.text.value
+        return ""
+
+    # ── Primary chat entry point ───────────────────────────────────────────────
 
     async def chat(
         self,
@@ -298,21 +276,19 @@ class AzureAIFoundryAgentManager:
         agent_type: Optional[str] = None,
         thread_id: Optional[str] = None,
     ) -> ChatResult:
-        """Process a chat request through the orchestrator or specific specialist."""
+        """Process a chat request through the orchestrator or a specific specialist."""
 
         normalized_type = (agent_type or "").strip().lower()
         if not normalized_type or normalized_type in {"sales", "orchestrator", "auto", "default"}:
             normalized_type = "orchestrator"
 
         async with self._lock:
-            # Get or create thread
             actual_thread_id, is_new = await self._create_or_get_thread(thread_id)
-            
+
             if is_new:
                 self.sessions[actual_thread_id] = normalized_type
                 logger.info(f"🔄 New session: thread={actual_thread_id}, agent={normalized_type}")
 
-            # Route to orchestrator or specialist
             if normalized_type == "orchestrator":
                 agent_id = self.orchestrator_agent_id
                 agent_name = self.orchestrator_agent_name
@@ -323,59 +299,51 @@ class AzureAIFoundryAgentManager:
             else:
                 raise ValueError(f"Unknown agent type: {normalized_type}")
 
-            logger.info(f"💬 Chat request - Agent: {agent_name}, Thread: {actual_thread_id}")
+            logger.info(f"💬 Chat – agent={agent_name}, thread={actual_thread_id}")
             logger.info(f"📨 User message: {message[:200]}")
 
             try:
-                # Create user message
                 await asyncio.to_thread(
-                    self.client.agents.create_message,
+                    self.client.messages.create,
                     thread_id=actual_thread_id,
-                    role="user",
-                    content=message
+                    role=MessageRole.USER,
+                    content=message,
                 )
 
-                # Run the agent
                 run = await asyncio.to_thread(
-                    self.client.agents.create_and_process_run,
+                    self.client.runs.create_and_process,
                     thread_id=actual_thread_id,
-                    agent_id=agent_id
+                    agent_id=agent_id,
                 )
 
-                if run.status == "failed":
+                if run.status == RunStatus.FAILED:
                     logger.error(f"❌ Agent run failed: {run.last_error}")
-                    # Detect content-filter failures reported via run.last_error
                     last_error = run.last_error or {}
-                    error_code = getattr(last_error, 'code', None) or (last_error.get('code') if isinstance(last_error, dict) else None) or ""
-                    if error_code in _CONTENT_FILTER_CODES or any(kw in str(last_error).lower() for kw in ("content_filter", "responsibleaipolicy")):
+                    error_code = (
+                        getattr(last_error, "code", None)
+                        or (last_error.get("code") if isinstance(last_error, dict) else None)
+                        or ""
+                    )
+                    if error_code in _CONTENT_FILTER_CODES or any(
+                        kw in str(last_error).lower()
+                        for kw in ("content_filter", "responsibleaipolicy")
+                    ):
                         logger.warning(f"⚠️ Content safety filter triggered for thread={actual_thread_id}")
                         return ChatResult(
                             response=_content_safety_message(),
                             thread_id=actual_thread_id,
                             agent_id=agent_id,
                             run_id=run.id,
-                            metadata={"content_filtered": True, "agent_type": normalized_type}
+                            metadata={"content_filtered": True, "agent_type": normalized_type},
                         )
                     raise RuntimeError(f"Agent run failed: {run.last_error}")
 
-                # Get the response messages
                 messages = await asyncio.to_thread(
-                    self.client.agents.list_messages,
-                    thread_id=actual_thread_id
+                    self.client.messages.list, thread_id=actual_thread_id
                 )
+                response_text = self._extract_response(messages, run.created_at)
 
-                # Extract the latest assistant response
-                response_text = ""
-                for msg in messages.data:
-                    if msg.role == "assistant" and msg.created_at >= run.created_at:
-                        for content in msg.content:
-                            if hasattr(content, 'text') and hasattr(content.text, 'value'):
-                                response_text = content.text.value
-                                break
-                        if response_text:
-                            break
-
-                logger.info(f"✅ Chat complete - Response: {response_text[:200]}")
+                logger.info(f"✅ Chat complete – response: {response_text[:200]}")
 
                 return ChatResult(
                     response=response_text,
@@ -385,9 +353,13 @@ class AzureAIFoundryAgentManager:
                     metadata={
                         "agent_name": agent_name,
                         "agent_type": normalized_type,
-                        "run_status": run.status,
-                        "created_at": run.created_at.isoformat() if hasattr(run.created_at, 'isoformat') else str(run.created_at)
-                    }
+                        "run_status": str(run.status),
+                        "created_at": (
+                            run.created_at.isoformat()
+                            if hasattr(run.created_at, "isoformat")
+                            else str(run.created_at)
+                        ),
+                    },
                 )
 
             except Exception as e:
@@ -398,18 +370,18 @@ class AzureAIFoundryAgentManager:
                         thread_id=actual_thread_id,
                         agent_id=agent_id,
                         run_id="",
-                        metadata={"content_filtered": True, "agent_type": normalized_type}
+                        metadata={"content_filtered": True, "agent_type": normalized_type},
                     )
                 logger.error(f"❌ Chat error: {e}")
                 raise
 
     async def cleanup(self):
-        """Cleanup resources."""
+        """Release resources."""
         await self.mcp_client.aclose()
         logger.info("🧹 Cleaned up Azure AI Foundry Agent Manager resources")
 
 
-# Global instance — guarded so import succeeds even without PROJECT_ENDPOINT configured
+# Module-level singleton — guarded so import succeeds without PROJECT_ENDPOINT configured
 try:
     foundry_agent_manager = AzureAIFoundryAgentManager()
 except Exception as _e:

@@ -30,10 +30,23 @@ param environment string = 'prod'
 param deploymentTimestamp string = utcNow()
 
 // ========================================
-// Parameters - Azure OpenAI
+// Parameters - Azure AI Foundry (Required)
 // ========================================
 
-@description('Deploy new Azure OpenAI resource (true) or use existing (false)')
+@description('Azure AI Foundry project endpoint URL (Required). Find in AI Foundry portal → Project → Settings → Endpoint. Format: https://<resource>.services.ai.azure.com/api/projects/<project-name>')
+param projectEndpoint string
+
+@description('Azure AI Foundry connection name for OpenAI')
+param connectionName string = 'aoai-connection'
+
+@description('Model deployment name in AI Foundry (e.g., gpt-4o, gpt-5.2)')
+param modelDeploymentName string = 'gpt-4o'
+
+// ========================================
+// Parameters - Azure OpenAI (Optional - only if not using Foundry models)
+// ========================================
+
+@description('Deploy new Azure OpenAI resource (true) or use existing (false). Leave false to use Foundry models (recommended).')
 param deployAzureOpenAI bool = false
 
 @description('Azure OpenAI account name (used when deployAzureOpenAI=true)')
@@ -57,7 +70,7 @@ param azureOpenAIModelCapacity int = 10
 ])
 param azureOpenAISku string = 'S0'
 
-@description('Azure OpenAI service endpoint URL (required when deployAzureOpenAI=false)')
+@description('Azure OpenAI service endpoint URL (optional - only needed when deployAzureOpenAI=false and using separate Azure OpenAI)')
 param azureOpenAIEndpoint string = ''
 
 @description('Azure OpenAI deployment/model name (e.g., gpt-4o, gpt-35-turbo)')
@@ -66,47 +79,43 @@ param azureOpenAIDeployment string = 'gpt-4o'
 @description('Azure OpenAI API version')
 param azureOpenAIApiVersion string = '2024-08-01-preview'
 
-@description('Azure OpenAI API Key (required when deployAzureOpenAI=false, will be retrieved from deployed resource if deployAzureOpenAI=true)')
+@description('Azure OpenAI API Key (optional - only needed when using separate Azure OpenAI)')
 @secure()
 param azureOpenAIApiKey string = ''
 
 // ========================================
-// Parameters - Azure AI Foundry
+// Parameters - Agent IDs (Azure AI Foundry) & Data Platform (Microsoft Fabric)
 // ========================================
 
-@description('Azure AI Foundry project endpoint URL')
-param projectEndpoint string
-
-@description('Azure AI Foundry connection name for OpenAI')
-param connectionName string = 'aoai-connection'
-
-@description('Model deployment name in AI Foundry')
-param modelDeploymentName string = 'gpt-4o'
-
-// ========================================
-// Parameters - Microsoft Fabric
-// ========================================
-
-@description('Microsoft Fabric workspace ID')
+@description('Microsoft Fabric workspace ID (data platform)')
 param fabricWorkspaceId string
 
-@description('Fabric Orchestrator Agent ID')
-param fabricOrchestratorAgentId string
+@description('Azure AI Foundry Orchestrator Agent ID (Required)')
+param orchestratorAgentId string
 
-@description('Fabric Document Agent ID')
-param fabricDocumentAgentId string
+@description('Azure AI Foundry Sales Agent ID (Required)')
+param salesAgentId string
 
-@description('Fabric Power BI Agent ID')
-param fabricPowerBiAgentId string
+@description('Azure AI Foundry Realtime Agent ID (Required)')
+param realtimeAgentId string
 
-@description('Fabric Chart Agent ID')
-param fabricChartAgentId string
+@description('Azure AI Foundry Analytics Agent ID (Required)')
+param analyticsAgentId string
 
-@description('Fabric Sales Agent ID')
-param fabricSalesAgentId string
+@description('Azure AI Foundry Financial Agent ID (Required)')
+param financialAgentId string
 
-@description('Fabric Realtime Agent ID')
-param fabricRealtimeAgentId string
+@description('Azure AI Foundry Support Agent ID (Required)')
+param supportAgentId string
+
+@description('Azure AI Foundry Operations Coordinator Agent ID (Required)')
+param operationsAgentId string
+
+@description('Azure AI Foundry Customer Success Agent ID (Required)')
+param customerSuccessAgentId string
+
+@description('Azure AI Foundry Operations Excellence Agent ID (Required)')
+param operationsExcellenceAgentId string
 
 // ========================================
 // Parameters - Power BI
@@ -262,16 +271,24 @@ var baseAppSettings = [
   { name: 'PROJECT_ENDPOINT', value: projectEndpoint }
   { name: 'CONNECTION_NAME', value: connectionName }
   { name: 'MODEL_DEPLOYMENT_NAME', value: modelDeploymentName }
-  
-  // Microsoft Fabric
+
+  // Microsoft Fabric (data platform)
   { name: 'FABRIC_WORKSPACE_ID', value: fabricWorkspaceId }
-  { name: 'FABRIC_ORCHESTRATOR_AGENT_ID', value: fabricOrchestratorAgentId }
-  { name: 'FABRIC_DOCUMENT_AGENT_ID', value: fabricDocumentAgentId }
-  { name: 'FABRIC_POWERBI_AGENT_ID', value: fabricPowerBiAgentId }
-  { name: 'FABRIC_CHART_AGENT_ID', value: fabricChartAgentId }
-  { name: 'FABRIC_SALES_AGENT_ID', value: fabricSalesAgentId }
-  { name: 'FABRIC_REALTIME_AGENT_ID', value: fabricRealtimeAgentId }
-  
+
+  // Azure AI Foundry Agent IDs
+  { name: 'ORCHESTRATOR_AGENT_ID', value: orchestratorAgentId }
+  { name: 'SALES_AGENT_ID', value: salesAgentId }
+  { name: 'REALTIME_AGENT_ID', value: realtimeAgentId }
+  { name: 'ANALYTICS_AGENT_ID', value: analyticsAgentId }
+  { name: 'FINANCIAL_AGENT_ID', value: financialAgentId }
+  { name: 'SUPPORT_AGENT_ID', value: supportAgentId }
+  { name: 'OPERATIONS_AGENT_ID', value: operationsAgentId }
+  { name: 'CUSTOMER_SUCCESS_AGENT_ID', value: customerSuccessAgentId }
+  { name: 'OPERATIONS_EXCELLENCE_AGENT_ID', value: operationsExcellenceAgentId }
+
+  // Agent Backend Selection (Default: Microsoft AI Foundry)
+  { name: 'USE_FOUNDRY_AGENTS', value: 'true' }
+
   // Power BI
   { name: 'POWERBI_WORKSPACE_ID', value: powerbiWorkspaceId }
   { name: 'POWERBI_REPORT_ID', value: powerbiReportId }

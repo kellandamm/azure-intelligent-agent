@@ -3,12 +3,11 @@
 
 <#
 .SYNOPSIS
-    Applies Azure AI Foundry / Fabric agent IDs to an App Service after manual agent creation.
+    Applies Azure AI Foundry agent IDs to an App Service after manual agent creation.
 
 .DESCRIPTION
-    After you create agents in the Azure AI Foundry or Microsoft Fabric portal and copy their
-    IDs, run this script to push them to App Settings in one step rather than using the portal
-    or typing multiple az CLI commands.
+    After you create agents in the Azure AI Foundry portal (https://ai.azure.com) and copy
+    their IDs, run this script to push them to App Settings in one step.
 
     Accepts individual agent ID parameters or reads them interactively if omitted.
     Restarts the app automatically so the new settings take effect immediately.
@@ -20,7 +19,7 @@
     App Service name.
 
 .PARAMETER ProjectEndpoint
-    Azure AI Foundry project endpoint URL.
+    Azure AI Foundry project endpoint URL (e.g. https://<name>.<region>.api.azureml.ms/...).
 
 .PARAMETER OrchestratorAgentId
     Orchestrator agent ID (format: asst_xxx...).
@@ -40,31 +39,31 @@
 .PARAMETER SupportAgentId
     Customer support agent ID.
 
+.PARAMETER OperationsCoordinatorAgentId
+    Operations coordinator / logistics agent ID.
+
 .PARAMETER CustomerSuccessAgentId
     Customer success specialist agent ID.
 
 .PARAMETER OperationsExcellenceAgentId
     Operations excellence specialist agent ID.
 
-.PARAMETER ProjectConnectionString
-    Azure AI Foundry project connection string (preferred over ProjectEndpoint for authentication).
-
 .PARAMETER FabricWorkspaceId
-    Microsoft Fabric workspace GUID.
+    Microsoft Fabric workspace GUID (data platform — separate from agent IDs).
 
 .PARAMETER NoRestart
     Skip the app restart after applying settings.
 
 .EXAMPLE
-    .\set-agent-ids.ps1 -ResourceGroupName "rg-myagents-prod" -AppName "agentXXXX-prod-app"
+    .\set-agent-ids.ps1 -ResourceGroupName "reg-admin" -AppName "agentXXXX-prod-app"
 
 .EXAMPLE
     .\set-agent-ids.ps1 `
-        -ResourceGroupName "rg-myagents-prod" `
+        -ResourceGroupName "reg-admin" `
         -AppName "agentXXXX-prod-app" `
+        -ProjectEndpoint "https://myproject.eastus.api.azureml.ms/..." `
         -OrchestratorAgentId "asst_abc123" `
-        -SalesAgentId "asst_def456" `
-        -FabricWorkspaceId "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+        -SalesAgentId "asst_def456"
 #>
 
 param(
@@ -77,9 +76,9 @@ param(
     [Parameter(Mandatory = $false)] [string]$AnalyticsAgentId,
     [Parameter(Mandatory = $false)] [string]$FinancialAgentId,
     [Parameter(Mandatory = $false)] [string]$SupportAgentId,
+    [Parameter(Mandatory = $false)] [string]$OperationsCoordinatorAgentId,
     [Parameter(Mandatory = $false)] [string]$CustomerSuccessAgentId,
     [Parameter(Mandatory = $false)] [string]$OperationsExcellenceAgentId,
-    [Parameter(Mandatory = $false)] [string]$ProjectConnectionString,
     [Parameter(Mandatory = $false)] [string]$FabricWorkspaceId,
     [Parameter(Mandatory = $false)] [switch]$NoRestart
 )
@@ -103,7 +102,6 @@ try {
     az login
 }
 
-# Verify app exists
 $webApp = az webapp show --name $AppName --resource-group $ResourceGroupName --output json 2>$null | ConvertFrom-Json
 if (-not $webApp) {
     Write-Host "❌ App Service '$AppName' not found in '$ResourceGroupName'" -ForegroundColor Red
@@ -124,38 +122,38 @@ function Prompt-IfEmpty {
     return $input.Trim()
 }
 
-$ProjectEndpoint            = Prompt-IfEmpty $ProjectEndpoint            "AI Foundry project endpoint" "https://<project>.<region>.api.azureml.ms/..."
-$ProjectConnectionString    = Prompt-IfEmpty $ProjectConnectionString    "AI Foundry connection string (preferred)" "<region>.api.azureml.ms;..."
-$OrchestratorAgentId        = Prompt-IfEmpty $OrchestratorAgentId        "Orchestrator agent ID"
-$SalesAgentId               = Prompt-IfEmpty $SalesAgentId               "Sales agent ID"
-$RealtimeAgentId            = Prompt-IfEmpty $RealtimeAgentId            "Operations / real-time agent ID"
-$AnalyticsAgentId           = Prompt-IfEmpty $AnalyticsAgentId           "Analytics agent ID"
-$FinancialAgentId           = Prompt-IfEmpty $FinancialAgentId           "Financial agent ID"
-$SupportAgentId             = Prompt-IfEmpty $SupportAgentId             "Support agent ID"
-$CustomerSuccessAgentId     = Prompt-IfEmpty $CustomerSuccessAgentId     "Customer success agent ID"
-$OperationsExcellenceAgentId = Prompt-IfEmpty $OperationsExcellenceAgentId "Operations excellence agent ID"
-$FabricWorkspaceId          = Prompt-IfEmpty $FabricWorkspaceId          "Fabric workspace ID" "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+$ProjectEndpoint                = Prompt-IfEmpty $ProjectEndpoint                "AI Foundry project endpoint" "https://<name>.<region>.api.azureml.ms/..."
+$OrchestratorAgentId            = Prompt-IfEmpty $OrchestratorAgentId            "Orchestrator agent ID"
+$SalesAgentId                   = Prompt-IfEmpty $SalesAgentId                   "Sales agent ID"
+$RealtimeAgentId                = Prompt-IfEmpty $RealtimeAgentId                "Operations / real-time agent ID"
+$AnalyticsAgentId               = Prompt-IfEmpty $AnalyticsAgentId               "Analytics agent ID"
+$FinancialAgentId               = Prompt-IfEmpty $FinancialAgentId               "Financial agent ID"
+$SupportAgentId                 = Prompt-IfEmpty $SupportAgentId                 "Customer support agent ID"
+$OperationsCoordinatorAgentId   = Prompt-IfEmpty $OperationsCoordinatorAgentId   "Operations coordinator agent ID"
+$CustomerSuccessAgentId         = Prompt-IfEmpty $CustomerSuccessAgentId         "Customer success agent ID"
+$OperationsExcellenceAgentId    = Prompt-IfEmpty $OperationsExcellenceAgentId    "Operations excellence agent ID"
+$FabricWorkspaceId              = Prompt-IfEmpty $FabricWorkspaceId              "Fabric workspace ID (optional)" "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
 
 # ── Build settings array ───────────────────────────────────────────────────────
 
 $settings = @()
 
-if ($ProjectConnectionString) { $settings += "PROJECT_CONNECTION_STRING=$ProjectConnectionString" }
-if ($ProjectEndpoint)         { $settings += "PROJECT_ENDPOINT=$ProjectEndpoint" }
-if ($OrchestratorAgentId)     { $settings += "FABRIC_ORCHESTRATOR_AGENT_ID=$OrchestratorAgentId" }
-if ($SalesAgentId)            { $settings += "FABRIC_SALES_AGENT_ID=$SalesAgentId" }
-if ($RealtimeAgentId)         { $settings += "FABRIC_REALTIME_AGENT_ID=$RealtimeAgentId" }
-if ($AnalyticsAgentId)        { $settings += "FABRIC_ANALYTICS_AGENT_ID=$AnalyticsAgentId" }
-if ($FinancialAgentId)        { $settings += "FABRIC_FINANCIAL_AGENT_ID=$FinancialAgentId" }
-if ($SupportAgentId)          { $settings += "FABRIC_SUPPORT_AGENT_ID=$SupportAgentId" }
-if ($CustomerSuccessAgentId)  { $settings += "FABRIC_CUSTOMER_SUCCESS_AGENT_ID=$CustomerSuccessAgentId" }
-if ($OperationsExcellenceAgentId) { $settings += "FABRIC_OPERATIONS_EXCELLENCE_AGENT_ID=$OperationsExcellenceAgentId" }
-if ($FabricWorkspaceId)       { $settings += "FABRIC_WORKSPACE_ID=$FabricWorkspaceId" }
+if ($ProjectEndpoint)               { $settings += "PROJECT_ENDPOINT=$ProjectEndpoint" }
+if ($OrchestratorAgentId)           { $settings += "ORCHESTRATOR_AGENT_ID=$OrchestratorAgentId" }
+if ($SalesAgentId)                  { $settings += "SALES_AGENT_ID=$SalesAgentId" }
+if ($RealtimeAgentId)               { $settings += "REALTIME_AGENT_ID=$RealtimeAgentId" }
+if ($AnalyticsAgentId)              { $settings += "ANALYTICS_AGENT_ID=$AnalyticsAgentId" }
+if ($FinancialAgentId)              { $settings += "FINANCIAL_AGENT_ID=$FinancialAgentId" }
+if ($SupportAgentId)                { $settings += "SUPPORT_AGENT_ID=$SupportAgentId" }
+if ($OperationsCoordinatorAgentId)  { $settings += "OPERATIONS_AGENT_ID=$OperationsCoordinatorAgentId" }
+if ($CustomerSuccessAgentId)        { $settings += "CUSTOMER_SUCCESS_AGENT_ID=$CustomerSuccessAgentId" }
+if ($OperationsExcellenceAgentId)   { $settings += "OPERATIONS_EXCELLENCE_AGENT_ID=$OperationsExcellenceAgentId" }
+if ($FabricWorkspaceId)             { $settings += "FABRIC_WORKSPACE_ID=$FabricWorkspaceId" }
 
 # Activate the Foundry backend automatically when at least one agent ID is provided
 $anyAgentId = $OrchestratorAgentId -or $SalesAgentId -or $RealtimeAgentId -or $AnalyticsAgentId `
-              -or $FinancialAgentId -or $SupportAgentId -or $CustomerSuccessAgentId `
-              -or $OperationsExcellenceAgentId
+              -or $FinancialAgentId -or $SupportAgentId -or $OperationsCoordinatorAgentId `
+              -or $CustomerSuccessAgentId -or $OperationsExcellenceAgentId
 if ($anyAgentId) {
     $settings += "USE_FOUNDRY_AGENTS=true"
     Write-Info "USE_FOUNDRY_AGENTS will be set to true (agent IDs provided)"
@@ -189,7 +187,7 @@ if (-not $NoRestart) {
     az webapp restart --name $AppName --resource-group $ResourceGroupName --output none
     Write-Ok "App restarted — new agent IDs are active"
 } else {
-    Write-Warn "Restart skipped (-NoRestart). Restart manually to apply settings:"
+    Write-Warn "Restart skipped (-NoRestart). Restart manually:"
     Write-Host "  az webapp restart --name $AppName --resource-group $ResourceGroupName"
 }
 
@@ -197,7 +195,7 @@ if (-not $NoRestart) {
 
 Write-Step "Done"
 Write-Info "Verify settings are active:"
-Write-Host "  az webapp config appsettings list --name $AppName -g $ResourceGroupName --query ""[?starts_with(name,'FABRIC') || name=='PROJECT_ENDPOINT' || name=='PROJECT_CONNECTION_STRING' || name=='USE_FOUNDRY_AGENTS']"" -o table"
+Write-Host "  az webapp config appsettings list --name $AppName -g $ResourceGroupName --query ""[?ends_with(name,'_AGENT_ID') || name=='PROJECT_ENDPOINT' || name=='USE_FOUNDRY_AGENTS']"" -o table"
 Write-Host ""
 Write-Info "View live logs:"
 Write-Host "  az webapp log tail --name $AppName --resource-group $ResourceGroupName"

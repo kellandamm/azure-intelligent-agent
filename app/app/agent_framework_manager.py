@@ -94,7 +94,7 @@ class AgentFrameworkManager:
         self.specialist_profiles: Dict[str, Dict[str, Any]] = {
             "sales": {
                 "display_name": "SalesAssistant",
-                "id": settings.fabric_sales_agent_id,
+                "id": settings.sales_agent_id,
                 "prompt": (
                     "You are SalesAssistant. Provide revenue insights, top products, and sales trends "
                     "using clear, metric-driven language. When data is requested, call the provided Fabric "
@@ -105,7 +105,7 @@ class AgentFrameworkManager:
             },
             "operations": {
                 "display_name": "OperationsAssistant",
-                "id": settings.fabric_realtime_agent_id,
+                "id": settings.realtime_agent_id,
                 "prompt": (
                     "You are OperationsAssistant. Monitor real-time operational metrics, uptime, and system "
                     "health. Use Fabric data tools to reference current status and highlight incidents. Focus "
@@ -115,7 +115,7 @@ class AgentFrameworkManager:
             },
             "analytics": {
                 "display_name": "AnalyticsAssistant",
-                "id": settings.fabric_analytics_agent_id or "analytics-agent-framework",
+                "id": settings.analytics_agent_id or "analytics-agent-framework",
                 "prompt": (
                     "You are AnalyticsAssistant, a senior business intelligence analyst specializing in Microsoft Fabric data.\n"
                     "Capabilities:\n"
@@ -130,7 +130,7 @@ class AgentFrameworkManager:
             },
             "financial": {
                 "display_name": "FinancialAdvisor",
-                "id": settings.fabric_financial_agent_id or "financial-agent-framework",
+                "id": settings.financial_agent_id or "financial-agent-framework",
                 "prompt": (
                     "You are FinancialAdvisor. Offer ROI calculations, revenue forecasting, and profitability analysis.\n"
                     "When presenting financial forecasts or comparisons, structure your response with clear numbers "
@@ -142,7 +142,7 @@ class AgentFrameworkManager:
             },
             "support": {
                 "display_name": "CustomerSupportAssistant",
-                "id": settings.fabric_support_agent_id or "support-agent-framework",
+                "id": settings.support_agent_id or "support-agent-framework",
                 "prompt": (
                     "You are CustomerSupportAssistant, a friendly and empathetic support specialist.\n"
                     "Clarify the customer request, offer clear troubleshooting steps, and suggest helpful follow-ups."
@@ -151,7 +151,7 @@ class AgentFrameworkManager:
             },
             "coordinator": {
                 "display_name": "OperationsCoordinator",
-                "id": settings.fabric_operations_agent_id
+                "id": settings.operations_agent_id
                 or "operations-coordinator-framework",
                 "prompt": (
                     "You are OperationsCoordinator overseeing logistics and supply chain status.\n"
@@ -161,7 +161,7 @@ class AgentFrameworkManager:
             },
             "customer_success": {
                 "display_name": "CustomerSuccessAgent",
-                "id": settings.fabric_customer_success_agent_id
+                "id": settings.customer_success_agent_id
                 or "customer-success-framework",
                 "prompt": (
                     "You are CustomerSuccessAgent focused on customer satisfaction, retention, and growth.\n"
@@ -173,7 +173,7 @@ class AgentFrameworkManager:
             },
             "operations_excellence": {
                 "display_name": "OperationsExcellenceAgent",
-                "id": settings.fabric_operations_excellence_agent_id
+                "id": settings.operations_excellence_agent_id
                 or "operations-excellence-framework",
                 "prompt": (
                     "You are OperationsExcellenceAgent dedicated to operational efficiency and process optimization.\n"
@@ -271,7 +271,7 @@ class AgentFrameworkManager:
         }
 
         self.orchestrator_agent_id = (
-            settings.fabric_orchestrator_agent_id or "agent-framework-orchestrator"
+            settings.orchestrator_agent_id or "agent-framework-orchestrator"
         )
 
     @staticmethod
