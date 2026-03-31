@@ -201,6 +201,8 @@ param appServicePlanSku = 'B2'
 // Enable Application Insights for monitoring, logging, and diagnostics
 param enableApplicationInsights = true
 
+// Web App startup command with fallback paths for startup.sh.
+// Keep this unless your deployment package uses a different startup script location.
 param appCommandLine = 'bash -c "if [ -f startup.sh ]; then bash startup.sh; elif [ -f app/startup.sh ]; then bash app/startup.sh; elif [ -f /home/site/wwwroot/startup.sh ]; then bash /home/site/wwwroot/startup.sh; elif [ -f /home/site/wwwroot/app/startup.sh ]; then bash /home/site/wwwroot/app/startup.sh; else echo startup.sh not found in working directory or /home/site/wwwroot; echo Working directory: $(pwd); echo Contents of working directory:; ls -la; echo Contents of /home/site/wwwroot:; ls -la /home/site/wwwroot; exit 1; fi"'
 
 // Enable Azure Key Vault for secure secrets management (recommended)

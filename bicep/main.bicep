@@ -40,7 +40,7 @@ param projectEndpoint string
 param connectionName string = 'aoai-connection'
 
 @description('Model deployment name in AI Foundry (e.g., gpt-4o, gpt-5.2)')
-param modelDeploymentName string = 'gpt-5.2'
+param modelDeploymentName string = 'gpt-4o'
 
 // ========================================
 // Parameters - Azure OpenAI (Optional - only if not using Foundry models)
@@ -53,7 +53,7 @@ param deployAzureOpenAI bool = false
 param azureOpenAIName string = '${appName}-openai-${environment}'
 
 @description('Azure OpenAI model name to deploy (e.g., gpt-4o, gpt-4, gpt-35-turbo)')
-param azureOpenAIModelName string = 'gpt-5.2'
+param azureOpenAIModelName string = 'gpt-4o'
 
 @description('Azure OpenAI model version')
 param azureOpenAIModelVersion string = '2024-11-20'
@@ -218,8 +218,9 @@ param enableTracing bool = true
 ])
 param logLevel string = 'INFO'
 
-description('Web App startup command. Uses fallback paths for startup.sh in common zip layouts.')
+@description('Web App startup command. Uses fallback paths for startup.sh in common zip layouts.')
 param appCommandLine string = 'bash -c "if [ -f startup.sh ]; then bash startup.sh; elif [ -f app/startup.sh ]; then bash app/startup.sh; elif [ -f /home/site/wwwroot/startup.sh ]; then bash /home/site/wwwroot/startup.sh; elif [ -f /home/site/wwwroot/app/startup.sh ]; then bash /home/site/wwwroot/app/startup.sh; else echo startup.sh not found in working directory or /home/site/wwwroot; echo Working directory: $(pwd); echo Contents of working directory:; ls -la; echo Contents of /home/site/wwwroot:; ls -la /home/site/wwwroot; exit 1; fi"'
+
 @description('Enable Key Vault for secrets management')
 param enableKeyVault bool = true
 
@@ -504,6 +505,7 @@ module appServiceModule 'modules/appService.bicep' = {
     pythonVersion: '3.11'
     alwaysOn: true
     appCommandLine: appCommandLine
+    appSettings: appSettings
     enableSystemManagedIdentity: true
     // Pass workspace ID so diagnostic logs are sent to Log Analytics (MCSB)
     logAnalyticsWorkspaceId: enableLogAnalyticsWorkspace ? logAnalyticsModule!.outputs.resourceId : ''

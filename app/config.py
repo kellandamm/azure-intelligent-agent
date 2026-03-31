@@ -70,6 +70,9 @@ class Settings(BaseSettings):
     app_port: int = 8080
     log_level: str = "INFO"
     enable_tracing: bool = True
+
+    # Agent backend selection (Azure AI Foundry is the recommended default)
+    use_foundry_agents: bool = True  # Set USE_FOUNDRY_AGENTS=false to use code-based agent backend
     
     # MCP Server Configuration
     mcp_server_host: str = "localhost"

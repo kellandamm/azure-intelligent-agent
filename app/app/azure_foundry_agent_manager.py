@@ -11,7 +11,7 @@ from azure.ai.agents.models import MessageRole, RunStatus
 
 from config import settings
 from utils.logging_config import logger
-from chart_generator import ResponseFormatter
+from .chart_generator import ResponseFormatter
 import httpx
 
 
