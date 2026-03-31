@@ -5,7 +5,7 @@
     "_comment_appName": "appName is now AUTO-GENERATED (agent + uniqueString). To override: add appName with value ${AZURE_APP_NAME} and run: azd env set AZURE_APP_NAME <yourname>",
     "_comment_sqlServerName": "sqlServerName is now AUTO-GENERATED as {appName}-sql. To override: add sqlServerName with ${AZURE_SQL_SERVER_NAME} and set the env var.",
     "location": {
-      "value": "${AZURE_LOCATION=eastus2}"
+      "value": "${AZURE_LOCATION=westus2}"
     },
     "environment": {
       "value": "${AZURE_ENVIRONMENT_NAME=dev}"

@@ -103,15 +103,15 @@ hooks:
 environments:
   dev:
     env:
-      AZURE_LOCATION: eastus2
+      AZURE_LOCATION: westus2
       AZURE_ENVIRONMENT_NAME: dev
   
   staging:
     env:
-      AZURE_LOCATION: eastus2
+      AZURE_LOCATION: westus2
       AZURE_ENVIRONMENT_NAME: staging
   
   prod:
     env:
-      AZURE_LOCATION: eastus2
+      AZURE_LOCATION: westus2
       AZURE_ENVIRONMENT_NAME: prod

@@ -34,7 +34,7 @@ using './main.bicep'
 param projectEndpoint = 'https://<your-resource>.services.ai.azure.com/api/projects/<your-project>'
 
 // Model deployment name in your Foundry project
-param modelDeploymentName = 'gpt-4o'  // or 'gpt-5.2'
+param modelDeploymentName = 'gpt-5.2'  // or 'gpt-5.2'
 
 // SQL Azure AD admin — cannot be blank (Azure Policy enforces this)
 param sqlAzureAdAdminLogin = 'admin@yourcompany.com'   // az ad signed-in-user show --query userPrincipalName -o tsv
@@ -47,7 +47,7 @@ If you want to deploy a separate Azure OpenAI resource instead of using Foundry'
 
 ```bicep
 param deployAzureOpenAI        = true
-param azureOpenAIModelName     = 'gpt-4o'
+param azureOpenAIModelName     = 'gpt-5.2'
 param azureOpenAIModelVersion  = '2024-11-20'
 param azureOpenAIModelCapacity = 10   // tokens per minute (thousands)
 ```
@@ -80,7 +80,7 @@ Choose **one** method:
 
 ```powershell
 # Create resource group
-az group create --name rg-myagents-prod --location eastus2
+az group create --name rg-myagents-prod --location westus2
 
 # Deploy infrastructure + app code
 .\scripts\deploy.ps1 -ResourceGroupName "rg-myagents-prod"
@@ -99,7 +99,7 @@ To update only the app code after changes (no infra rebuild):
 ```bash
 # Install azd if needed: https://learn.microsoft.com/azure/developer/azure-developer-cli/install-azd
 azd init
-azd env set AZURE_LOCATION eastus2
+azd env set AZURE_LOCATION westus2
 azd up
 ```
 
@@ -159,7 +159,7 @@ az webapp config appsettings set \
 **Step 2: Create All 9 Required Agents**
 
 Click **"+ New agent"** and create each agent below **using the exact names** (case-sensitive). For each agent:
-- **Model**: Select `gpt-41` or `gpt-5-mini` (or `gpt-5.2` if available)
+- **Model**: Select `gpt-4.1` or `gpt-5-mini` (or `gpt-5.2` if available)
 - **Instructions**: Copy the system prompt provided below
 - Click **"Save"** after entering the instructions
 

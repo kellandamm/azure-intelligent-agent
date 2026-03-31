@@ -71,7 +71,7 @@ azd env select dev
 azd env list
 
 # Set a variable in the active environment
-azd env set AZURE_LOCATION eastus2
+azd env set AZURE_LOCATION westus2
 
 # View all variables
 azd env get-values
@@ -92,7 +92,7 @@ azd env select prod   && azd up
 
 | Variable | Description |
 |----------|-------------|
-| `AZURE_LOCATION` | Azure region (e.g. `eastus2`) |
+| `AZURE_LOCATION` | Azure region (e.g. `westus2`) |
 | `AZURE_ENVIRONMENT_NAME` | Environment label (`dev`, `staging`, `prod`) |
 | `AZURE_APP_NAME` | Optional custom app name prefix |
 
