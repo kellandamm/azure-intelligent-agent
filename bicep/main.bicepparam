@@ -53,7 +53,7 @@ param environment = 'prod'
 // Azure AI Foundry project endpoint URL
 // Find in: AI Foundry portal → Project → Settings → Endpoint
 // Format: https://<resource>.services.ai.azure.com/api/projects/<project-name>
-param projectEndpoint = 'https://demosaifoundry9257402771.services.ai.azure.com/api/projects/demosaifoundry925740277-project'
+param projectEndpoint = ''
 
 // Model deployment name in AI Foundry
 // Example: 'gpt-4o', 'gpt-5.2'
@@ -164,8 +164,8 @@ param sqlAdminPassword = ''
 // This user/group will have admin access to the SQL database
 // Get from Azure AD: Users/Groups → Object ID
 // Run: az ad signed-in-user show --query id -o tsv
-param sqlAzureAdAdminLogin = 'admin@MngEnv180378.onmicrosoft.com'
-param sqlAzureAdAdminSid = '0230cab2-5323-49cd-a9c8-c5a7a51ca9ff'
+param sqlAzureAdAdminLogin = ''
+param sqlAzureAdAdminSid = ''
 
 // ========================================
 // Authentication & Security
