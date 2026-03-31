@@ -80,6 +80,10 @@ Choose **one** method:
 
 ```bash
 # Install azd if needed: https://learn.microsoft.com/azure/developer/azure-developer-cli/install-azd
+az login (if you havent logged in a while)
+
+azd auth login (if you havent logged in a while)
+
 azd init
 azd env set AZURE_LOCATION westus3
 azd up
@@ -87,7 +91,7 @@ azd up
 
 For full azd details see [AZD_DEPLOYMENT_GUIDE.md](AZD_DEPLOYMENT_GUIDE.md).
 
-### Option A: PowerShell 
+### Option B: PowerShell 
 
 ```powershell
 # Create resource group
