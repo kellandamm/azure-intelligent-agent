@@ -157,6 +157,17 @@ Run the helper script — it prompts for each ID, stores them as App Settings, a
 
 Run it without parameters to be prompted interactively for each value.
 
+To enable published Agent Applications (Responses protocol) during apply, use:
+
+```powershell
+.\scripts\get-agent-ids.ps1 `
+  -ProjectEndpoint "https://<resource>.services.ai.azure.com/api/projects/<project>" `
+  -ResourceGroupName "rg-myagents-prod" `
+  -AppName "<app-name>" `
+  -Apply `
+  -EnablePublishedMode
+```
+
 ### What gets written to App Settings
 
 | App Setting | Description |
@@ -171,7 +182,17 @@ Run it without parameters to be prompted interactively for each value.
 | `OPERATIONS_AGENT_ID` | Operations coordinator agent ID |
 | `CUSTOMER_SUCCESS_AGENT_ID` | Customer success agent ID |
 | `OPERATIONS_EXCELLENCE_AGENT_ID` | Operations excellence agent ID |
+| `ORCHESTRATOR_AGENT_APP_NAME` | Orchestrator published application name |
+| `SALES_AGENT_APP_NAME` | Sales published application name |
+| `REALTIME_AGENT_APP_NAME` | Operations / real-time published application name |
+| `ANALYTICS_AGENT_APP_NAME` | Analytics published application name |
+| `FINANCIAL_AGENT_APP_NAME` | Financial published application name |
+| `SUPPORT_AGENT_APP_NAME` | Customer support published application name |
+| `OPERATIONS_AGENT_APP_NAME` | Operations coordinator published application name |
+| `CUSTOMER_SUCCESS_AGENT_APP_NAME` | Customer success published application name |
+| `OPERATIONS_EXCELLENCE_AGENT_APP_NAME` | Operations excellence published application name |
 | `USE_FOUNDRY_AGENTS` | `true` — activates the Foundry backend |
+| `USE_PUBLISHED_AGENT_APPLICATIONS` | `true` when `-EnablePublishedMode` is used; otherwise unchanged |
 
 ---
 

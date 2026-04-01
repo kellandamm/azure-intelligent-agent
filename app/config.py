@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     # Azure AI Foundry settings (optional)
     project_endpoint: Optional[str] = None
     model_deployment_name: str = "gpt-4o"
+    use_published_agent_applications: bool = False
     
     # Microsoft Fabric Configuration (data platform)
     fabric_workspace_id: Optional[str] = None
@@ -30,14 +31,23 @@ class Settings(BaseSettings):
     # Azure AI Foundry Agent IDs (set these after creating agents in the Foundry portal)
     orchestrator_agent_id: Optional[str] = None
     orchestrator_agent_name: str = "RetailAssistantOrchestrator"
+    orchestrator_agent_app_name: Optional[str] = None
     sales_agent_id: Optional[str] = None
+    sales_agent_app_name: Optional[str] = None
     realtime_agent_id: Optional[str] = None
+    realtime_agent_app_name: Optional[str] = None
     analytics_agent_id: Optional[str] = None
+    analytics_agent_app_name: Optional[str] = None
     financial_agent_id: Optional[str] = None
+    financial_agent_app_name: Optional[str] = None
     support_agent_id: Optional[str] = None
+    support_agent_app_name: Optional[str] = None
     operations_agent_id: Optional[str] = None
+    operations_agent_app_name: Optional[str] = None
     customer_success_agent_id: Optional[str] = None
+    customer_success_agent_app_name: Optional[str] = None
     operations_excellence_agent_id: Optional[str] = None
+    operations_excellence_agent_app_name: Optional[str] = None
 
     # Azure AI Foundry Data Agents Configuration
     ai_foundry_project_endpoint: Optional[str] = None  # Azure AI Foundry project endpoint
