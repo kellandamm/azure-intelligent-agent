@@ -16,13 +16,13 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 # Try to import FabricTool - it may not be available if fabric-data-agent-sdk is not installed
+# Try to import FabricTool from the new projects SDK
 try:
-    from azure.ai.agents.models import FabricTool, ListSortOrder
+    from azure.ai.projects.models import FabricTool
     FABRIC_AVAILABLE = True
 except ImportError:
-    from azure.ai.agents.models import ListSortOrder
     FABRIC_AVAILABLE = False
-    print("⚠️  FabricTool not available. Fabric integration will be limited.")
+    print("⚠️  FabricTool not available via projects SDK. Fabric integration will be limited.")
 
 from config import settings
 from utils.logging_config import setup_logging, logger

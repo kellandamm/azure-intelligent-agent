@@ -528,6 +528,22 @@ module keyVaultRoleAssignment 'modules/roleAssignment.bicep' = if (enableKeyVaul
   }
 }
 
+// ========================================
+// Module: Role Assignments for Published Agents
+// ========================================
+
+@description('Built-in Role ID for Azure AI User, required to invoke Responses API')
+var azureAIUserRoleDefinitionId = 'a97b65f3-24c7-4388-baec-2e87135dc908'
+
+module agentRbacDeployment 'modules/roleAssignment.bicep' = {
+  name: 'appservice-ai-user-rbac'
+  params: {
+    principalId: appServiceModule.outputs.managedIdentityPrincipalId
+    roleDefinitionId: azureAIUserRoleDefinitionId
+    targetResourceId: resourceGroup().id 
+  }
+}
+
 // NOTE: SQL managed identity user creation (CREATE USER ... FROM EXTERNAL PROVIDER)
 // is an in-database DDL operation and cannot be done through an ARM/Bicep role assignment.
 // It is handled automatically by setup_mi_user.py on first application startup.

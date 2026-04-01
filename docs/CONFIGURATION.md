@@ -61,7 +61,8 @@ All Bicep parameters and application environment variables for the Azure Intelli
 | `fabricPowerBiAgentId` | No | Power BI query agent ID | Fabric → Data Science → Agents |
 | `fabricChartAgentId` | No | Chart generation agent ID | Fabric → Data Science → Agents |
 
-Agent ID format: `asst_xxxxxxxxxxxxxxxxxxxxx`
+*Agent ID format:** The application uses the Responses API. You must provide the fully qualified Azure Resource Manager (ARM) ID of the **Published** Agent. 
+*Example:* `/subscriptions/<sub-id>/resourceGroups/<rg-name>/providers/Microsoft.CognitiveServices/accounts/<account-name>/projects/<project-name>/applications/SalesAssistant`
 
 Microsoft Fabric cannot be deployed via Bicep. See [docs/FABRIC_DEPLOYMENT.md](docs/FABRIC_DEPLOYMENT.md) for manual setup steps.
 

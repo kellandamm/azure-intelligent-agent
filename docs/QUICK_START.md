@@ -34,7 +34,7 @@ using './main.bicep'
 param projectEndpoint = 'https://<your-resource>.services.ai.azure.com/api/projects/<your-project>'
 
 // Model deployment name in your Foundry project
-param modelDeploymentName = 'gpt-4o'  // or 'gpt-5.2'
+param modelDeploymentName = 'gpt-5.2'  // or 'gpt-5.2'
 
 // SQL Azure AD admin — cannot be blank (Azure Policy enforces this)
 param sqlAzureAdAdminLogin = 'admin@yourcompany.com'   // az ad signed-in-user show --query userPrincipalName -o tsv
@@ -47,7 +47,7 @@ If you want to deploy a separate Azure OpenAI resource instead of using Foundry'
 
 ```bicep
 param deployAzureOpenAI        = true
-param azureOpenAIModelName     = 'gpt-4o'
+param azureOpenAIModelName     = 'gpt-5.2'
 param azureOpenAIModelVersion  = '2024-11-20'
 param azureOpenAIModelCapacity = 10   // tokens per minute (thousands)
 ```
@@ -76,11 +76,22 @@ param powerbiClientSecret   = '<secret>'
 
 Choose **one** method:
 
-### Option A: PowerShell (recommended)
+### Option A: Azure Developer CLI (recommended)
+
+```bash
+# Install azd if needed: https://learn.microsoft.com/azure/developer/azure-developer-cli/install-azd
+azd init
+azd env set AZURE_LOCATION westus3
+azd up
+```
+
+For full azd details see [AZD_DEPLOYMENT_GUIDE.md](AZD_DEPLOYMENT_GUIDE.md).
+
+### Option A: PowerShell 
 
 ```powershell
 # Create resource group
-az group create --name rg-myagents-prod --location eastus2
+az group create --name rg-myagents-prod --location westus3
 
 # Deploy infrastructure + app code
 .\scripts\deploy.ps1 -ResourceGroupName "rg-myagents-prod"
@@ -93,17 +104,6 @@ To update only the app code after changes (no infra rebuild):
                      -AppName "<your-app-name>" `
                      -SkipInfrastructure
 ```
-
-### Option B: Azure Developer CLI
-
-```bash
-# Install azd if needed: https://learn.microsoft.com/azure/developer/azure-developer-cli/install-azd
-azd init
-azd env set AZURE_LOCATION eastus2
-azd up
-```
-
-For full azd details see [AZD_DEPLOYMENT_GUIDE.md](AZD_DEPLOYMENT_GUIDE.md).
 
 ### Confirm a healthy start
 
@@ -159,9 +159,37 @@ az webapp config appsettings set \
 **Step 2: Create All 9 Required Agents**
 
 Click **"+ New agent"** and create each agent below **using the exact names** (case-sensitive). For each agent:
-- **Model**: Select `gpt-41` or `gpt-5-mini` (or `gpt-5.2` if available)
+- **Model**: Select `gpt-4.1` or `gpt-5-mini` (or `gpt-5.2` if available)
 - **Instructions**: Copy the system prompt provided below
 - Click **"Save"** after entering the instructions
+
+**Step 3: Publish Agents and Retrieve ARM IDs**
+
+Because this application uses the new stateless **Responses API**, your agents must be *Published* as applications within your Foundry Project, rather than just saved as drafts.
+
+1. After saving each agent, click the **Publish** button in the top right of the agent screen.
+2. Once published, navigate to the **Published Applications** (or Endpoints) section of your Foundry project.
+3. For each of the 9 agents, copy their **Fully Qualified Azure Resource Manager (ARM) ID**. 
+   * *Format looks like:* `/subscriptions/<sub-id>/resourceGroups/<rg-name>/providers/Microsoft.CognitiveServices/accounts/<account-name>/projects/<project-name>/applications/<AgentAppName>`
+
+**Step 4: Configure App Service Environment Variables**
+
+Run the following commands, replacing the `<ARM-ID>` placeholders with the IDs you copied:
+
+```powershell
+az webapp config appsettings set \
+  --name <app-name> --resource-group rg-myagents-prod \
+  --settings \
+    USE_FOUNDRY_AGENTS="true" \
+    ORCHESTRATOR_AGENT_ID="<Orchestrator-ARM-ID>" \
+    SALES_AGENT_ID="<Sales-ARM-ID>" \
+    REALTIME_AGENT_ID="<Operations-ARM-ID>" \
+    ANALYTICS_AGENT_ID="<Analytics-ARM-ID>" \
+    FINANCIAL_AGENT_ID="<Financial-ARM-ID>" \
+    SUPPORT_AGENT_ID="<Support-ARM-ID>" \
+    OPERATIONS_AGENT_ID="<Coordinator-ARM-ID>" \
+    CUSTOMER_SUCCESS_AGENT_ID="<Success-ARM-ID>" \
+    OPERATIONS_EXCELLENCE_AGENT_ID="<Excellence-ARM-ID>"
 
 ---
 
@@ -269,23 +297,11 @@ After creating all 9 agents, run this script to automatically retrieve their IDs
   -Apply
 ```
 
-To enable the newer published Agent Application (Responses protocol) mode during apply:
-
-```powershell
-.\scripts\get-agent-ids.ps1 `
-  -ProjectEndpoint "https://<your-resource>.services.ai.azure.com/api/projects/<your-project>" `
-  -ResourceGroupName "rg-myagents-prod" `
-  -AppName "<app-name>" `
-  -Apply `
-  -EnablePublishedMode
-```
-
 **What this script does:**
 - ✅ Retrieves all 9 agent IDs by name from Microsoft AI Foundry
-- ✅ Maps them to both ID settings (`*_AGENT_ID`) and app-name settings (`*_AGENT_APP_NAME`)
-- ✅ Configures App Service settings with all agent routing values
+- ✅ Maps them to the correct environment variables
+- ✅ Configures App Service settings with all agent IDs
 - ✅ Sets `USE_FOUNDRY_AGENTS=true`
-- ✅ Optionally sets `USE_PUBLISHED_AGENT_APPLICATIONS=true` when `-EnablePublishedMode` is provided
 - ✅ Restarts the app
 
 **To find your PROJECT_ENDPOINT:**
