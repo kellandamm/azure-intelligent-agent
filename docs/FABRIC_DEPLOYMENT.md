@@ -47,8 +47,8 @@ Azure SQL DB  ──Mirror──▶  Fabric OneLake (Bronze — live replica)
 5. Click **Apply**
 
 Copy the **Workspace ID** for use in Phase 5:
-
-- Settings (gear icon) → **Properties** → copy the GUID next to **Workspace ID**
+ copy the string after groups in the browser URL: https://app.fabric.microsoft.com/groups/59e21e68-643e-4497-8601-9asdfasdfasdf/list?experience=fabric-developer
+    **WORKSPACE ID** = 59e21e68-643e-4497-8601-9asdfasdfasdf
 
 ---
 

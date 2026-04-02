@@ -164,7 +164,7 @@ Click **"+ New agent"** and create each agent below **using the exact names** (c
 - Click **"Save"** after entering the instructions
 
 
-**Agent 1: RetailAssistantOrchestrator**
+**Agent 1: RetailAssistantOrchestrator**  
 ```
 You are a retail business orchestrator. Your job is to understand the user's question and
 route it to the correct specialist. You have access to specialists for: sales data, operations
@@ -232,7 +232,7 @@ Because this application uses the new stateless **Responses API**, your agents m
 
 1. After saving each agent, click the **Publish** button in the top right of the agent screen.
 2. Once published, navigate to the **Published Applications** (or Endpoints) section of your Foundry project.
-3. For each of the 9 agents, copy their **Fully Qualified Azure Resource Manager (ARM) ID**. 
+3. For each of the 9 agents, copy their **Fully Qualified Azure Resource Manager (ARM) ID**. (you can find this by going to Agent > Publish > View Details > Copy Principal ID of the agent identity)
 
 
 **Step 4: Configure App Service Environment Variables**
@@ -253,7 +253,22 @@ az webapp config appsettings set \
     OPERATIONS_AGENT_ID="<Coordinator-ARM-ID>" \
     CUSTOMER_SUCCESS_AGENT_ID="<Success-ARM-ID>" \
     OPERATIONS_EXCELLENCE_AGENT_ID="<Excellence-ARM-ID>"
+
+    ************
+    AGENT NAME to variables above
+
+    RetailAssistantOrchestrator** = ORCHESTRATOR_AGENT_ID
+    SalesAssistant = SALES_AGENT_ID
+    OperationsAssistant = REALTIME_AGENT_ID
+    AnalyticsAssistant = ANALYTICS_AGENT_ID
+    FinancialAdvisor  = FINANCIAL_AGENT_ID
+    CustomerSupportAssistant = SUPPORT_AGENT_ID
+    OperationsCoordinator = OPERATIONS_AGENT_ID
+    CustomerSuccessAgent = CUSTOMER_SUCCESS_AGENT
+    OperationsExcellenceAgent = OPERATIONS_EXCELLENCE_AGENT_ID
 ```
+
+
 
 **Troubleshooting**
 - If script reports "Not found" for agents, verify you created them with the exact names listed above
@@ -358,7 +373,7 @@ $openaiId = az cognitiveservices account show `
 # Assign Cognitive Services OpenAI User role
 az role assignment create `
   --assignee $principalId `
-  --role "Cognitive Services OpenAI User" `
+  --role "Azure AI Project Manager" `
   --scope $openaiId
 ```
 
@@ -444,6 +459,8 @@ synthetic data. Choose the path that fits your needs:
 
 ### Option A — No Fabric (quick demo, SQL only)
 
+Change USE_FOUNDRY_AGENTS=false to use SQL Mode as it uses a different framework.
+
 `app/Fabric/synthetic_data.sql` was already run in Phase 4 — no further action needed.
 
 The AI agents, Analytics dashboard, and Sales dashboard will all query those Gold tables directly against Azure SQL. No environment variable changes are required.
@@ -458,18 +475,11 @@ Microsoft Fabric is a SaaS service that cannot be provisioned via Bicep — all 
 
 1. Navigate to [app.fabric.microsoft.com](https://app.fabric.microsoft.com)
 2. Create a **workspace**: Workspaces → + New workspace
-3. Get the **workspace ID**: Settings → Properties → Workspace ID
+3. Get the **workspace ID**: copy the string after groups in the browser URL: https://app.fabric.microsoft.com/groups/59e21e68-643e-4497-8601-9asdfasdfasdf/list?experience=fabric-developer
+    **WORKSPACE ID** = 59e21e68-643e-4497-8601-9asdfasdfasdf
 4. Create **agents**: Data Science → + Create Agent (one per required role)
-5. Copy each agent ID (`asst_xxx...`)
-6. Apply all IDs using the helper script (prompts for anything not passed as a flag):
 
-```powershell
-.\scripts\set-agent-ids.ps1 -ResourceGroupName "rg-myagents-prod" `
-                             -AppName "<app-name>" `
-                             -FabricWorkspaceId "<workspace-GUID>"
-```
 
-The script applies all settings and restarts the app.
 
 **Step 2 — Mirror SQL → Fabric and build medallion architecture**
 
