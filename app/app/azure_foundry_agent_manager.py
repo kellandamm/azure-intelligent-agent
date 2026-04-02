@@ -1,32 +1,38 @@
-"""Azure AI Foundry Published Agents integration layer using the Responses API."""
+"""Azure AI Foundry Published Agents integration layer using OpenAI conversations + agent_reference, with defensive debug logging."""
 from __future__ import annotations
 
 import asyncio
+import json
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
-import httpx
 
-from azure.identity.aio import DefaultAzureCredential, AzureCliCredential
+import httpx
 from azure.ai.projects.aio import AIProjectClient
+from azure.identity.aio import AzureCliCredential, DefaultAzureCredential
 
 from config import settings
 from utils.logging_config import logger
 from .chart_generator import ResponseFormatter
 
-# Error codes returned by Azure AI Foundry when the content-filter policy blocks a request.
-_CONTENT_FILTER_CODES = frozenset([
-    "content_filter",
-    "ResponsibleAIPolicyViolation",
-    "content_management_policy",
-])
+_CONTENT_FILTER_CODES = frozenset(
+    [
+        "content_filter",
+        "ResponsibleAIPolicyViolation",
+        "content_management_policy",
+    ]
+)
+
 
 def _is_content_safety_error(exc: Exception) -> bool:
-    """Return True if *exc* was raised because the AI content filter blocked the request."""
     error_code = getattr(getattr(exc, "error", None), "code", None) or ""
     if error_code in _CONTENT_FILTER_CODES:
         return True
     msg = str(exc).lower()
-    return any(kw in msg for kw in ("content_filter", "responsibleaipolicyviolation", "content_management"))
+    return any(
+        kw in msg
+        for kw in ("content_filter", "responsibleaipolicyviolation", "content_management")
+    )
+
 
 def _content_safety_message() -> str:
     return (
@@ -35,9 +41,22 @@ def _content_safety_message() -> str:
         "this is in error."
     )
 
+
+def _safe_repr(value: Any, max_len: int = 2000) -> str:
+    try:
+        if hasattr(value, "model_dump"):
+            text = json.dumps(value.model_dump(), default=str)
+        elif hasattr(value, "dict"):
+            text = json.dumps(value.dict(), default=str)
+        else:
+            text = repr(value)
+    except Exception as exc:
+        text = f"<unserializable {type(value).__name__}: {exc}>"
+    return text[:max_len]
+
+
 @dataclass
 class ChatResult:
-    """Container for chat responses."""
     response: str
     thread_id: str
     agent_id: str
@@ -46,7 +65,7 @@ class ChatResult:
 
 
 class AzureAIFoundryAgentManager:
-    """Manages orchestrator and specialist published agents using the Responses API."""
+    """Manages orchestrator and specialist published agents using conversation-backed Responses API."""
 
     def __init__(self) -> None:
         self.credential = self._create_credential()
@@ -57,19 +76,15 @@ class AzureAIFoundryAgentManager:
                 "Set it in App Settings or .env."
             )
 
-        # Initialize the new async project client for Responses API
         self.project_client = AIProjectClient(
             endpoint=settings.project_endpoint,
             credential=self.credential,
         )
 
         self._lock = asyncio.Lock()
-
-        # Optional MCP client for external tool calls (Retained for backward compatibility)
         self.mcp_client = httpx.AsyncClient(base_url=settings.mcp_server_url)
         self.mcp_tools_cache: Optional[List[Dict[str, Any]]] = None
 
-        # Specialist profiles map to Published Agent Resource IDs
         self.specialist_profiles: Dict[str, Dict[str, Any]] = {
             "sales": {
                 "display_name": "SalesAssistant",
@@ -124,10 +139,21 @@ class AzureAIFoundryAgentManager:
             logger.info("ℹ️ Falling back to AzureCliCredential for AIProjectClient")
             return AzureCliCredential()
 
-    # ── MCP helpers (Retained for compatibility) ───────────────────────────────
+    def _resolve_agent(self, agent_type: Optional[str]) -> tuple[str, str, str]:
+        normalized_type = (agent_type or "").strip().lower()
+        if not normalized_type or normalized_type in {"auto", "default", "orchestrator"}:
+            normalized_type = "orchestrator"
+
+        if normalized_type == "orchestrator":
+            return normalized_type, self.orchestrator_agent_id, self.orchestrator_agent_name
+
+        if normalized_type in self.specialist_profiles:
+            profile = self.specialist_profiles[normalized_type]
+            return normalized_type, profile["id"], profile["display_name"]
+
+        raise ValueError(f"Unknown agent type: {normalized_type}")
 
     async def _get_mcp_tools(self) -> List[Dict[str, Any]]:
-        """Fetch available MCP tools from the MCP server (cached)."""
         if self.mcp_tools_cache:
             return self.mcp_tools_cache
 
@@ -156,7 +182,6 @@ class AzureAIFoundryAgentManager:
             return []
 
     async def _call_mcp_tool(self, tool_name: str, arguments: Dict[str, Any]) -> Any:
-        """Call an MCP tool via the MCP server."""
         try:
             response = await self.mcp_client.post(
                 "/mcp/call",
@@ -172,7 +197,110 @@ class AzureAIFoundryAgentManager:
             logger.error(f"❌ Failed to call MCP tool '{tool_name}': {e}")
             return {"error": str(e)}
 
-    # ── Primary chat entry point (Responses API) ───────────────────────────────
+    @staticmethod
+    def _extract_response_text(response: Any) -> str:
+        text = getattr(response, "output_text", "") or ""
+        if text:
+            return text.strip()
+
+        parts: List[str] = []
+        for item in getattr(response, "output", None) or []:
+            item_type = getattr(item, "type", "") or (item.get("type", "") if isinstance(item, dict) else "")
+            if item_type in {"message", "text_message"}:
+                for content in getattr(item, "content", None) or (item.get("content", []) if isinstance(item, dict) else []):
+                    text_obj = getattr(content, "text", None)
+                    value = getattr(text_obj, "value", None)
+                    if value:
+                        parts.append(value)
+                        continue
+                    if isinstance(content, dict):
+                        text_dict = content.get("text") or {}
+                        if isinstance(text_dict, dict) and text_dict.get("value"):
+                            parts.append(text_dict["value"])
+                direct_text = getattr(item, "text", None)
+                if isinstance(direct_text, str) and direct_text:
+                    parts.append(direct_text)
+        return "\n".join(p for p in parts if p).strip()
+
+    async def _create_or_append_conversation(self, openai_client: Any, thread_id: Optional[str], message: str) -> str:
+        conversations = getattr(openai_client, "conversations", None)
+        if conversations is None:
+            raise AttributeError("OpenAI client has no 'conversations' attribute")
+
+        logger.info(
+            "🔍 conversations methods: %s",
+            [name for name in dir(conversations) if not name.startswith("_")][:30],
+        )
+
+        if not thread_id:
+            payload = {"items": [{"type": "message", "role": "user", "content": message}]}
+            logger.info("🔍 create conversation payload: %s", _safe_repr(payload))
+            conversation = await conversations.create(**payload)
+            logger.info("🔍 create conversation response: %s", _safe_repr(conversation))
+            return conversation.id
+
+        items_client = getattr(conversations, "items", None)
+        if items_client is None or not hasattr(items_client, "create"):
+            raise AttributeError("OpenAI conversations client has no 'items.create' method")
+
+        payload = {
+            "conversation_id": thread_id,
+            "items": [{"type": "message", "role": "user", "content": message}],
+        }
+        logger.info("🔍 append conversation payload: %s", _safe_repr(payload))
+        result = await items_client.create(**payload)
+        logger.info("🔍 append conversation response: %s", _safe_repr(result))
+        return thread_id
+
+    def _agent_reference_payloads(self, agent_id: str, agent_name: str) -> List[Dict[str, Any]]:
+        return [
+            {"agent_reference": {"name": agent_name, "type": "agent_reference"}},
+            {"agent_reference": {"id": agent_id, "type": "agent_reference"}},
+            {"agent_reference": {"name": agent_name}},
+            {"agent_reference": {"id": agent_id}},
+        ]
+
+    async def _create_response_with_fallbacks(
+        self,
+        openai_client: Any,
+        conversation_id: str,
+        agent_id: str,
+        agent_name: str,
+    ) -> Any:
+        responses_client = getattr(openai_client, "responses", None)
+        if responses_client is None or not hasattr(responses_client, "create"):
+            raise AttributeError("OpenAI client has no 'responses.create' method")
+
+        logger.info(
+            "🔍 responses methods: %s",
+            [name for name in dir(responses_client) if not name.startswith("_")][:30],
+        )
+
+        last_exc: Optional[Exception] = None
+        base_variants = [
+            {"conversation": conversation_id},
+            {"conversation_id": conversation_id},
+        ]
+
+        for base in base_variants:
+            for extra_body in self._agent_reference_payloads(agent_id, agent_name):
+                payload = dict(base)
+                payload["extra_body"] = extra_body
+                logger.info("🔍 responses.create payload: %s", _safe_repr(payload))
+                try:
+                    response = await responses_client.create(**payload)
+                    logger.info("🔍 responses.create response: %s", _safe_repr(response))
+                    return response
+                except TypeError as exc:
+                    last_exc = exc
+                    logger.warning("⚠️ responses.create TypeError with payload variant: %s", exc)
+                except Exception as exc:
+                    last_exc = exc
+                    logger.warning("⚠️ responses.create failed with payload variant: %s", exc)
+
+        if last_exc:
+            raise last_exc
+        raise RuntimeError("responses.create failed for all payload variants")
 
     async def chat(
         self,
@@ -182,57 +310,44 @@ class AzureAIFoundryAgentManager:
         thread_id: Optional[str] = None,
         user_context: Optional[Dict] = None,
     ) -> ChatResult:
-        """Process a chat request through a specific published agent."""
+        normalized_type, agent_id, agent_name = self._resolve_agent(agent_type)
 
-        normalized_type = (agent_type or "").strip().lower()
-        if not normalized_type or normalized_type in {"auto", "default", "orchestrator"}:
-            normalized_type = "orchestrator"
-
-        if normalized_type == "orchestrator":
-            agent_id = self.orchestrator_agent_id
-            agent_name = self.orchestrator_agent_name
-        elif normalized_type in self.specialist_profiles:
-            profile = self.specialist_profiles[normalized_type]
-            agent_id = profile["id"]
-            agent_name = profile["display_name"]
-        else:
-            raise ValueError(f"Unknown agent type: {normalized_type}")
-
-        logger.info(f"💬 Chat (Responses API) – agent={agent_name}, conversation={thread_id or 'new'}")
+        logger.info(
+            f"💬 Chat (Responses API + conversation) – agent={agent_name}, conversation={thread_id or 'new'}"
+        )
         logger.info(f"📨 User message: {message[:200]}")
+        logger.info("🔍 agent_id=%s, agent_name=%s, agent_type=%s", agent_id, agent_name, normalized_type)
 
         try:
             async with self._lock:
-                # Use the OpenAI compatibility layer for Responses
                 async with self.project_client.get_openai_client() as openai_client:
-                    
-                    # Prepare the Responses API payload
-                    kwargs = {
-                        "agent_id": agent_id,
-                        "input": message,
-                    }
-                    
-                    # Pass the conversation history ID if this is a continuing thread
-                    if thread_id:
-                        kwargs["conversation_id"] = thread_id
+                    logger.info(
+                        "🔍 openai client attrs: %s",
+                        [name for name in dir(openai_client) if not name.startswith("_")][:40],
+                    )
 
-                    # Single-shot invocation
-                    response = await openai_client.responses.create(**kwargs)
+                    conversation_id = await self._create_or_append_conversation(
+                        openai_client,
+                        thread_id,
+                        message,
+                    )
 
-                    # Extract the response text safely depending on SDK structure
-                    response_text = getattr(response, "output_text", "")
-                    if not response_text and hasattr(response, "output"):
-                        for out in response.output:
-                            if getattr(out, "type", "") == "text_message":
-                                response_text += getattr(out, "text", "")
+                    response = await self._create_response_with_fallbacks(
+                        openai_client,
+                        conversation_id,
+                        agent_id,
+                        agent_name,
+                    )
 
-                    # Extract conversation persistence details
-                    new_thread_id = getattr(response, "conversation_id", thread_id or "new_session")
-                    response_id = getattr(response, "id", "response_completed")
+                    response_text = self._extract_response_text(response)
+                    if not response_text:
+                        logger.warning("⚠️ Response had no parsed text. Raw response: %s", _safe_repr(response))
+                        response_text = "The agent completed successfully but returned no text."
+
+                    run_id = getattr(response, "id", "") or ""
 
                     logger.info(f"✅ Chat complete – response: {response_text[:200]}")
 
-                    # If this was routed to a specialist explicitly, format the response
                     if normalized_type != "orchestrator":
                         response_text = ResponseFormatter.format_specialist_response(
                             specialist_name=agent_name,
@@ -243,18 +358,20 @@ class AzureAIFoundryAgentManager:
 
                     return ChatResult(
                         response=response_text,
-                        thread_id=new_thread_id,
+                        thread_id=conversation_id,
                         agent_id=agent_id,
-                        run_id=response_id,
+                        run_id=run_id,
                         metadata={
                             "agent_name": agent_name,
-                            "agent_type": normalized_type
+                            "agent_type": normalized_type,
                         },
                     )
 
         except Exception as e:
             if _is_content_safety_error(e):
-                logger.warning(f"⚠️ Content safety filter raised exception for thread={thread_id}: {e}")
+                logger.warning(
+                    f"⚠️ Content safety filter raised exception for thread={thread_id}: {e}"
+                )
                 return ChatResult(
                     response=_content_safety_message(),
                     thread_id=thread_id or "new",
@@ -262,17 +379,15 @@ class AzureAIFoundryAgentManager:
                     run_id="",
                     metadata={"content_filtered": True, "agent_type": normalized_type},
                 )
-            logger.error(f"❌ Chat error (Responses API): {e}")
+            logger.error("❌ Chat error (Responses API + conversation): %s", e, exc_info=True)
             raise
 
     async def cleanup(self):
-        """Release resources."""
         await self.project_client.close()
         await self.mcp_client.aclose()
         logger.info("🧹 Cleaned up Azure AI Foundry Agent Manager resources")
 
 
-# Module-level singleton — guarded so import succeeds without PROJECT_ENDPOINT configured
 try:
     foundry_agent_manager = AzureAIFoundryAgentManager()
 except Exception as _e:
