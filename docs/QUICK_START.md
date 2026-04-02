@@ -170,9 +170,11 @@ You are a retail business orchestrator. Your job is to understand the user's que
 route it to the correct specialist. You have access to specialists for: sales data, operations
 metrics, analytics, financial planning, customer support, logistics, customer success, and
 operations excellence. Respond concisely and delegate complex questions to the right expert.
+```
 
 **Agent 2: SalesAssistant**
 ```
+
 You are a sales specialist. You provide deep insights into sales data, revenue trends,
 product performance, and customer purchasing patterns. Use data to answer questions about
 sales metrics, top products, regional performance, and growth opportunities. Be specific
@@ -543,3 +545,13 @@ Verify `AZURE_OPENAI_ENDPOINT` is set and the model deployment name (`AZURE_OPEN
 **Power BI not loading** _(optional integration)_
 
 Verify the service principal (`powerbiClientId`) has at least Member access to the Power BI workspace, and that "Service principals can use Power BI APIs" is enabled in the Power BI Admin portal → Tenant settings.
+
+
+## Backend selection
+
+Choose one backend mode for the lab and use the same language everywhere:
+
+- **Foundry-hosted agents (app-driven routing)** with `USE_FOUNDRY_AGENTS=true`
+- **Microsoft Agent Framework (code-orchestrated)** with `USE_FOUNDRY_AGENTS=false`
+
+If your lab relies on hosted specialist agents, prefer the Foundry-hosted mode.

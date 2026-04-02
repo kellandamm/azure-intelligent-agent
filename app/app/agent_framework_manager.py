@@ -45,8 +45,8 @@ class ChatResult:
     metadata: Optional[Dict[str, Any]] = None
 
 
-class AgentFrameworkManager:
-    """Manages orchestrator and specialist agents using Microsoft Agent Framework."""
+class MicrosoftAgentFrameworkBackendManager:
+    """Manages the Microsoft Agent Framework backend using code-orchestrated specialists."""
 
     def __init__(self, cache_manager=None) -> None:
         self.credential = self._create_credential()
@@ -907,7 +907,7 @@ class AgentFrameworkManager:
 
 
 try:
-    agent_framework_manager = AgentFrameworkManager()
+    microsoft_agent_framework_backend_manager = MicrosoftAgentFrameworkBackendManager()
 except Exception as _e:
     import logging as _logging
     _logging.getLogger(__name__).warning(
@@ -917,3 +917,8 @@ except Exception as _e:
     )
     agent_framework_manager = None
 """Singleton manager used by FastAPI endpoints."""
+
+
+# Backward-compatible aliases for older imports.
+AgentFrameworkManager = MicrosoftAgentFrameworkBackendManager
+agent_framework_manager = microsoft_agent_framework_backend_manager

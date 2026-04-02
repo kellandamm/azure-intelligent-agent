@@ -6,10 +6,7 @@ from pydantic import BaseModel
 from config import settings # <-- Move settings import up here
 
 # Select agent backend based on USE_FOUNDRY_AGENTS feature flag
-if settings.use_foundry_agents:
-    from app.azure_foundry_agent_manager import foundry_agent_manager as agent_framework_manager
-else:
-    from app.agent_framework_manager import agent_framework_manager
+from app.agent_backend_manager import agent_backend_manager
 
 from app.routes_admin_agents import log_agent_request
 from app.telemetry import trace_agent_response
@@ -90,7 +87,7 @@ class ChatService:
         
         try:
             # Call agent framework
-            result = await agent_framework_manager.chat(
+            result = await agent_backend_manager.chat(
                 message=message,
                 agent_type=agent_type,
                 thread_id=thread_id,

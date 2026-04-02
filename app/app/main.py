@@ -1,6 +1,6 @@
 """
-Contoso Sales app with Microsoft Foundry hosted agents and Microsoft Agent Framework integration.
-Supports both hosted-agent and code-orchestrated execution backends.
+Microsoft Agent Framework with Fabric Integration - Main Application
+Showcases agent capabilities with Microsoft Fabric data integration.
 """
 import os
 import asyncio
@@ -32,6 +32,7 @@ from utils.auth import AuthManager, get_current_user, require_admin
 from app.rls_middleware import RLSMiddleware
 from app.powerbi_integration import powerbi_embedding, powerbi_analytics
 
+# Select the active agent backend through the neutral selector module
 from app.agent_backend_manager import AGENT_BACKEND_LABEL, agent_backend_manager
 from app.routes_auth import auth_router, admin_router
 from app.routes_admin_agents import admin_agent_router, admin_dashboard_router, log_agent_request

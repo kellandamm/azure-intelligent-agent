@@ -251,3 +251,13 @@ param enableKeyVault       = true
 param sqlUseAzureAuth      = true
 param logLevel             = 'INFO'
 ```
+
+
+## Backend naming convention
+
+Use the following labels consistently across code, logs, and documentation.
+
+- `USE_FOUNDRY_AGENTS=true` → **Foundry-hosted agents (app-driven routing)**
+- `USE_FOUNDRY_AGENTS=false` → **Microsoft Agent Framework (code-orchestrated)**
+
+Avoid using ambiguous labels like `AgentFramework` or `Azure AI Foundry backend` in shared integration points without clarifying the routing model.

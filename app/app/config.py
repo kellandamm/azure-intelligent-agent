@@ -1,4 +1,5 @@
 """Configuration management for Agent Framework with Fabric Integration."""
+import os
 from typing import Optional
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -18,11 +19,11 @@ class Settings(BaseSettings):
     azure_openai_deployment: str = "gpt-4o"
     azure_openai_api_version: str = "2024-08-01-preview"
 
-    # Azure AI Foundry Project
+    # Azure AI Foundry settings (optional)
     project_endpoint: Optional[str] = None
     model_deployment_name: str = "gpt-4o"
     use_published_agent_applications: bool = False
-
+    
     # Microsoft Fabric Configuration (data platform)
     fabric_workspace_id: Optional[str] = None
     fabric_connection_id: Optional[str] = None
@@ -47,6 +48,12 @@ class Settings(BaseSettings):
     customer_success_agent_app_name: Optional[str] = None
     operations_excellence_agent_id: Optional[str] = None
     operations_excellence_agent_app_name: Optional[str] = None
+
+    # Azure AI Foundry Data Agents Configuration
+    ai_foundry_project_endpoint: Optional[str] = None  # Azure AI Foundry project endpoint
+    fabric_lakehouse_id: Optional[str] = None  # Fabric lakehouse ID for Data Agents
+    fabric_lakehouse_name: str = "RetailData"  # Fabric lakehouse name
+    enable_data_agents: bool = False  # Enable Data Agents for querying Fabric (default: False until configured)
     
     # Power BI Integration Configuration
     powerbi_workspace_id: Optional[str] = None
@@ -57,11 +64,16 @@ class Settings(BaseSettings):
     powerbi_tenant_id: Optional[str] = None
     powerbi_connection_url: Optional[str] = None
     
+    # Azure AI Content Safety (optional - for advanced prompt injection detection)
+    content_safety_endpoint: Optional[str] = None
+    content_safety_key: Optional[str] = None
+    enable_content_safety: bool = False  # Set to True with endpoint/key for AI-powered detection
+    
     # Azure Deployment
     azure_subscription_id: Optional[str] = None
-    azure_resource_group: str = ""
+    azure_resource_group: str = "rg-agentframework"
     azure_location: str = "eastus2"
-    azure_container_registry: str = ""
+    azure_container_registry: str = "acragentdemos"
     application_insights_name: str = "agentframework-demos"
     
     # Application Configuration
@@ -71,7 +83,7 @@ class Settings(BaseSettings):
 
     # Agent backend selection (Azure AI Foundry is the recommended default)
     use_foundry_agents: bool = True  # Set USE_FOUNDRY_AGENTS=false to use code-based agent backend
-
+    
     # MCP Server Configuration
     mcp_server_host: str = "localhost"
     mcp_server_port: int = 3000
@@ -81,7 +93,7 @@ class Settings(BaseSettings):
     
     # Database Configuration for Authentication (Optional - only needed if authentication is enabled)
     sql_server: Optional[str] = None  # e.g., 'myserver.database.windows.net'
-    sql_database: Optional[str] = None  # e.g., 'your-database-name'
+    sql_database: Optional[str] = None  # e.g., 'aiagentsdemo'
     sql_username: Optional[str] = None  # Optional if using Azure AD auth
     sql_password: Optional[str] = None  # Optional if using Azure AD auth
     sql_driver: str = "ODBC Driver 18 for SQL Server"
@@ -178,3 +190,8 @@ class Settings(BaseSettings):
 
 # Global settings instance
 settings = Settings()
+
+
+# Naming guidance for backend selection
+# USE_FOUNDRY_AGENTS=true  -> Foundry-hosted agents (app-driven routing)
+# USE_FOUNDRY_AGENTS=false -> Microsoft Agent Framework (code-orchestrated)

@@ -321,3 +321,11 @@ New files:
 
 ### Documentation
 - Documentation updates
+
+
+## Backend naming and routing update
+
+- Added a neutral backend selector module for shared imports.
+- Standardized backend naming across docs and app logs.
+- Renamed backend manager classes to make the routing model explicit.
+- Documented the Foundry-hosted agent mode as app-driven routing.
