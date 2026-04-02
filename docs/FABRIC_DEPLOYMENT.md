@@ -99,13 +99,13 @@ All mirrored status should show **Running** before proceeding.
 
 ### Grant Fabric read access to Azure SQL
 
-Fabric creates a service principal for the mirror. Its name appears in the connection details.
-Run in Query Editor:
+Click on your Workspace > Workspace Settings > Workspace Identity > + Workspace Identity > 
+Use the data in the Name field for Identity details
 
 ```sql
 -- Replace <fabric-spn-name> with the name shown in the Fabric mirror connection settings
-CREATE USER [<fabric-spn-name>] FROM EXTERNAL PROVIDER;
-ALTER ROLE db_datareader ADD MEMBER [<fabric-spn-name>];
+CREATE USER [<Name>] FROM EXTERNAL PROVIDER;
+ALTER ROLE db_datareader ADD MEMBER [<Name>];
 ```
 
 ---
@@ -127,9 +127,9 @@ In your workspace → **+ New item** → **Lakehouse** (repeat twice):
 
 1. Workspace → **+ New item** → **Notebook**
 2. Name: `Silver_Transform`
-3. Click **Add lakehouse** → select `AgentDemo_Silver` → **Add**
+3. Click **Add data items** → select `AgentDemo_Silver` → **Add**
 
-Paste the following cells and **Run all**:
+Paste the following cells and modify the variables  **Run all**:
 
 ```python
 # Cell 1 — Silver: Customers
@@ -181,7 +181,7 @@ print(f"silver_products: {products.count()} rows")
 
 1. Workspace → **+ New item** → **Notebook**
 2. Name: `Gold_Aggregate`
-3. Click **Add lakehouse** → select `AgentDemo_Gold` → **Add**
+3. Click **Add data items** → select `AgentDemo_Gold` → **Add**
 
 Paste each cell and **Run all**:
 
@@ -360,7 +360,7 @@ print("gold_inventory_analysis created")
 
 ## Phase 7 — Build the Refresh Pipeline
 
-1. Workspace → **+ New item** → **Data pipeline**
+1. Workspace → **+ New item** → **Pipeline**
 2. Name: `Medallion_Refresh`
 
 ### Add activities
