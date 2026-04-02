@@ -327,10 +327,9 @@ class FoundryHostedAgentBackendManager:
                         value = getattr(text_obj, "value", None)
                     if value:
                         parts.append(value)
-                if isinstance(direct_text, str) and direct_text:
-                    parts.append(direct_text)
-        return "
-".join(p for p in parts if p).strip()
+            if isinstance(direct_text, str) and direct_text:
+                parts.append(direct_text)
+            return "\n".join(p for p in parts if p).strip()
 
     async def _create_or_append_conversation(self, openai_client: Any, thread_id: Optional[str], message: str) -> str:
         if not thread_id:
