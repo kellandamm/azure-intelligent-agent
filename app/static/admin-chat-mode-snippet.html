@@ -1,0 +1,33 @@
+<div class="admin-card">
+  <h3>Chat backend mode</h3>
+  <label for="chatModeSelect">Mode</label>
+  <select id="chatModeSelect">
+    <option value="foundry">Foundry</option>
+    <option value="standard">Standard</option>
+  </select>
+  <button id="saveChatModeBtn">Save mode</button>
+  <div id="chatModeStatus"></div>
+</div>
+<script>
+async function loadChatMode() {
+  const res = await fetch('/api/admin/config/chat-mode');
+  const data = await res.json();
+  document.getElementById('chatModeSelect').value = data.mode;
+  document.getElementById('chatModeStatus').textContent =
+    `Mode: ${data.mode}, client_ready: ${data.client_ready}, foundry_ready: ${data.foundry_ready}`;
+}
+
+document.getElementById('saveChatModeBtn').addEventListener('click', async () => {
+  const mode = document.getElementById('chatModeSelect').value;
+  const res = await fetch('/api/admin/config/chat-mode', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({mode})
+  });
+  const data = await res.json();
+  document.getElementById('chatModeStatus').textContent =
+    res.ok ? `Updated to ${data.chat_mode}. client_ready=${data.client_ready}` : `Error: ${data.detail || data.error}`;
+});
+
+loadChatMode();
+</script>
