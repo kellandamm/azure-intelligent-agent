@@ -23,6 +23,9 @@ from .agent_tools import (
 )
 from utils.logging_config import logger
 from .chart_generator import ResponseFormatter, ChartGenerator
+
+class ConfigurationError(RuntimeError):
+    """Raised when the agent framework is misconfigured."""
 from .token_manager import TokenManager
 from .session_persistence import SessionPersistenceManager
 from .request_deduplicator import RequestDeduplicator, DeduplicationContext, DuplicateRequestError
@@ -623,12 +626,17 @@ class MicrosoftAgentFrameworkBackendManager:
         while iterations < max_iterations:
             iterations += 1
 
-            # Convert messages to Agent Framework format (string format for simple messages)
             formatted_messages = self._format_messages_for_framework(history)
 
             assistant_content = ""
             tool_calls: List[Dict[str, Any]] = []
             usage_info: Optional[Dict[str, Any]] = None
+
+            if self.client is None:
+                raise ConfigurationError(
+                    "Azure OpenAI client is not configured. "
+                    "Set AZURE_OPENAI_ENDPOINT and the deployment setting."
+                )
 
             if hasattr(self.client, "get_response"):
                 response = await self.client.get_response(
@@ -657,13 +665,12 @@ class MicrosoftAgentFrameworkBackendManager:
                 if getattr(response, "usage", None):
                     usage_info = {
                         "prompt_tokens": getattr(response.usage, "prompt_tokens", 0),
-                        "completion_tokens": getattr(
-                            response.usage, "completion_tokens", 0
-                        ),
+                        "completion_tokens": getattr(response.usage, "completion_tokens", 0),
                         "total_tokens": getattr(response.usage, "total_tokens", 0),
                     }
             else:
                 tool_schemas = self._convert_tools_for_openai(tools)
+
                 payload = await self.client.complete_with_tools(
                     messages=[
                         msg.to_dict() if hasattr(msg, "to_dict") else msg
@@ -673,9 +680,7 @@ class MicrosoftAgentFrameworkBackendManager:
                     tool_choice="auto" if tool_schemas else "none",
                 )
 
-                choices = (
-                    payload.get("choices", []) if isinstance(payload, dict) else []
-                )
+                choices = payload.get("choices", []) if isinstance(payload, dict) else []
                 message_payload = choices[-1].get("message", {}) if choices else {}
 
                 content_payload = message_payload.get("content")
@@ -697,15 +702,11 @@ class MicrosoftAgentFrameworkBackendManager:
                     for call in tool_calls_payload
                 ]
 
-                usage_payload = (
-                    payload.get("usage") if isinstance(payload, dict) else None
-                )
+                usage_payload = payload.get("usage") if isinstance(payload, dict) else None
                 if isinstance(usage_payload, dict):
                     usage_info = {
                         "prompt_tokens": int(usage_payload.get("prompt_tokens", 0)),
-                        "completion_tokens": int(
-                            usage_payload.get("completion_tokens", 0)
-                        ),
+                        "completion_tokens": int(usage_payload.get("completion_tokens", 0)),
                         "total_tokens": int(usage_payload.get("total_tokens", 0)),
                     }
 
@@ -715,16 +716,14 @@ class MicrosoftAgentFrameworkBackendManager:
             }
 
             if tool_calls:
-                # Tool calls are already in dict format, just assign them
                 assistant_message["tool_calls"] = tool_calls
 
             history.append(assistant_message)
 
             if tool_calls:
                 if not tool_executor:
-                    raise RuntimeError(
-                        "Tool calls encountered but no executor provided"
-                    )
+                    raise RuntimeError("Tool calls encountered but no executor provided")
+
                 for call in tool_calls:
                     tool_output = await tool_executor(call)
                     history.append(

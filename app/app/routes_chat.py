@@ -10,9 +10,9 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel, Field, field_validator
 
+from config import settings
 from services.auth_service import AuthService
 from services.chat_service import process_chat_message
-from config import settings
 from utils.logging_config import logger
 
 router = APIRouter()
@@ -33,7 +33,6 @@ class ChatRequest(BaseModel):
     @field_validator("message")
     @classmethod
     def sanitize_message(cls, value: str) -> str:
-        """Sanitize message to reduce obvious injection attempts."""
         sanitized = "".join(
             char for char in value if ord(char) >= 32 or char in ("\n", "\t")
         ).strip()
