@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Azure Intelligent Agent — Architecture</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300..700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0d1117;--surface:#161b22;--surface-2:#21262d;--surface-3:#30363d;
+  --border:#30363d;--text:#e6edf3;--text-muted:#8b949e;--text-faint:#484f58;
+  --azure-blue:#0078d4;--azure-blue-dim:#1a3a5c;
+  --azure-teal:#00b7c3;--azure-teal-dim:#003d40;
+  --azure-purple:#7b5ea7;--azure-purple-dim:#2d1f45;
+  --azure-green:#28a745;--azure-green-dim:#0d2818;
+  --azure-orange:#d6720c;--azure-orange-dim:#3d2008;
+  --radius-sm:6px;--radius-md:10px;--radius-lg:16px;
+}
+html{-webkit-font-smoothing:antialiased}
+body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-size:14px;min-height:100vh;padding:2rem 1rem}
+.page{max-width:1280px;margin:0 auto}
+.header{display:flex;align-items:center;gap:1rem;margin-bottom:2.5rem;padding-bottom:1.5rem;border-bottom:1px solid var(--border);flex-wrap:wrap}
+.header-text h1{font-size:1.3rem;font-weight:700;letter-spacing:-0.02em}
+.header-text p{font-size:0.8rem;color:var(--text-muted);margin-top:2px}
+.repo-link{margin-left:auto;display:flex;align-items:center;gap:6px;padding:6px 14px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:0.75rem;color:var(--text-muted);text-decoration:none;transition:all 180ms ease}
+.repo-link:hover{border-color:var(--azure-blue);color:#79c0ff}
+.legend{display:flex;flex-wrap:wrap;gap:1rem;margin-bottom:2rem;padding:1rem 1.25rem;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md)}
+.legend-title{font-size:0.6875rem;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted);margin-bottom:.5rem;width:100%}
+.legend-item{display:flex;align-items:center;gap:8px;font-size:0.75rem;color:var(--text-muted)}
+.legend-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.diagram{display:grid;gap:1.5rem}
+.zone{border-radius:var(--radius-lg);border:1px solid var(--border);overflow:hidden}
+.zone-header{padding:.625rem 1.25rem;display:flex;align-items:center;gap:.75rem;font-size:.75rem;font-weight:600;text-transform:uppercase;letter-spacing:.07em}
+.zone-body{padding:1.25rem;display:flex;flex-direction:column;gap:1.25rem}
+.zone-client .zone-header{background:var(--azure-purple-dim);color:#c9aef7;border-bottom:1px solid var(--azure-purple)}
+.zone-client{border-color:var(--azure-purple)}
+.zone-appservice .zone-header{background:var(--azure-blue-dim);color:#79c0ff;border-bottom:1px solid var(--azure-blue)}
+.zone-appservice{border-color:var(--azure-blue)}
+.zone-ai .zone-header{background:var(--azure-teal-dim);color:#39d3d3;border-bottom:1px solid var(--azure-teal)}
+.zone-ai{border-color:var(--azure-teal)}
+.zone-data .zone-header{background:rgba(40,167,69,.12);color:#56d364;border-bottom:1px solid var(--azure-green)}
+.zone-data{border-color:var(--azure-green)}
+.zone-infra .zone-header{background:rgba(214,114,12,.12);color:#ffa657;border-bottom:1px solid var(--azure-orange)}
+.zone-infra{border-color:var(--azure-orange)}
+.zone-optional .zone-header{background:rgba(139,148,158,.08);color:var(--text-muted);border-bottom:1px solid var(--border)}
+.zone-optional{border-color:var(--surface-3)}
+.service-row{display:flex;flex-wrap:wrap;gap:.875rem;align-items:stretch}
+.svc{flex:1;min-width:155px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-md);padding:.875rem 1rem;display:flex;flex-direction:column;gap:.5rem;transition:border-color 180ms ease,box-shadow 180ms ease}
+.svc:hover{border-color:var(--azure-blue);box-shadow:0 0 18px rgba(0,120,212,0.22)}
+.svc-title{font-weight:600;font-size:.8125rem;color:var(--text)}
+.svc-sub{font-size:.6875rem;color:var(--text-muted);line-height:1.45}
+.svc-tag{display:inline-flex;align-items:center;font-size:.625rem;padding:2px 7px;border-radius:var(--radius-sm);font-weight:600;text-transform:uppercase;letter-spacing:.05em;width:fit-content;margin-top:auto}
+.tag-core{background:rgba(0,120,212,.18);color:#79c0ff;border:1px solid rgba(0,120,212,.3)}
+.tag-optional{background:rgba(139,148,158,.12);color:var(--text-muted);border:1px solid var(--border)}
+.tag-network{background:rgba(214,114,12,.18);color:#ffa657;border:1px solid rgba(214,114,12,.3)}
+.flow-section{margin-bottom:2rem}
+.flow-section h2{font-size:.75rem;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--text-muted);margin-bottom:1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border)}
+.flow-step{display:flex;align-items:flex-start;gap:1rem;padding:.875rem 0;border-bottom:1px solid var(--border)}
+.flow-step:last-child{border-bottom:none}
+.step-num{width:28px;height:28px;border-radius:50%;background:var(--azure-blue-dim);border:1px solid var(--azure-blue);color:#79c0ff;font-size:.6875rem;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-family:'JetBrains Mono',monospace}
+.step-content h3{font-size:.8125rem;font-weight:600;color:var(--text);margin-bottom:2px}
+.step-content p{font-size:.75rem;color:var(--text-muted);line-height:1.5;max-width:72ch}
+.step-services{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.step-badge{font-size:.625rem;padding:2px 8px;border-radius:var(--radius-sm);font-weight:600;background:var(--surface-3);color:var(--text-muted);border:1px solid var(--border)}
+.network-banner{display:flex;align-items:flex-start;gap:1rem;padding:1rem 1.25rem;background:rgba(214,114,12,.08);border:1px solid rgba(214,114,12,.3);border-radius:var(--radius-md);margin-bottom:1.5rem}
+.network-banner p{font-size:.75rem;color:#ffa657;line-height:1.5}
+.cost-box{margin-top:2rem;padding:1rem 1.25rem;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md)}
+.cost-title{font-size:.6875rem;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--text-muted);margin-bottom:.75rem}
+.cost-row{display:flex;gap:2rem;flex-wrap:wrap;align-items:center}
+.ci .l{font-size:.75rem;color:var(--text-muted)} .ci .a{font-size:1.1rem;font-weight:700} .ci .n{font-size:.6875rem;color:var(--text-faint)}
+.cd{font-size:.6875rem;color:var(--text-faint);max-width:380px}
+footer{margin-top:3rem;padding-top:1.5rem;border-top:1px solid var(--border);font-size:.6875rem;color:var(--text-faint);display:flex;justify-content:space-between;flex-wrap:wrap;gap:.5rem}
+</style>
+</head>
+<body>
+<div class="page">
+
+<header class="header">
+  <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
+    <rect width="40" height="40" rx="10" fill="#0078d4"/>
+    <path d="M10 28 L20 12 L30 28" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    <circle cx="20" cy="20" r="3.5" fill="white"/>
+    <path d="M14 24 L26 24" stroke="rgba(255,255,255,0.45)" stroke-width="1.5" stroke-linecap="round"/>
+  </svg>
+  <div class="header-text">
+    <h1>Azure Intelligent Agent &mdash; Architecture Diagram</h1>
+    <p>FastAPI &middot; Azure OpenAI GPT-4o &middot; Azure SQL &middot; VNet Private Topology &middot; Optional: Fabric, AI Foundry, Power BI, MCP</p>
+  </div>
+  <a class="repo-link" href="https://github.com/kellandamm/azure-intelligent-agent" target="_blank" rel="noopener noreferrer">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
+    kellandamm / azure-intelligent-agent
+  </a>
+</header>
+
+<div class="legend">
+  <div class="legend-title">Service Categories</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#7b5ea7"></div>Client / Browser</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#0078d4"></div>Azure App Service (Core Runtime)</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#00b7c3"></div>AI &amp; Agent Services</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#28a745"></div>Data &amp; Storage</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#d6720c"></div>Network &amp; Security</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#8b949e"></div>Optional / Extended</div>
+</div>
+
+<div class="network-banner">
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ffa657" stroke-width="2" style="flex-shrink:0;margin-top:1px"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+  <p><strong>Private Network Topology:</strong> App Service connects to Azure SQL exclusively through VNet integration + private endpoint. No public internet path to SQL. Satisfies Azure Policy requirements out of the box.</p>
+</div>
+
+<div class="flow-section">
+  <h2>Request &amp; Agent Flow (7 Steps)</h2>
+  <div>
+    <div class="flow-step"><div class="step-num">1</div><div class="step-content"><h3>Client Request</h3><p>Browser or API client sends a chat/REST request over HTTPS. Azure AD Bearer token passed for authenticated routes.</p><div class="step-services"><span class="step-badge">Browser / API Client</span><span class="step-badge">Azure AD (Entra ID)</span></div></div></div>
+    <div class="flow-step"><div class="step-num">2</div><div class="step-content"><h3>FastAPI Ingress, Auth &amp; Rate Limit</h3><p>Azure App Service (Python 3.11 + Gunicorn) receives the request. auth_service.py validates the JWT; rate_limiter.py enforces per-user throttling to protect OpenAI token budgets.</p><div class="step-services"><span class="step-badge">Azure App Service</span><span class="step-badge">main.py</span><span class="step-badge">auth_service.py</span><span class="step-badge">rate_limiter.py</span></div></div></div>
+    <div class="flow-step"><div class="step-num">3</div><div class="step-content"><h3>Session Load from SQL</h3><p>chat_service.py loads the conversation history for the session from Azure SQL Database via private endpoint. Row-Level Security ensures each user only sees their own data.</p><div class="step-services"><span class="step-badge">chat_service.py</span><span class="step-badge">Azure SQL Database</span><span class="step-badge">VNet / Private Endpoint</span></div></div></div>
+    <div class="flow-step"><div class="step-num">4</div><div class="step-content"><h3>Agent Orchestration &amp; Secret Resolution</h3><p>agent_framework_manager.py selects the agent strategy: direct OpenAI, Fabric specialist, or AI Foundry. Secrets fetched from Key Vault via Managed Identity.</p><div class="step-services"><span class="step-badge">agent_framework_manager.py</span><span class="step-badge">Azure Key Vault</span><span class="step-badge">Managed Identity</span><span class="step-badge">config.py</span></div></div></div>
+    <div class="flow-step"><div class="step-num">5</div><div class="step-content"><h3>AI Inference &mdash; GPT-4o Function-Calling Loop</h3><p>agent_tools.py dispatches tool calls to Azure OpenAI GPT-4o. The agent reasons over conversation history + tool results in a loop until a final answer is produced. Streaming is supported.</p><div class="step-services"><span class="step-badge">agent_tools.py</span><span class="step-badge">Azure OpenAI (GPT-4o)</span></div></div></div>
+    <div class="flow-step"><div class="step-num">6</div><div class="step-content"><h3>Tool Calls: SQL, Fabric, Analytics, Sales</h3><p>During the agent loop, tools query Azure SQL for structured business data, optionally call Microsoft Fabric specialist agents for lakehouse analytics, and run domain logic via analytics_service.py and routes_sales.py.</p><div class="step-services"><span class="step-badge">Azure SQL</span><span class="step-badge">Microsoft Fabric (optional)</span><span class="step-badge">analytics_service.py</span><span class="step-badge">routes_sales.py</span></div></div></div>
+    <div class="flow-step"><div class="step-num">7</div><div class="step-content"><h3>Persist, Emit Telemetry &amp; Respond</h3><p>Final answer is written back to SQL (session history). Telemetry pushed to Application Insights. Streaming/JSON response returned to client. Power BI Embedded reports surfaceable inline.</p><div class="step-services"><span class="step-badge">Azure SQL</span><span class="step-badge">Application Insights</span><span class="step-badge">Power BI Embedded (optional)</span></div></div></div>
+  </div>
+</div>
+
+<div class="diagram">
+
+  <div class="zone zone-client">
+    <div class="zone-header">&#128249; Client Layer</div>
+    <div class="zone-body"><div class="service-row">
+      <div class="svc"><div class="svc-title">Browser / API Client</div><div class="svc-sub">Chat UI or direct REST calls over HTTPS. Sends Bearer token for auth. Entry point for all user interactions.</div><span class="svc-tag tag-core">Entry Point</span></div>
+      <div class="svc"><div class="svc-title">Azure AD / Entra ID</div><div class="svc-sub">Issues MSAL JWT tokens. Validated by auth_service.py. Supports RBAC role claims (admin, user, sales).</div><span class="svc-tag tag-core">Identity</span></div>
+    </div></div>
+  </div>
+
+  <div class="zone zone-appservice">
+    <div class="zone-header">&#9881; Azure App Service &mdash; Core Runtime &nbsp;(Python 3.11 &middot; FastAPI &middot; Gunicorn)</div>
+    <div class="zone-body">
+      <div class="service-row">
+        <div class="svc"><div class="svc-title">main.py</div><div class="svc-sub">FastAPI app entry point. Mounts routers: chat, admin, sales, health. Configures CORS, middleware, and lifespan events.</div><span class="svc-tag tag-core">Core</span></div>
+        <div class="svc"><div class="svc-title">auth_service.py</div><div class="svc-sub">Validates JWT Bearer tokens. Extracts user identity and role claims. Enforces route-level access control.</div><span class="svc-tag tag-core">Auth</span></div>
+        <div class="svc"><div class="svc-title">rate_limiter.py</div><div class="svc-sub">Per-user token-bucket rate limiting. Protects OpenAI token budgets. Configurable per tier (dev / prod).</div><span class="svc-tag tag-core">Middleware</span></div>
+        <div class="svc"><div class="svc-title">chat_service.py</div><div class="svc-sub">Manages conversation sessions. Loads and persists history to SQL. Triggers agent framework with assembled context.</div><span class="svc-tag tag-core">Chat</span></div>
+      </div>
+      <div class="service-row">
+        <div class="svc"><div class="svc-title">agent_framework_manager.py</div><div class="svc-sub">Orchestrates agent strategy: OpenAI direct, Fabric specialist, or AI Foundry. Central router for all AI calls. 40K+ lines.</div><span class="svc-tag tag-core">Orchestrator</span></div>
+        <div class="svc"><div class="svc-title">agent_tools.py</div><div class="svc-sub">All callable tools exposed to GPT-4o via function-calling. SQL queries, data lookups, analytics, Fabric calls. 60K+ lines.</div><span class="svc-tag tag-core">Tools</span></div>
+        <div class="svc"><div class="svc-title">routes_sales.py</div><div class="svc-sub">Sales domain API router. Territory queries, pipeline analytics, RLS-scoped data views, sales metrics.</div><span class="svc-tag tag-core">Router</span></div>
+        <div class="svc"><div class="svc-title">mcp_server_app.py</div><div class="svc-sub">Optional MCP server mode. Exposes agent tools via Model Context Protocol. AI Foundry and Claude Desktop can connect.</div><span class="svc-tag tag-optional">MCP</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="zone zone-ai">
+    <div class="zone-header">&#11088; AI &amp; Agent Services</div>
+    <div class="zone-body"><div class="service-row">
+      <div class="svc"><div class="svc-title">Azure OpenAI (GPT-4o)</div><div class="svc-sub">Primary inference engine. Function-calling loop powers agent tool dispatch. Streaming supported. Deployable or BYOD (existing resource).</div><span class="svc-tag tag-core">Core AI</span></div>
+      <div class="svc"><div class="svc-title">Azure AI Foundry</div><div class="svc-sub">Optional native agent experiences. Alternative to direct OpenAI SDK calls. MCP integration path for richer orchestration.</div><span class="svc-tag tag-optional">Optional</span></div>
+      <div class="svc"><div class="svc-title">Application Insights</div><div class="svc-sub">Distributed tracing, logs, metrics, failure analysis. Telemetry for every agent call, SQL query, and route invocation.</div><span class="svc-tag tag-core">Observability</span></div>
+    </div></div>
+  </div>
+
+  <div class="zone zone-data">
+    <div class="zone-header">&#128451; Data &amp; Storage</div>
+    <div class="zone-body"><div class="service-row">
+      <div class="svc"><div class="svc-title">Azure SQL Database</div><div class="svc-sub">Users, sessions, conversation history, sales territories, agent configs. Row-Level Security (RLS). Reachable only via private endpoint.</div><span class="svc-tag tag-core">Core Data</span></div>
+      <div class="svc"><div class="svc-title">Microsoft Fabric</div><div class="svc-sub">Optional lakehouse. Specialist agents query Fabric for heavy analytical workloads. Synthetic data gen via notebooks in fabric/ folder.</div><span class="svc-tag tag-optional">Optional</span></div>
+      <div class="svc"><div class="svc-title">Power BI Embedded</div><div class="svc-sub">Optional embedded reports. Token-based embedding into chat responses or standalone dashboard pages.</div><span class="svc-tag tag-optional">Optional</span></div>
+    </div></div>
+  </div>
+
+  <div class="zone zone-infra">
+    <div class="zone-header">&#128737; Network &amp; Security Infrastructure</div>
+    <div class="zone-body"><div class="service-row">
+      <div class="svc"><div class="svc-title">Azure Virtual Network (VNet)</div><div class="svc-sub">App Service VNet integration. All outbound traffic to SQL routes through the private subnet. No public SQL exposure.</div><span class="svc-tag tag-network">Network</span></div>
+      <div class="svc"><div class="svc-title">Private Endpoint (SQL)</div><div class="svc-sub">Azure SQL private endpoint in the VNet. All SQL traffic stays internal to Azure &mdash; never traverses the public internet.</div><span class="svc-tag tag-network">Network</span></div>
+      <div class="svc"><div class="svc-title">Azure Key Vault</div><div class="svc-sub">Stores OpenAI API keys, SQL connection strings, and all app secrets. Accessed via Managed Identity. No credentials in code.</div><span class="svc-tag tag-core">Secrets</span></div>
+      <div class="svc"><div class="svc-title">Managed Identity</div><div class="svc-sub">System-assigned identity on App Service. Authenticates to Key Vault and Azure SQL without any stored credentials.</div><span class="svc-tag tag-network">Identity</span></div>
+    </div></div>
+  </div>
+
+  <div class="zone zone-optional">
+    <div class="zone-header">&#128161; Optional Extensions (deploy as needed)</div>
+    <div class="zone-body"><div class="service-row">
+      <div class="svc"><div class="svc-title">Bicep IaC (bicep/)</div><div class="svc-sub">All Azure resources as code. Deploy via deploy.ps1 or azd up. Parameterized for dev / prod environments.</div><span class="svc-tag tag-optional">IaC</span></div>
+      <div class="svc"><div class="svc-title">Fabric Notebooks (fabric/)</div><div class="svc-sub">Synthetic data generation, schema diagnostics, lakehouse setup. Run in Microsoft Fabric workspace.</div><span class="svc-tag tag-optional">Optional</span></div>
+      <div class="svc"><div class="svc-title">MCP Server Mode</div><div class="svc-sub">mcp_server_app.py + Dockerfile.mcp. Exposes all agent tools via MCP protocol. AI Foundry and Claude Desktop can connect.</div><span class="svc-tag tag-optional">MCP</span></div>
+      <div class="svc"><div class="svc-title">GitHub Actions (.github/)</div><div class="svc-sub">CI/CD workflows. Automated test, lint, and deploy on push. Smoke tests via tests/smoke_test.py.</div><span class="svc-tag tag-optional">CI/CD</span></div>
+    </div></div>
+  </div>
+
+</div>
+
+<div class="cost-box">
+  <div class="cost-title">Cost Reference (per month, excludes OpenAI token costs)</div>
+  <div class="cost-row">
+    <div class="ci"><div class="l">Development</div><div class="a" style="color:#56d364">~$31</div><div class="n">B2 App Service + Basic SQL</div></div>
+    <div class="ci"><div class="l">Production</div><div class="a" style="color:#ffa657">~$410</div><div class="n">P1v2 App Service + S2 SQL</div></div>
+    <div class="cd">Excludes Azure OpenAI token costs, Microsoft Fabric capacity charges, and Power BI Premium licensing.</div>
+  </div>
+</div>
+
+<footer>
+  <span>azure-intelligent-agent &middot; kellandamm &middot; April 2026</span>
+  <span>Architecture diagram generated from full repo analysis</span>
+</footer>
+</div>
+</body>
+</html>
