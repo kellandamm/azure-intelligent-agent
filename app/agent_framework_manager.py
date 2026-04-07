@@ -5,7 +5,7 @@ from typing import Any, Dict, Optional, Tuple
 
 class ConfigurationError(RuntimeError):
     """Raised when chat backend configuration is invalid or incomplete."""
-
+    pass
 
 class StandardChatClient:
     def __init__(self, endpoint: str, deployment: str):
