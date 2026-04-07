@@ -1,6 +1,6 @@
 # Deployment Guide
 
-Deploy the Azure Intelligent Agent from zero to running in a simple step-by-step flow.
+Deploy the Azure Intelligent Agent from zero to running in a practical step-by-step flow.
 
 ---
 
@@ -8,29 +8,43 @@ Deploy the Azure Intelligent Agent from zero to running in a simple step-by-step
 
 Have these ready before starting:
 
-- [ ] Azure CLI installed and logged in.
-- [ ] PowerShell 7.0+ installed.
-- [ ] Azure subscription with Contributor access.
-- [ ] Azure AD UPN and object ID.
-- [ ] Azure AI Foundry project or Azure OpenAI deployment.
-- [ ] Fabric capacity only if you plan to enable Microsoft Fabric.
+- [ ] **Azure CLI** installed and logged in (`az login`)
+- [ ] **PowerShell 7.0+** installed (`pwsh` command available)
+- [ ] **Azure subscription** with Contributor access to a resource group
+- [ ] Your **Azure AD UPN**: `az ad signed-in-user show --query userPrincipalName -o tsv`
+- [ ] Your **Azure AD object ID**: `az ad signed-in-user show --query id -o tsv`
+- [ ] **Azure AI Foundry** project or **Azure OpenAI** deployment, depending on your chosen backend
+- [ ] **Microsoft Fabric capacity** only if you plan to enable Fabric
 
 ---
 
 ## Phase 1 — Configure Parameters
 
-1. Open the main Bicep parameter file.
-2. Fill in the required SQL Azure AD admin values.
-3. Fill in the required AI endpoint or Foundry project settings.
-4. Leave Fabric, RTI, Direct Lake, Foundry/Data Agent, and Purview settings blank unless you plan to enable them now.
+Open the main Bicep parameter file and fill in the required values first.
+
+### Required fields
+
+- SQL Azure AD admin login.
+- SQL Azure AD admin object ID.
+- AI endpoint/project settings.
+- Model deployment name.
+
+### Optional integrations
+
+Leave these blank unless you plan to enable them now:
+
+- Fabric workspace and analytics settings.
+- Foundry/Data Agent settings.
+- RTI settings.
+- Purview settings.
 
 ---
 
 ## Phase 2 — Deploy Infrastructure
 
-Choose one method.
+Choose **one** method.
 
-### Azure Developer CLI
+### Option A — Azure Developer CLI
 
 ```bash
 azd init
@@ -38,86 +52,106 @@ azd env set AZURE_LOCATION westus3
 azd up
 ```
 
-### PowerShell
+### Option B — PowerShell
 
 ```powershell
 az group create --name rg-myagents-prod --location westus3
 .\scripts\deploy.ps1 -ResourceGroupName "rg-myagents-prod"
 ```
 
-After deployment, note the app name from the output.
+To redeploy code only later:
+
+```powershell
+.\scripts\deploy.ps1 -ResourceGroupName "rg-myagents-prod" `
+                     -AppName "<your-app-name>" `
+                     -SkipInfrastructure
+```
 
 ---
 
-## Phase 3 — Confirm the App Starts
+## Phase 3 — Confirm a Healthy Start
+
+Tail the startup logs:
 
 ```powershell
 az webapp log tail --name <app-name> --resource-group rg-myagents-prod
 ```
 
-A healthy start should show the application booting without configuration errors.
+A healthy start should show the application booting cleanly.
 
 ---
 
 ## Phase 4 — Configure Authentication and Seed Data
 
-1. Open Azure Portal → SQL Database → Query Editor.
-2. Run the required schema and seed SQL scripts in order.
-3. Create the first admin user if authentication is enabled.
-4. Confirm you can sign in successfully.
+Run the required SQL schema and seed scripts in Azure SQL Query Editor.
+
+Recommended order:
+
+1. Authentication schema.
+2. Security / RLS policies.
+3. Synthetic or business seed data.
+4. Create the first admin user if authentication is enabled.
 
 ---
 
 ## Phase 5 — Validate SQL Access
 
-1. Confirm the app can reach Azure SQL.
-2. If the managed identity grant did not work automatically, run:
+The application should be able to use its managed identity to access Azure SQL.
+
+If automatic grant fails, run:
 
 ```sql
 CREATE USER [<webapp-name>] FROM EXTERNAL PROVIDER;
 ALTER ROLE db_owner ADD MEMBER [<webapp-name>];
 ```
 
-3. Restart the app if needed.
+Then restart the app.
 
 ---
 
-## Phase 6 — Optional Fabric Setup
+## Phase 6 — Fabric
 
-If you do not need Fabric, skip this section.
+Microsoft Fabric is optional. The app can run fully against Azure SQL alone.
 
-If you do need Fabric:
+### Option A — No Fabric
 
-1. Create the Fabric workspace.
-2. Enable SQL mirroring.
-3. Build the Silver and Gold layers.
-4. Create the semantic model.
-5. Prefer Direct Lake over curated Gold data.
-6. Point the app to Fabric only after validation.
+Skip this phase entirely.
 
-See **[FABRIC_DEPLOYMENT.md](FABRIC_DEPLOYMENT.md)** for the full walkthrough.
+### Option B — Full Fabric
+
+Use **[FABRIC_DEPLOYMENT.md](FABRIC_DEPLOYMENT.md)** for the step-by-step Fabric walkthrough.
+
+That guide covers:
+
+- Azure SQL mirroring.
+- Bronze, Silver, and Gold setup.
+- Repo notebook source files.
+- Semantic model guidance.
+- Direct Lake guidance.
+- App connection to Fabric.
 
 ---
 
-## Phase 7 — Optional RTI Setup
+## Phase 7 — Optional Real-Time Intelligence
 
-If you need near-real-time monitoring:
+If you need near-real-time monitoring and actions:
 
 1. Create Eventstream.
-2. Route data to Eventhouse.
-3. Add Activator rules.
-4. Test one end-to-end event path.
+2. Add an event source.
+3. Route data to Eventhouse.
+4. Add Activator rules.
+5. Validate one end-to-end event path.
 
 See **[FABRIC_RTI_OPTIONAL_DEPLOYMENT.md](FABRIC_RTI_OPTIONAL_DEPLOYMENT.md)**.
 
 ---
 
-## Phase 8 — Optional Foundry and Data Agent Setup
+## Phase 8 — Optional Foundry and Data Agent
 
-If you need conversational analytics over Fabric:
+If you need conversational analytics over curated Fabric data:
 
 1. Create the Fabric Data Agent.
-2. Expose only curated Gold data.
+2. Expose only approved Gold data.
 3. Connect it through Foundry.
 4. Validate Fabric first, then Foundry, then the app.
 
@@ -125,12 +159,12 @@ See **[FABRIC_DATA_AGENT_FOUNDRY_APP_SETUP.md](FABRIC_DATA_AGENT_FOUNDRY_APP_SET
 
 ---
 
-## Phase 9 — Optional Purview Setup
+## Phase 9 — Optional Purview
 
-If you need governance:
+If you need governance and cataloging:
 
 1. Deploy the Purview account.
-2. Register sources.
+2. Register the required sources.
 3. Configure scans.
 4. Validate catalog and lineage.
 
@@ -138,19 +172,31 @@ See **[PURVIEW_OPTIONAL_DEPLOYMENT.md](PURVIEW_OPTIONAL_DEPLOYMENT.md)**.
 
 ---
 
-## Phase 10 — Smoke Test
+## Phase 10 — Smoke Tests
 
 ```bash
-python tests/smoke_test.py --url https://<your-app-name>.azurewebsites.net --skip-auth
+python tests/smoke_test.py   --url https://<your-app-name>.azurewebsites.net   --skip-auth
 ```
 
-Confirm the app loads and the main endpoints return healthy responses.
+A healthy run shows the main endpoints returning successful responses.
+
+---
+
+## Common Commands
+
+| Action | PowerShell / Azure CLI | azd |
+|--------|------------------------|-----|
+| Full deploy | `.\scripts\deploy.ps1 -ResourceGroupName rg-name` | `azd up` |
+| Code only | `.\scripts\deploy.ps1 -ResourceGroupName rg-name -AppName app-name -SkipInfrastructure` | `azd deploy` |
+| Tail logs | `az webapp log tail --name app-name -g rg-name` | `azd monitor --logs --follow` |
+| Restart app | `az webapp restart --name app-name -g rg-name` | — |
+| Delete everything | `az group delete --name rg-name --yes --no-wait` | `azd down` |
 
 ---
 
 ## Troubleshooting
 
-- App startup issues: tail App Service logs.
-- SQL connection issues: verify identity, networking, and SQL permissions.
-- Fabric issues: validate mirroring and Gold table creation before app cutover.
-- Foundry/Data Agent issues: validate Fabric and Foundry independently before using the app path.
+- Startup issues: tail App Service logs.
+- SQL issues: check identity, permissions, and networking.
+- Fabric issues: validate mirroring and Gold tables before switching the app path.
+- Foundry/Data Agent issues: validate each layer independently before testing the app route.
