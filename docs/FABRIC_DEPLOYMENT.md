@@ -1,6 +1,6 @@
 # Microsoft Fabric Setup — Mirroring, Medallion Architecture & Pipelines
 
-Sets up Microsoft Fabric to mirror your Azure SQL database and build a medallion analytics architecture that powers the AI agents and dashboards.
+Sets up Microsoft Fabric to mirror your Azure SQL database and build a medallion analytics architecture that powers dashboards, curated analytics, and Data Agent scenarios.
 
 > **No Fabric?** Skip this guide entirely. Run `app/Fabric/synthetic_data.sql` against Azure SQL and the app works without any Fabric configuration. See [QUICK_START.md Phase 6](../docs/QUICK_START.md#phase-6--fabric).
 
@@ -35,7 +35,7 @@ Azure SQL DB  ──Mirror──▶  Fabric OneLake (Bronze — live replica)
 - Azure SQL database deployed and seeded (Phase 2 + Phase 5 of QUICK_START.md complete)
 - Azure CLI logged in with Contributor access to the resource group
 - Fabric workspace admin rights
-
+    - [ ] Add your user as Fabric Administrator in Entra if you are doing to use Fabric
 ---
 
 ## Phase 1 — Create a Fabric Workspace
@@ -110,20 +110,36 @@ ALTER ROLE db_datareader ADD MEMBER [<fabric-spn-name>];
 
 ---
 
-## Phase 4 — Create the Silver and Gold Lakehouses
+## Phase 4 — Create the Lakehouses
 
-### Create two lakehouses
+### Create three lakehouses
 
-In your workspace → **+ New item** → **Lakehouse** (repeat twice):
+In your workspace → **+ New item** → **Lakehouse** :
 
 | Name | Purpose |
 |------|---------|
+| `AgentDemo_Bronze` | Mirrored raw Data |
 | `AgentDemo_Silver` | Cleansed, standardised tables |
-| `AgentDemo_Gold` | Pre-aggregated analytics tables queried by the app |
+| `AgentDemo_` | Pre-aggregated analytics tables queried by the app |
+
 
 ---
 
-## Phase 5 — Silver Layer — Cleansing Notebook
+## Phase 4.1 — Bronze Layer — Seeding Notebook
+
+1. Workspace → **+ New item** → **Notebook**
+2. Name: `Bronze_Seed`
+3. Click **Add lakehouse** → select `AgentDemo_Bronze` → **Add**
+
+Notebook sources:
+
+- `notebooks/01_bronze_seed_demo_data.py`
+
+Paste the following cells and **Run all**:
+
+---
+
+## Phase 4.2 — Silver Layer — Cleansing Notebook
 
 1. Workspace → **+ New item** → **Notebook**
 2. Name: `Silver_Transform`
@@ -131,234 +147,33 @@ In your workspace → **+ New item** → **Lakehouse** (repeat twice):
 
 Paste the following cells and **Run all**:
 
-```python
-# Cell 1 — Silver: Customers
-from pyspark.sql.functions import col, upper, trim, coalesce, lit
+Notebook sources:
 
-mirrored_db = "<your-mirrored-db-name>"   # name of the Mirrored Database item in Fabric
+- `notebooks/02_silver_transform.py`
 
-customers = spark.sql(f"SELECT * FROM {mirrored_db}.dbo.Customers")
-customers_silver = (
-    customers
-    .withColumn("State",   upper(trim(col("State"))))
-    .withColumn("Country", coalesce(col("Country"), lit("USA")))
-    .withColumn("Email",   trim(col("Email")))
-    .dropDuplicates(["Email"])
-)
-customers_silver.write.mode("overwrite").saveAsTable("silver_customers")
-print(f"silver_customers: {customers_silver.count()} rows")
-```
-
-```python
-# Cell 2 — Silver: Orders
-orders = spark.sql(f"SELECT * FROM {mirrored_db}.dbo.Orders WHERE OrderStatus != 'Cancelled'")
-orders.write.mode("overwrite").saveAsTable("silver_orders")
-print(f"silver_orders: {orders.count()} rows")
-```
-
-```python
-# Cell 3 — Silver: OrderItems
-order_items = spark.sql(f"SELECT * FROM {mirrored_db}.dbo.OrderItems")
-order_items.write.mode("overwrite").saveAsTable("silver_order_items")
-print(f"silver_order_items: {order_items.count()} rows")
-```
-
-```python
-# Cell 4 — Silver: Products
-products = spark.sql(f"""
-    SELECT p.*, c.CategoryName
-    FROM {mirrored_db}.dbo.Products p
-    LEFT JOIN {mirrored_db}.dbo.Categories c ON p.CategoryID = c.CategoryID
-    WHERE p.IsActive = 1
-""")
-products.write.mode("overwrite").saveAsTable("silver_products")
-print(f"silver_products: {products.count()} rows")
-```
-
+Run the Silver transformation flow and confirm the expected Silver tables are created
 ---
 
-## Phase 6 — Gold Layer — Aggregation Notebook
+## Phase 4.3 — Gold Layer — Aggregation Notebook
 
 1. Workspace → **+ New item** → **Notebook**
 2. Name: `Gold_Aggregate`
 3. Click **Add lakehouse** → select `AgentDemo_Gold` → **Add**
+4. Add another Cell copy contents for Validate notebook file
 
 Paste each cell and **Run all**:
 
-```python
-# Cell 1 — Gold: Monthly Sales Time Series
-spark.sql("""
-CREATE OR REPLACE TABLE gold_sales_time_series AS
-SELECT
-    DATE_TRUNC('month', o.OrderDate)              AS OrderDate,
-    YEAR(o.OrderDate)                              AS year,
-    QUARTER(o.OrderDate)                           AS quarter,
-    MONTH(o.OrderDate)                             AS month,
-    DATE_FORMAT(o.OrderDate, 'MMMM')               AS month_name,
-    COUNT(DISTINCT o.OrderID)                      AS daily_orders,
-    ROUND(SUM(oi.LineTotal), 2)                    AS daily_revenue,
-    ROUND(SUM(oi.LineTotal) / COUNT(DISTINCT o.OrderID), 6) AS avg_order_value,
-    COUNT(DISTINCT o.CustomerID)                   AS unique_customers
-FROM silver_orders o
-JOIN silver_order_items oi ON o.OrderID = oi.OrderID
-GROUP BY 1, 2, 3, 4, 5
-ORDER BY 1
-""")
-print("gold_sales_time_series created")
-```
+Notebook sources:
 
-```python
-# Cell 2 — Gold: Customer 360
-spark.sql("""
-CREATE OR REPLACE TABLE gold_customer_360 AS
-SELECT
-    c.CustomerID,
-    c.FirstName,
-    c.LastName,
-    c.Email,
-    c.City,
-    c.State,
-    c.Country,
-    c.CustomerSince,
-    COUNT(DISTINCT o.OrderID)                                         AS total_orders,
-    ROUND(SUM(oi.LineTotal), 2)                                       AS lifetime_value,
-    ROUND(SUM(oi.LineTotal) / NULLIF(COUNT(DISTINCT o.OrderID), 0), 6) AS avg_order_value,
-    MAX(o.OrderDate)                                                  AS last_order_date,
-    MIN(o.OrderDate)                                                  AS first_order_date,
-    AVG(DATEDIFF(o.ShippedDate, o.OrderDate))                        AS avg_delivery_days,
-    DATEDIFF(CURRENT_DATE, c.CustomerSince)                          AS customer_tenure_days,
-    DATEDIFF(CURRENT_DATE, MAX(o.OrderDate))                         AS recency_days,
-    CASE
-        WHEN SUM(oi.LineTotal) >= 10000 THEN 'Premium'
-        WHEN SUM(oi.LineTotal) >= 5000  THEN 'Standard'
-        WHEN COUNT(DISTINCT o.OrderID) = 1 THEN 'New'
-        ELSE 'At Risk'
-    END AS customer_segment,
-    CASE
-        WHEN DATEDIFF(CURRENT_DATE, MAX(o.OrderDate)) > 365 THEN 'Churned'
-        WHEN DATEDIFF(CURRENT_DATE, MAX(o.OrderDate)) > 180 THEN 'Inactive'
-        ELSE 'Active'
-    END AS customer_status
-FROM silver_customers c
-LEFT JOIN silver_orders o      ON c.CustomerID = o.CustomerID
-LEFT JOIN silver_order_items oi ON o.OrderID   = oi.OrderID
-GROUP BY 1,2,3,4,5,6,7,8
-""")
-print("gold_customer_360 created")
-```
+- `notebooks/03_gold_aggregate.py`
+- `notebooks/04_validate_gold.py`
 
-```python
-# Cell 3 — Gold: Sales Performance KPIs
-spark.sql("""
-CREATE OR REPLACE TABLE gold_sales_performance AS
-SELECT 'Total Revenue'     AS metric_name, ROUND(SUM(LineTotal), 2) AS metric_value FROM silver_order_items
-UNION ALL
-SELECT 'Total Orders',     CAST(COUNT(DISTINCT OrderID) AS DOUBLE)  FROM silver_orders
-UNION ALL
-SELECT 'Avg Order Value',  ROUND(AVG(TotalAmount), 2)               FROM silver_orders
-UNION ALL
-SELECT 'Win Rate',
-    ROUND(COUNT(CASE WHEN OrderStatus = 'Delivered' THEN 1 END) * 100.0 / NULLIF(COUNT(*), 0), 2)
-    FROM silver_orders
-UNION ALL
-SELECT 'Conversion Rate',
-    ROUND(COUNT(DISTINCT CustomerID) * 100.0 / NULLIF((SELECT COUNT(*) FROM silver_customers), 0), 2)
-    FROM silver_orders
-UNION ALL
-SELECT 'Avg Delivery Days',
-    ROUND(AVG(DATEDIFF(ShippedDate, OrderDate)), 2)
-    FROM silver_orders WHERE ShippedDate IS NOT NULL
-""")
-print("gold_sales_performance created")
-```
+Run the Gold aggregation notebook, then run the validation notebook.
 
-```python
-# Cell 4 — Gold: Geographic Sales
-spark.sql("""
-CREATE OR REPLACE TABLE gold_geographic_sales AS
-SELECT
-    c.State,
-    c.City,
-    YEAR(o.OrderDate)    AS year,
-    QUARTER(o.OrderDate) AS quarter,
-    MONTH(o.OrderDate)   AS month,
-    COUNT(DISTINCT o.OrderID)   AS order_count,
-    ROUND(SUM(oi.LineTotal), 2) AS total_revenue,
-    COUNT(DISTINCT o.CustomerID) AS unique_customers
-FROM silver_customers c
-JOIN silver_orders      o  ON c.CustomerID = o.CustomerID
-JOIN silver_order_items oi ON o.OrderID    = oi.OrderID
-GROUP BY 1, 2, 3, 4, 5
-""")
-print("gold_geographic_sales created")
-```
-
-```python
-# Cell 5 — Gold: Cohort Analysis
-spark.sql("""
-CREATE OR REPLACE TABLE gold_cohort_analysis AS
-WITH cohorts AS (
-    SELECT
-        CustomerID,
-        DATE_FORMAT(MIN(OrderDate), 'yyyy-MM') AS cohort_month,
-        COUNT(DISTINCT OrderID)                AS order_count,
-        SUM(total_revenue)                     AS cohort_revenue
-    FROM (
-        SELECT o.CustomerID, o.OrderID, o.OrderDate, SUM(oi.LineTotal) AS total_revenue
-        FROM silver_orders o
-        JOIN silver_order_items oi ON o.OrderID = oi.OrderID
-        GROUP BY o.CustomerID, o.OrderID, o.OrderDate
-    ) t
-    GROUP BY CustomerID
-)
-SELECT
-    cohort_month,
-    COUNT(*)                               AS cohort_size,
-    ROUND(SUM(cohort_revenue), 2)          AS cohort_revenue,
-    ROUND(COUNT(CASE WHEN order_count > 1 THEN 1 END) * 100.0 / COUNT(*), 2) AS retention_rate
-FROM cohorts
-GROUP BY cohort_month
-ORDER BY cohort_month DESC
-""")
-print("gold_cohort_analysis created")
-```
-
-```python
-# Cell 6 — Gold: Inventory Analysis
-spark.sql("""
-CREATE OR REPLACE TABLE gold_inventory_analysis AS
-SELECT
-    cat.CategoryName     AS category,
-    p.ProductName,
-    p.StockQuantity      AS current_stock,
-    COALESCE(sold.units_sold, 0) AS units_sold_30d,
-    CASE
-        WHEN p.StockQuantity = 0 THEN 'Out of Stock'
-        WHEN p.StockQuantity < 10 THEN 'Low Stock'
-        ELSE 'In Stock'
-    END AS stock_status,
-    ROUND(p.Price, 2) AS unit_price,
-    ROUND(p.Price * p.StockQuantity, 2) AS inventory_value
-FROM silver_products p
-JOIN silver_orders o1 ON 1=0  -- placeholder join structure
-LEFT JOIN (
-    SELECT oi.ProductID, SUM(oi.Quantity) AS units_sold
-    FROM silver_order_items oi
-    JOIN silver_orders o ON oi.OrderID = o.OrderID
-    WHERE o.OrderDate >= DATE_SUB(CURRENT_DATE, 30)
-    GROUP BY oi.ProductID
-) sold ON p.ProductID = sold.ProductID
-JOIN (SELECT CategoryID, CategoryName FROM silver_products GROUP BY CategoryID, CategoryName) cat
-    ON p.CategoryID = cat.CategoryID
-""")
-print("gold_inventory_analysis created")
-```
-
-> **Note:** The inventory notebook cell above uses a simplified join — adjust to match the actual `Categories` table structure in your Silver lakehouse.
 
 ---
 
-## Phase 7 — Build the Refresh Pipeline
+## Phase 5 — Build the Refresh Pipeline
 
 1. Workspace → **+ New item** → **Data pipeline**
 2. Name: `Medallion_Refresh`
@@ -384,6 +199,30 @@ Click **Run** → **Run now**. Monitor the run under the **Pipeline runs** tab i
 
 ---
 
+## Phase 6 - Semantic Model and Direct Lake
+
+1. Build the semantic model over curated Gold data.
+2. Prefer Direct Lake when the Gold data already lives in Fabric.
+3. Avoid unnecessary DirectQuery fallback.
+4. Validate behavior before cutover.
+
+See **[FABRIC_DIRECT_LAKE.md](FABRIC_DIRECT_LAKE.md)**. for directions
+
+---
+
+## Phase 7 - Data Agent Deployment
+
+1. Create the Fabric Data Agent in the target Fabric workspace.
+2. Add the curated Gold source.
+3. Select only approved tables.
+4. Add clear agent instructions that explain what the source contains and what kinds of questions it should answer.
+5. Add example queries where supported.
+6. Test and refine the Data Agent in Fabric.
+7. Publish the Data Agent only after validation.
+
+See **[FABRIC_DATA_AGENT_DEPLOYMENT.md](FABRIC_DATA_AGENT_DEPLOYMENT.md)**. 
+
+
 ## Phase 8 — Connect the App to Fabric Gold
 
 ### Get the SQL Analytics Endpoint
@@ -406,6 +245,11 @@ az webapp config appsettings set `
 ```
 
 Or set them in **Azure Portal → App Service → Settings → Environment variables**.
+
+---
+
+
+
 
 ### Restart the app
 

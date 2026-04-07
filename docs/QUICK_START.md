@@ -1,6 +1,6 @@
 # Deployment Guide
 
-Deploy the Azure Intelligent Agent from zero to running in approximately 20 minutes.
+Deploy the Azure Intelligent Agent from zero to running in a practical step-by-step flow.
 
 ---
 
@@ -17,17 +17,22 @@ Have these ready before starting:
   - Note: Azure OpenAI endpoint and API key will be retrieved from Foundry project settings
 - [ ] Your **Azure AD UPN**: `az ad signed-in-user show --query userPrincipalName -o tsv`
 - [ ] Your **Azure AD object ID**: `az ad signed-in-user show --query id -o tsv`
-
+- [ ] Add your user as Fabric Administrator in Entra if you are doing to use Fabric
+- 
 ---
 
-## Phase 1 — Configure Parameters (5 min)
+## Phase 1 — Configure Parameters
 
 Open `bicep/main.bicepparam` and fill in your values. Most fields are optional — start with the required ones.
 
 ### Required fields
 
+- SQL Azure AD admin login.
+- SQL Azure AD admin object ID.
+- AI endpoint/project settings.
+- Model deployment name.
+
 ```bicep
-using './main.bicep'
 
 // Microsoft AI Foundry Project — Required for default agent backend
 // Find in Azure AI Foundry portal → Project → Settings → Endpoint
@@ -56,6 +61,15 @@ param azureOpenAIModelCapacity = 10   // tokens per minute (thousands)
 
 ### Optional integrations
 
+Leave these blank unless you plan to enable them now:
+
+- Fabric workspace and analytics settings.
+- Foundry/Data Agent settings.
+- RTI settings.
+- Purview settings.
+
+---
+
 Fill these in now if you have additional services, or return to add them later:
 
 ```bicep
@@ -72,7 +86,7 @@ param powerbiClientSecret   = '<secret>'
 
 ---
 
-## Phase 2 — Deploy Infrastructure (8–15 min)
+## Phase 2 — Deploy Infrastructure
 
 Choose **one** method:
 
@@ -87,7 +101,7 @@ azd up
 
 For full azd details see [AZD_DEPLOYMENT_GUIDE.md](AZD_DEPLOYMENT_GUIDE.md).
 
-### Option A: PowerShell 
+### Option B: PowerShell 
 
 ```powershell
 # Create resource group
@@ -163,64 +177,66 @@ Click **"+ New agent"** and create each agent below **using the exact names** (c
 - **Instructions**: Copy the system prompt provided below
 - Click **"Save"** after entering the instructions
 
+```**Agent 1: RetailAssistantOrchestrator**  
 
-**Agent 1: RetailAssistantOrchestrator**  
-```
 You are a retail business orchestrator. Your job is to understand the user's question and
 route it to the correct specialist. You have access to specialists for: sales data, operations
 metrics, analytics, financial planning, customer support, logistics, customer success, and
 operations excellence. Respond concisely and delegate complex questions to the right expert.
 ```
 
-**Agent 2: SalesAssistant**
-```
+```**Agent 2: SalesAssistant**
 
 You are a sales specialist. You provide deep insights into sales data, revenue trends,
 product performance, and customer purchasing patterns. Use data to answer questions about
 sales metrics, top products, regional performance, and growth opportunities. Be specific
 and quantitative when presenting findings.
 ```
-**Agent 3: OperationsAssistant**
+
+```**Agent 3: OperationsAssistant**
 
 You are a real-time operations specialist. You monitor operational KPIs, track inventory
 levels, analyze supply chain metrics, and provide alerts on operational issues. Focus on
 current state and immediate issues requiring attention.
 ```
 
-**Agent 4: AnalyticsAssistant**
-```
+```**Agent 4: AnalyticsAssistant**
+
 You are a business intelligence analyst. You perform advanced analytics, identify trends,
 create forecasts, and provide data-driven recommendations. Use statistical analysis and
 visualization suggestions to help users understand complex business patterns.
 ```
 
-**Agent 5: FinancialAdvisor**
-```
+```**Agent 5: FinancialAdvisor**
+
 You are a financial analyst specializing in retail business finance. You analyze profitability,
 ROI, cost structures, pricing strategies, and financial forecasts. Provide actionable financial
 insights and recommendations backed by data.
 ```
-**Agent 6: CustomerSupportAssistant**
-```
+
+```**Agent 6: CustomerSupportAssistant**
+
 You are a customer support specialist. You analyze customer inquiries, complaints, satisfaction
 scores, and support ticket trends. Provide insights on common issues, resolution times, and
 recommendations for improving customer experience.
 ```
-**Agent 7: OperationsCoordinator**
-```
+
+```**Agent 7: OperationsCoordinator**
+
 You are an operations coordinator focused on logistics, fulfillment, and supply chain efficiency.
 You analyze delivery performance, warehouse operations, vendor relationships, and identify
 bottlenecks in the operational flow.
 ```
-**Agent 8: CustomerSuccessAgent**
-```
+
+```**Agent 8: CustomerSuccessAgent**
+
 You are a customer success specialist. You analyse customer satisfaction data, churn signals,
 retention strategies, and growth opportunities. Provide proactive recommendations to improve
 customer lifetime value and loyalty.
 ```
 
-**Agent 9: OperationsExcellenceAgent**
-```
+```**Agent 9: OperationsExcellenceAgent**
+
 You are an operations excellence specialist. You identify inefficiencies, analyse process
 metrics, and recommend improvements. Apply continuous-improvement frameworks (Lean, Six Sigma)
 where relevant and quantify the expected impact of changes.
@@ -268,8 +284,6 @@ az webapp config appsettings set \
     OperationsExcellenceAgent = OPERATIONS_EXCELLENCE_AGENT_ID
 ```
 
-
-
 **Troubleshooting**
 - If script reports "Not found" for agents, verify you created them with the exact names listed above
 - If authentication fails, ensure you're logged in: `az login`
@@ -303,24 +317,6 @@ az webapp restart --name <app-name> --resource-group rg-myagents-prod
 
 > **Note:** The app seamlessly switches between backends without data loss. All chat endpoints, auth logic, and UI remain identical.
 
-### Power BI service principal _(optional)_
-
-> Skip this section if you don't need Power BI report embedding.
-
-The Power BI **service principal** (Azure AD app registration) can be created automatically:
-
-```powershell
-# Creates the app registration + secret, prints all values, optionally applies them to App Service
-.\scripts\setup-powerbi.ps1 -ResourceGroupName "rg-myagents-prod" -AppName "<app-name>"
-```
-
-Two steps remain in the portal after the script completes (they require tenant admin access):
-
-1. **Power BI Admin portal** → Tenant settings → Developer settings → Enable _"Service principals can use Power BI APIs"_ → add the service principal
-2. **Your Power BI workspace** → Access → add the service principal as **Member**
-
-The script prints exactly where to go for each step.
-
 ---
 
 ## Phase 4 — Enable Authentication
@@ -332,7 +328,7 @@ Run these three SQL files **in order** via **Azure Portal → SQL Database → Q
 
 1. `app/Fabric/auth_schema.sql` — creates Users, Roles, Permissions tables and stored procedures
 2. `app/Fabric/rls_security_policies.sql` — creates the Security schema, session context stored procs, and RLS predicate functions
-3. `app/Fabric/synthetic_data.sql` — seeds all business data: operational tables, star-schema, and 9 Gold analytics tables used by the AI agents and dashboards
+3. `app/Fabric/synthetic_data.sql` — seeds all business data: operational tables, star-schema, and 9 Gold analytics tables used by the AI agents and dashboards when not connected to Fabric.
 
 All three scripts are safe to re-run.
 
@@ -467,39 +463,69 @@ The AI agents, Analytics dashboard, and Sales dashboard will all query those Gol
 
 ---
 
-### Option B — Full Fabric (mirroring + medallion architecture)
+### Option B — Full Fabric
 
-Microsoft Fabric is a SaaS service that cannot be provisioned via Bicep — all setup is done in the Fabric portal.
+Use **[FABRIC_DEPLOYMENT.md](FABRIC_DEPLOYMENT.md)** for the step-by-step Fabric walkthrough.
 
-**Step 1 — Workspace and agents**
+That guide covers:
 
-1. Navigate to [app.fabric.microsoft.com](https://app.fabric.microsoft.com)
-2. Create a **workspace**: Workspaces → + New workspace
-3. Get the **workspace ID**: copy the string after groups in the browser URL: https://app.fabric.microsoft.com/groups/59e21e68-643e-4497-8601-9asdfasdfasdf/list?experience=fabric-developer
-    **WORKSPACE ID** = 59e21e68-643e-4497-8601-9asdfasdfasdf
-4. Create **agents**: Data Science → + Create Agent (one per required role)
-
-
-
-**Step 2 — Mirror SQL → Fabric and build medallion architecture**
-
-See **[FABRIC_DEPLOYMENT.md](FABRIC_DEPLOYMENT.md)** for the complete guide covering:
-- Enabling Change Tracking on Azure SQL
-- Creating a Mirrored Database in Fabric (Bronze layer)
-- Building Silver and Gold layers using Notebooks
-- Scheduling a daily Pipeline
-- Connecting the app to the Fabric SQL Analytics Endpoint
+- Azure SQL mirroring.
+- Bronze, Silver, and Gold setup.
+- Repo notebook source files.
+- Semantic model guidance.
+- Direct Lake guidance.
+- App connection to Fabric.
 
 ---
 
-## Phase 7 — Smoke Tests
+## Phase 7 — Optional Foundry and Data Agent
+
+If you need conversational analytics over curated Fabric data:
+
+1. Create the Fabric Data Agent.
+2. Expose only approved Gold data.
+3. Connect it through Foundry.
+4. Validate Fabric first, then Foundry, then the app.
+
+See **[FABRIC_DATA_AGENT_FOUNDRY_APP_SETUP.md](FABRIC_DATA_AGENT_FOUNDRY_APP_SETUP.md)**.
+
+
+## Phase 8 — Optional Real-Time Intelligence
+
+If you need near-real-time monitoring and actions:
+
+1. Create Eventstream.
+2. Add an event source.
+3. Route data to Eventhouse.
+4. Add Activator rules.
+5. Validate one end-to-end event path.
+
+See **[FABRIC_RTI_OPTIONAL_DEPLOYMENT.md](FABRIC_RTI_OPTIONAL_DEPLOYMENT.md)**.
+
+## Phase 9 — Optional Purview
+
+If you need governance and cataloging:
+
+1. Deploy the Purview account.
+2. Register the required sources.
+3. Configure scans.
+4. Validate catalog and lineage.
+
+See **[PURVIEW_OPTIONAL_DEPLOYMENT.md](PURVIEW_OPTIONAL_DEPLOYMENT.md)**.
+
+---
+
+## Phase 10 — Smoke Tests
 
 ```bash
-# Run from the repo root
-python tests/smoke_test.py \
-  --url https://<your-app-name>.azurewebsites.net \
-  --skip-auth
+python tests/smoke_test.py   --url https://<your-app-name>.azurewebsites.net   --skip-auth
 ```
+
+A healthy run shows the main endpoints returning successful responses.
+
+---
+
+
 
 A healthy run shows all endpoints returning 2xx. Open the browser to confirm the UI loads:
 
