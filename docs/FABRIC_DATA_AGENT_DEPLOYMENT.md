@@ -1,40 +1,68 @@
-# Fabric Data Agent and Foundry app setup
+# Data Agent Deployment — Step by Step
 
-## Scope
+Use these steps to deploy a Fabric Data Agent and prove that it is using the curated Fabric data path you expect.
 
-This doc describes the optional conversational analytics path using Microsoft Fabric Data Agent plus Azure AI Foundry integration. This path should remain optional and should only be claimed in the repo after end-to-end validation succeeds.
+## Step 1 — Confirm prerequisites
 
-## Prerequisites
+Before creating the Data Agent, confirm all of these:
 
-- A paid Fabric capacity of F2 or higher.
-- Fabric data agent tenant setting enabled.
-- Copilot tenant switch enabled where required.
-- Cross-geo processing for AI enabled.
-- Cross-geo storing for AI enabled.
-- A curated Fabric data source such as a lakehouse, warehouse, semantic model, or KQL database.
+- Fabric capacity is paid F2 or higher.
+- Fabric Data Agent tenant setting is enabled.
+- Copilot tenant setting is enabled where required.
+- Cross-geo processing for AI is enabled if your tenant requires it.
+- Cross-geo storing for AI is enabled if your tenant requires it.
+- Your Fabric workspace already contains the curated data source you want the Data Agent to use.
 
-## Recommended data source strategy
+Supported source types include:
 
-Use curated Gold data only. Do not expose broad Bronze or Silver datasets to the data agent unless there is a strong reason.
+- Lakehouse.
+- Warehouse.
+- Power BI semantic model.
+- KQL database.
 
-Recommended source types for this solution:
+## Step 2 — Decide what source to expose
 
-- Gold Lakehouse tables.
-- Gold Warehouse tables.
-- Approved semantic models.
-- KQL database for RTI-aligned scenarios if needed.
+Use curated business-facing data only.
 
-## Gold-table curation rules
+Recommended first source choice:
 
-Only include tables that are:
+1. Gold semantic model, if it is already validated.
+2. Gold Lakehouse tables, if the semantic model is not ready.
+3. Gold Warehouse tables, if that is your governed analytics path.
 
-- business-facing,
-- stable,
-- well-described,
-- low-noise,
-- appropriate for question answering.
+Avoid using Bronze or Silver data for the first production Data Agent.
 
-Good examples for this solution:
+## Step 3 — Create the Fabric Data Agent
+
+1. Go to your Fabric workspace.
+2. Select **+ New item**.
+3. Search for **Fabric data agent**.
+4. Enter a clear name such as `Sales Insights Agent` or `Customer Analytics Agent`.
+5. Create the item.
+
+After creation, the OneLake catalog opens so you can add data sources.
+
+## Step 4 — Add the data source
+
+1. In the OneLake catalog, select the validated source.
+2. Click **Add**.
+3. Repeat only if you truly need more than one source.
+
+Important guidance:
+
+- Keep the first version narrow.
+- Fabric Data Agent supports up to five sources, but the first deployment should usually use one trusted source.
+- If you use a semantic model, make sure you have the required read/write permissions to add it.
+
+## Step 5 — Select only the approved tables
+
+After adding the source:
+
+1. Open the source in the left Explorer pane.
+2. Review the available tables.
+3. Select only the tables the agent should answer questions about.
+
+Recommended first-table set:
 
 - `gold_customer360`
 - `gold_productperformance`
@@ -42,58 +70,157 @@ Good examples for this solution:
 - `goldsalestimeseries`
 - `goldsupportmetrics`
 
-Avoid exposing raw or highly technical tables unless the target users truly need them.
+Keep the first version focused. A smaller table set is easier to validate and trust.
 
-## Fabric Data Agent setup
+## Step 6 — Add instructions
 
-1. Create the Fabric Data Agent in the target Fabric workspace.
-2. Add the curated Gold source.
-3. Select only approved tables.
-4. Add clear agent instructions that explain what the source contains and what kinds of questions it should answer.
-5. Add example queries where supported.
-6. Test and refine the Data Agent in Fabric.
-7. Publish the Data Agent only after validation.
+Write short, explicit instructions inside the Data Agent.
 
-## Foundry integration guidance
+Suggested pattern:
 
-After the Fabric Data Agent works inside Fabric, connect it to the Foundry project path used by the app.
+1. Explain what business domain the agent covers.
+2. Tell it to answer only from the selected data.
+3. Tell it to avoid guessing when data is missing.
+4. Tell it to summarize clearly and use business language.
+5. Tell it not to answer outside its data scope.
 
-Recommended sequence:
+Example instruction starter:
 
-1. Create or confirm the Foundry project.
-2. Create the Microsoft Fabric connection in the Foundry project.
-3. Create or update the Foundry agent to use the Fabric tool/connection.
-4. Validate the Foundry agent directly before app integration.
-5. Configure the app runtime for `CHAT_BACKEND_MODE=foundry`.
-6. Validate the app end to end.
+> You are a business analytics agent for curated sales and customer support reporting. Use only the approved Gold data sources attached to this agent. If the data is missing or unclear, say so instead of guessing.
 
-## App validation path
+## Step 7 — Add example questions
 
-Validation should happen in this order:
+Add a few known-good example questions if supported in your setup.
 
-1. Fabric Data Agent answers correctly in Fabric.
-2. Foundry agent answers correctly using the Fabric connection.
-3. The application answers correctly through the Foundry-backed route.
+Good first examples:
 
-Do not describe the app as fully associated with Fabric Data Agents until all three validations pass.
+- What were total sales by month?
+- Which product categories generated the most revenue?
+- Which customers have the highest lifetime value?
+- What support trends need attention?
 
-## ALM and source control
+This improves usability and gives you a repeatable validation set.
 
-Fabric Data Agent ALM should be treated as part of the broader Fabric promotion strategy.
+## Step 8 — Test inside Fabric first
 
-Recommended practices:
+Before connecting anything to Foundry or the app:
 
-- Use Git integration for version tracking.
-- Use deployment pipelines for Dev/Test/Prod promotion.
-- Keep Data Agent changes in draft until validated.
-- Do not directly edit published folder content in Git.
+1. Ask a known question.
+2. Compare the Data Agent answer to the actual Gold table or semantic model result.
+3. Repeat for at least five test questions.
+4. Fix table selection or instructions if answers are weak.
 
-## Publish guidance
+Best practice:
 
-Publishing matters because published data agents are the versions available across supported consumption channels. Development work should stay in restricted development workspaces, while end users should consume agents published from production workspaces.
+- Build a small test set with known correct answers.
+- Validate answers against direct queries to the curated source.
 
-## Repo merge notes
+## Step 9 — Publish only after validation
 
-- Create or update `docs/FABRIC_DATA_AGENT_FOUNDRY_APP_SETUP.md` from this file.
-- Keep this path optional in README, QUICK_START, and architecture docs.
-- Only claim support after end-to-end validation is complete.
+Once the Data Agent answers correctly in Fabric:
+
+1. Save your changes.
+2. Publish the Data Agent.
+3. Record the workspace ID and the Data Agent artifact ID for later integration.
+
+Use draft mode while tuning. Publish only when the Data Agent is stable enough for downstream use.
+
+## Step 10 — Connect the Data Agent to Foundry
+
+After the Fabric-side validation is complete:
+
+1. Open your Azure AI Foundry project.
+2. Create a Microsoft Fabric connection to the Data Agent.
+3. Use the Fabric workspace ID and Data Agent artifact ID when required.
+4. Give the connection a clear name.
+5. Make it available to the correct project scope.
+
+In Foundry, the Fabric Data Agent is added as a knowledge/tool resource.
+
+## Step 11 — Create or update the Foundry agent
+
+1. Open the Foundry agent used by the app.
+2. Enable the Fabric connection/tool.
+3. Add instructions that explain when the agent should use the Fabric Data Agent.
+4. Keep the instructions explicit.
+
+Suggested pattern:
+
+- Use the Fabric tool for curated business analytics questions.
+- Prefer the Fabric tool for sales, customer, and support analytics.
+- If the tool does not return enough information, say so clearly.
+
+## Step 12 — Validate in Foundry before using the app
+
+Run the same test questions again in Foundry.
+
+Check all of these:
+
+- The agent calls the Fabric tool.
+- The answer matches the Fabric Data Agent output.
+- The answer matches the validated Gold data result.
+- No authentication or connection errors occur.
+
+Do not move to the app until this passes.
+
+## Step 13 — Connect the app runtime
+
+Once Foundry works:
+
+1. Set `CHAT_BACKEND_MODE=foundry`.
+2. Set `USE_FOUNDRY_AGENTS=true`.
+3. Set the Foundry project endpoint.
+4. Set the Fabric project connection name.
+5. Set the model deployment name if required.
+6. Restart the app.
+
+## Step 14 — Prove the app is using the Data Agent path
+
+Use one of these tests:
+
+### Test A — Known answer comparison
+
+1. Ask a validated analytics question in the app.
+2. Compare the answer to the Foundry result.
+3. Compare both to the Gold source result.
+4. Confirm they match.
+
+### Test B — Controlled source change
+
+1. Update a known source value in Azure SQL or the Fabric Gold path.
+2. Run the required refresh flow.
+3. Confirm the Data Agent answer changes in Fabric.
+4. Confirm the Foundry answer changes.
+5. Confirm the app answer changes.
+
+### Test C — Fabric-only question
+
+1. Ask a question that depends on a curated Gold table or semantic model not exposed in the old SQL-only route.
+2. Confirm the app answers it correctly.
+
+## Step 15 — Final go-live checklist
+
+Before calling this complete, confirm:
+
+- Data Agent works in Fabric.
+- Only approved sources and tables are exposed.
+- Instructions are present and clear.
+- Example questions are tested.
+- Data Agent is published.
+- Foundry connection works.
+- Foundry agent works.
+- App runtime is set correctly.
+- App answers match validated Fabric data.
+- Repo wording claims support only after all validations pass.
+
+## Recommended rollout order
+
+Use this order:
+
+1. Validate the semantic model or Gold source.
+2. Validate the Fabric Data Agent.
+3. Publish the Data Agent.
+4. Validate the Foundry connection.
+5. Validate the Foundry agent.
+6. Validate the app.
+7. Promote to production.

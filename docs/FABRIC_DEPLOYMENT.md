@@ -248,9 +248,6 @@ Or set them in **Azure Portal → App Service → Settings → Environment varia
 
 ---
 
-
-
-
 ### Restart the app
 
 ```powershell
@@ -287,6 +284,15 @@ Fabric connection string set — agents will query Fabric
 ```
 
 Or make a chat request asking about sales data and check that the agent returns data.
+
+## Phase 9 optional deployments
+
+### RTI Deployment
+See **[FABRIC_RTI_DEPLOYMENT.md](FABRIC_RTI_DEPLOYMENT.md)**. 
+
+### Purview Deployment
+See **[PURVIEW_DEPLOYMENT.md](PURVIEW_DEPLOYMENT.md)**. 
+
 
 ### Run the smoke test
 
