@@ -77,6 +77,14 @@ ALTER TABLE dbo.SalesFact   ENABLE CHANGE_TRACKING WITH (TRACK_COLUMNS_UPDATED =
 
 > Existing gold tables (`gold_*`) do not need change tracking — they will be rebuilt by the Gold pipeline.
 
+## Scale the Database and allow access from Fabric to database
+
+1. Still in the Azure Portal > go to settings > Compute + storage > change Service Tier > Standard  > DTUs 100 > Click Apply. 
+
+2. Click on SQL Logical Servers within the Azure SQL blade > Click on your SQL Server > Security > Networking > bottom of screen check the box for > Allow Azure services and resources access to this server.
+
+3. in Fabric Workspace > click on Workspace Settings > Workspace Identity > click on +Workspace Identity and it will create an identity > take note of the name as it will be used in the command for phase 3. 
+
 ---
 
 ## Phase 3 — Create the Mirrored Database (Bronze)
@@ -86,10 +94,7 @@ ALTER TABLE dbo.SalesFact   ENABLE CHANGE_TRACKING WITH (TRACK_COLUMNS_UPDATED =
    - **Server**: `<your-server>.database.windows.net`
    - **Database**: `aiagentsdb`
    - **Authentication kind**: Organisational account (Azure AD interactive) — recommended for initial setup
-3. Click **Connect**, then select these tables to mirror:
-   - `dbo.Categories`, `dbo.Products`, `dbo.Customers`
-   - `dbo.Orders`, `dbo.OrderItems`
-   - `dbo.CustomerDim`, `dbo.ProductDim`, `dbo.SalesFact`
+3. Click **Connect**, then select all tables except for tables with gold in name to mirror
 4. Click **Mirror database**
 
 **What happens next:**
@@ -99,7 +104,7 @@ All mirrored status should show **Running** before proceeding.
 
 ### Grant Fabric read access to Azure SQL
 
-Fabric creates a service principal for the mirror. Its name appears in the connection details.
+Grab the Name from where you created the Workspace identity. 
 Run in Query Editor:
 
 ```sql
@@ -107,6 +112,8 @@ Run in Query Editor:
 CREATE USER [<fabric-spn-name>] FROM EXTERNAL PROVIDER;
 ALTER ROLE db_datareader ADD MEMBER [<fabric-spn-name>];
 ```
+
+After this succeeds go to your sql mirror and click refresh under Monitor Replication. You should see the 
 
 ---
 
@@ -120,7 +127,7 @@ In your workspace → **+ New item** → **Lakehouse** :
 |------|---------|
 | `AgentDemo_Bronze` | Mirrored raw Data |
 | `AgentDemo_Silver` | Cleansed, standardised tables |
-| `AgentDemo_` | Pre-aggregated analytics tables queried by the app |
+| `AgentDemo_Gold` | Pre-aggregated analytics tables queried by the app |
 
 
 ---
