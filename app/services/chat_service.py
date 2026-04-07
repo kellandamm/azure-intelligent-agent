@@ -2,21 +2,13 @@ from typing import Any, Dict
 import inspect
 import uuid
 
-from app.agent_framework_manager import AgentFrameworkManager
+from app.agent_backend_manager import agent_backend_manager
 
 try:
     from app.agent_framework_manager import ConfigurationError
 except ImportError:
     class ConfigurationError(RuntimeError):
         pass
-
-try:
-    from app.agent_framework_manager import ChatResult as _ChatResult
-except ImportError:
-    _ChatResult = None
-
-
-agent_backend_manager = AgentFrameworkManager()
 
 
 def _filter_supported_kwargs(func, kwargs: Dict[str, Any]) -> Dict[str, Any]:
@@ -99,15 +91,15 @@ class ChatService:
                 **filtered_kwargs,
             )
 
-            if _ChatResult is not None and isinstance(backend_result, _ChatResult):
-                return {
-                    "response": backend_result.response,
-                    "thread_id": backend_result.thread_id,
-                    "agent_id": backend_result.agent_id,
-                    "run_id": backend_result.run_id,
-                }
-
             if not isinstance(backend_result, dict):
+                # Both ChatResult dataclasses (foundry + framework) share the same fields
+                if hasattr(backend_result, "response") and hasattr(backend_result, "thread_id"):
+                    return {
+                        "response": backend_result.response,
+                        "thread_id": backend_result.thread_id,
+                        "agent_id": backend_result.agent_id,
+                        "run_id": backend_result.run_id,
+                    }
                 return {
                     "error": "Chat backend returned an invalid response",
                     "status_code": 500,
