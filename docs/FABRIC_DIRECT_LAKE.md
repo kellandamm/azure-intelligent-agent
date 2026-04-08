@@ -1,163 +1,264 @@
-# Phase 8 — Semantic Model and Direct Lake
+# Phase 8 — Semantic Model and Direct Lake Setup Guide
 
-Use these steps to make sure the app reports are using Fabric Gold data.
+This guide walks you through connecting your app's reports to **Microsoft Fabric Gold data** using a Direct Lake semantic model. Follow each step in order. Do not skip ahead — each step depends on the previous one being complete.
 
-## Step 1 — Confirm Gold tables are ready
+---
 
-Before building the semantic model, confirm these are true:
+## Before You Start
 
-- The Gold notebook completed successfully.
-- The validation notebook completed successfully.
-- Your target Gold tables are present in the Fabric item you plan to use.
-- The table names and column names are stable enough for reporting.
+**What you'll need:**
+- Access to your Microsoft Fabric workspace
+- The Gold Lakehouse or Warehouse already set up (from earlier phases)
+- Power BI / Fabric reporting permissions in your workspace
+- Your app's environment variables accessible (App Service settings)
 
-Recommended minimum check:
+**What you're trying to accomplish:**
+You are creating a *semantic model* — think of it as a structured, optimized layer that sits between your raw Gold data tables and your reports/app. This is what makes your reports fast and reliable.
 
-- `gold_customer360`
-- `gold_productperformance`
-- `goldsalesbycategory`
-- `goldsalestimeseries`
-- `goldsupportmetrics`
+---
 
-## Step 2 — Create the semantic model
+## Step 1 — Confirm Your Gold Tables Are Ready
 
-Choose one of these entry points in Fabric:
+Before you do anything else, verify that your data pipeline ran successfully.
 
-### Option A — From the Lakehouse
+1. Open your Fabric workspace.
+2. Navigate to your **Gold Lakehouse** (or Warehouse).
+3. Check that the following notebooks completed without errors:
+   - The **Gold notebook** (transforms Silver → Gold data)
+   - The **Validation notebook** (checks data quality)
+4. Open the Lakehouse and browse the **Tables** section. Confirm these tables exist:
 
-1. Open the Gold Lakehouse.
-2. In the ribbon, select **New semantic model**.
-3. Enter a model name such as `AgentDemo_Gold_Model`.
-4. Select only the curated Gold tables you want reports to use.
-5. Click **Confirm**.
+| Table Name | Purpose |
+|---|---|
+| `gold_customer360` | Customer data |
+| `gold_productperformance` | Product metrics |
+| `goldsalesbycategory` | Sales by category |
+| `goldsalestimeseries` | Sales over time |
+| `goldsupportmetrics` | Support KPIs |
 
-### Option B — From the SQL analytics endpoint or Warehouse
+> **Why this matters:** If any Gold table is missing or has stale data, your semantic model will either fail to build or show incorrect numbers downstream. Fix data issues here before proceeding.
 
-1. Open the SQL analytics endpoint for the Gold item, or open the Warehouse.
-2. Go to **Reporting**.
-3. Select **New semantic model**.
-4. Enter the model name.
+---
+
+## Step 2 — Create the Semantic Model
+
+A semantic model tells Power BI/Fabric *which tables to use* and *how to interpret them*. You can create it from two places — choose the one that matches how your Gold data is stored.
+
+### Option A — If your Gold data is in a Lakehouse
+
+1. In your Fabric workspace, click to open your **Gold Lakehouse**.
+2. In the top ribbon, click **New semantic model**.
+
+   > If you don't see this button, make sure you're in the Lakehouse view (not a notebook or pipeline).
+
+3. In the dialog that appears:
+   - **Name**: Enter `AgentDemo_Gold_Model` (or a name that matches your project).
+   - **Tables**: Check only the curated Gold tables listed in Step 1. Do not select raw or Silver tables.
+4. Click **Confirm**.
+
+### Option B — If your Gold data is in a SQL Analytics Endpoint or Warehouse
+
+1. Open the **SQL analytics endpoint** for your Gold item, or open the **Warehouse** directly.
+2. In the left navigation, click **Reporting**.
+3. Click **New semantic model**.
+4. Enter the same model name as above.
 5. Select the curated Gold tables.
 6. Click **Confirm**.
 
-## Step 3 — Clean up the model in web modeling
+> **Result:** After confirming, Fabric will open the semantic model editor automatically. Leave it open — you'll use it in the next step.
 
-Once the semantic model opens:
+---
 
-1. Check relationships between fact and dimension-style Gold tables.
-2. Set correct data types and formats.
-3. Mark your date table if you have one.
-4. Create a few basic measures that match what the app reports need, for example:
-   - Total Revenue
-   - Total Orders
-   - Average Order Value
-   - Active Customers
-5. Hide technical columns that should not appear in reports.
-6. Save the semantic model.
+## Step 3 — Clean Up the Model in the Web Editor
 
-## Step 4 — Keep it Direct Lake friendly
+When the semantic model editor opens, you need to make a few adjustments before it's report-ready.
 
-To maximize the chance that the model stays in Direct Lake mode:
+1. **Check relationships** — Look at the diagram view. Fabric may have auto-detected relationships between your Gold tables. Review them:
+   - Fact tables (like sales) should connect to dimension tables (like customers, products) via matching ID columns.
+   - If a relationship is wrong or missing, click the line between tables to edit it, or drag from one column to another to create one.
 
-1. Build the model over Fabric Gold tables, not random mixed sources.
-2. Avoid SQL endpoint views when possible.
-3. Avoid forcing row-level security only at the SQL analytics endpoint for these report tables.
-4. Keep the model simple during first validation.
-5. Do not add unsupported patterns until the baseline works.
+2. **Set data types** — Click each table and review the columns panel on the right:
+   - Date columns should be set to **Date** or **Date/Time** type.
+   - Revenue and numeric columns should be **Decimal Number** or **Whole Number**.
+   - ID columns that should never be summed should be set to **Text** or have summarization disabled.
 
-Important note:
+3. **Mark your date table** (if you have one) — If you have a dedicated calendar/date table:
+   - Select the table.
+   - Click **Mark as date table** in the toolbar.
+   - Select the date column.
 
-- Queries can fall back to DirectQuery when the semantic model uses SQL endpoint views or tables that enforce RLS in the SQL analytics endpoint.
-- For testing, keep the first version of the report model as clean as possible.
+4. **Create basic measures** — In the left panel, right-click a table and choose **New measure**. Create these to start:
 
-## Step 5 — Create a simple validation report in Fabric or Power BI
+   ```
+   Total Revenue = SUM(goldsalestimeseries[revenue])
+   Total Orders = COUNTROWS(goldsalesbycategory)
+   Average Order Value = DIVIDE([Total Revenue], [Total Orders])
+   Active Customers = DISTINCTCOUNT(gold_customer360[customer_id])
+   ```
 
-Build a quick report against the new semantic model before touching the app.
+   > Adjust column names to match your actual table schema.
 
-Suggested visuals:
+5. **Hide technical columns** — Right-click any columns that are internal IDs or technical fields not needed in reports, and select **Hide**. This keeps your report fields list clean.
 
-1. Revenue by month using `goldsalestimeseries`.
-2. Revenue by category using `goldsalesbycategory`.
-3. Customer count or value using `gold_customer360`.
-4. Support KPI using `goldsupportmetrics`.
+6. Click **Save** (top right or Ctrl+S).
 
-This gives you a fast sanity check that the semantic model is usable and the numbers look right.
+---
 
-## Step 6 — Verify the model is reading Fabric data
+## Step 4 — Keep the Model in Direct Lake Mode
 
-Use at least two checks:
+Direct Lake is a Fabric-specific performance mode that reads data directly from the lakehouse without importing or querying through SQL. You want to stay in this mode.
 
-### Check A — Update source data
+**Do these things to stay in Direct Lake mode:**
 
-1. Insert or update a known test record in the Azure SQL source.
-2. Let mirroring and notebook refresh complete.
-3. Re-open the report or refresh visuals.
-4. Confirm the new value appears in the semantic model results.
+- ✅ Build the model using only Fabric Gold tables (not external sources or mixed sources).
+- ✅ Keep the first version of the model simple — no complex filters or security rules yet.
+- ❌ Avoid using **SQL endpoint views** as table sources when possible.
+- ❌ Avoid applying **Row-Level Security (RLS)** through the SQL analytics endpoint for these tables — it forces a fallback to DirectQuery mode.
 
-### Check B — Compare against Gold tables
+> **What is DirectQuery fallback?** If Fabric can't serve a query through Direct Lake, it automatically falls back to DirectQuery, which is slower. For initial validation, you want to avoid this. You'll see a warning banner in the semantic model if this happens.
 
-1. Query the Gold table directly in Fabric.
-2. Compare the returned values with the report visuals.
-3. Confirm the totals match.
+---
 
-If report totals match Gold totals, the model is reading the Fabric-prepared data path correctly.
+## Step 5 — Build a Validation Report
 
-## Step 7 — Connect the app to the Fabric reporting path
+Before connecting your app, build a quick standalone report to verify the semantic model is working correctly.
 
-After the semantic model is validated:
+1. From the semantic model editor, click **New report** in the ribbon (or go to the workspace and create a new **Power BI report**, pointing it to your new semantic model).
+2. In the report canvas, add the following visuals:
 
-1. Open the Gold Lakehouse or SQL analytics endpoint.
-2. Copy the server/endpoint details you use for the app reporting connection.
-3. Set the required App Service environment variables.
-4. Restart the app.
-5. Open the app and load the report pages.
+   | Visual Type | Fields to Use | Table Source |
+   |---|---|---|
+   | Line chart | Revenue by Month | `goldsalestimeseries` |
+   | Bar chart | Revenue by Category | `goldsalesbycategory` |
+   | Card | Customer Count or Total Value | `gold_customer360` |
+   | KPI or Card | Support metric (e.g., ticket count) | `goldsupportmetrics` |
 
-If your app embeds Power BI/Fabric-backed reports, make sure the embedded report is published from the semantic model you just validated.
+3. Verify the numbers look reasonable (not zero, not obviously wrong).
+4. Save the report as `AgentDemo_Validation_Report` (or similar).
 
-## Step 8 — Prove the app is not using the old SQL-only path
+> **This report is your safety net.** Before touching the app, confirm data looks correct here. It is much faster to debug in a standalone report than inside the app.
 
-Use one of these practical tests:
+---
 
-### Test 1 — Fabric-only metric
+## Step 6 — Verify the Model Is Reading Live Fabric Data
 
-1. Add a metric or measure that exists only in the Gold semantic model.
-2. Publish the report.
-3. Open the app.
-4. Confirm the metric appears there.
+You need to confirm that changes to source data actually flow through to your report. Run both checks below.
 
-### Test 2 — Controlled value change
+### Check A — End-to-End Refresh Test
 
-1. Change a known value in source data.
-2. Run mirror and Gold refresh.
-3. Confirm the Fabric report updates.
-4. Confirm the app shows the same updated value.
+1. Identify a record you can safely modify (a test customer, test order, etc.) in your **Azure SQL source database**.
+2. Make a change — for example, update a revenue value or add a new row.
+3. Trigger the mirroring process (or wait for the scheduled mirror sync to complete).
+4. Run the Gold notebook to re-process the updated data.
+5. Return to your validation report and click **Refresh visuals** (the circular arrow icon).
+6. Confirm the updated value now shows in the report.
 
-### Test 3 — Temporary app setting swap check
+### Check B — Direct Comparison Against Gold Tables
 
-1. Record current app report values.
-2. Point the app to the validated Fabric reporting settings.
+1. In Fabric, open your Gold Lakehouse.
+2. Click on a Gold table (e.g., `goldsalestimeseries`) and use **Preview data** or query it via the SQL analytics endpoint.
+3. Note the total revenue value (or another easily comparable metric).
+4. Compare that value to the same metric shown in your validation report.
+5. They should match exactly (or within rounding).
+
+> If the values match, your semantic model is correctly reading from Fabric-prepared data — not from an old SQL path.
+
+---
+
+## Step 7 — Connect the App to the Fabric Reporting Path
+
+Now that the semantic model is validated, update your app to use it.
+
+1. Open your **Gold Lakehouse** or **SQL analytics endpoint** in Fabric.
+2. Click the **Settings** gear or find the **Connection string** / **Server endpoint** details. Copy the following:
+   - Server / workspace endpoint URL
+   - Dataset ID or semantic model name
+3. Go to your **Azure App Service** in the Azure portal.
+4. Click **Configuration** → **Application settings**.
+5. Update (or add) the environment variables your app uses for its reporting connection. Common variables include:
+
+   ```
+   FABRIC_WORKSPACE_ID = <your workspace ID>
+   FABRIC_DATASET_ID   = <your semantic model ID>
+   POWERBI_REPORT_ID   = <your report ID, if embedding>
+   ```
+
+   > Your app may use different variable names. Check the app's `.env` or config documentation for the exact keys.
+
+6. Click **Save**.
+7. Click **Restart** to restart the app service.
+8. Open the app and navigate to the report pages. Confirm they load without errors.
+
+> **If your app embeds Power BI reports:** Make sure the embedded report is published from the semantic model you just validated — not from an older imported dataset.
+
+---
+
+## Step 8 — Prove the App Is Not Using the Old SQL-Only Path
+
+Run at least one of these tests to confirm the app is using Fabric data, not the old direct-SQL path.
+
+### Test 1 — Fabric-Only Metric Test
+
+1. In your semantic model, create a new measure that **only exists in Fabric** — for example, a calculated field like `Fabric_Verified = 1`.
+2. Add it to the validation report.
+3. Publish the report.
+4. Open the app and go to the report page.
+5. If the metric appears, the app is pulling from Fabric. If it's missing, the app is still using an old data source.
+
+### Test 2 — Controlled Value Change Test
+
+1. Change a known value in your Azure SQL source (e.g., set a specific customer's revenue to a distinctive number like `99999`).
+2. Run the mirror sync and Gold notebook.
+3. Check the Fabric validation report — confirm the updated value appears.
+4. Open the app — confirm the app shows the same updated value.
+
+### Test 3 — Settings Swap Test
+
+1. Record the current values shown in the app's report pages (screenshot them).
+2. Confirm the app's environment variables now point to the Fabric semantic model (set in Step 7).
 3. Restart the app.
-4. Confirm values now match the Fabric report exactly.
+4. Compare the new values with your Fabric validation report values — they should match.
 
-## Step 9 — Final pre-cutover checklist
+---
 
-Before calling this complete, confirm all of these:
+## Step 9 — Final Pre-Cutover Checklist
 
-- Gold refresh works.
-- Semantic model saves successfully.
-- Validation report works.
-- Direct Lake is the intended mode.
-- No unnecessary DirectQuery fallback patterns were introduced.
-- The app report pages match the Fabric report values.
-- Restarted app loads without reporting errors.
+Before marking this phase complete, verify every item below:
 
-## Step 10 — Recommended first production rollout pattern
+- [ ] Gold notebook runs and completes successfully
+- [ ] Semantic model saves without errors
+- [ ] Validation report builds and loads data correctly
+- [ ] Direct Lake mode is active (no unexpected DirectQuery fallback warnings)
+- [ ] No unnecessary SQL views or RLS patterns introduced in this phase
+- [ ] App report pages match the Fabric validation report values
+- [ ] App restarts cleanly with no reporting errors in logs
 
-Use this rollout order:
+> **Do not proceed to production until all boxes are checked.**
 
-1. Validate Gold tables.
-2. Validate semantic model.
-3. Validate standalone report.
-4. Point non-production app to Fabric.
-5. Compare values with expected Gold outputs.
-6. Promote to production after signoff.
+---
+
+## Step 10 — First Production Rollout Order
+
+When you are ready to promote to production, follow this exact sequence:
+
+1. ✅ Validate Gold tables (data is current and complete)
+2. ✅ Validate semantic model (saves, loads, and Direct Lake is active)
+3. ✅ Validate standalone report (visuals load, numbers look correct)
+4. 🔄 Point a **non-production (staging) app instance** to the Fabric reporting path
+5. 🔍 Compare staging app values against known Gold table outputs
+6. ✅ Get signoff from a stakeholder or QA reviewer
+7. 🚀 Promote the same configuration to the production app
+
+> **Why this order?** Each step de-risks the next. You confirm the data path is correct before putting it in front of end users.
+
+---
+
+## Troubleshooting Quick Reference
+
+| Symptom | Likely Cause | What to Try |
+|---|---|---|
+| Semantic model won't save | Missing required relationship or invalid column type | Check the error message in the editor; fix data types or remove the broken table |
+| Report shows blank visuals | Semantic model not selected correctly, or tables have no data | Re-open the report, check the data source, confirm Gold tables have rows |
+| Numbers don't match Gold tables | DirectQuery fallback is active, or wrong table selected | Check for SQL endpoint views; simplify the model |
+| App shows old data after restart | Environment variables not updated, or old dataset still referenced | Double-check App Service config; confirm the correct `FABRIC_DATASET_ID` |
+| Direct Lake fallback warning | RLS on SQL endpoint, or SQL views as sources | Remove views; move RLS to the semantic model layer instead |
