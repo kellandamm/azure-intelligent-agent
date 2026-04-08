@@ -151,6 +151,8 @@ Paste the following cells and **Run all**:
 1. Workspace → **+ New item** → **Notebook**
 2. Name: `Silver_Transform`
 3. Click **Add lakehouse** → select `AgentDemo_Silver` → **Add**
+4. Click **Add lakehouse** → select `AgentDemo_Bronze` → **Add**
+5. Ensure that `AgentDemo_Silver` is primary OneLake
 
 Paste the following cells and **Run all**:
 
@@ -166,7 +168,9 @@ Run the Silver transformation flow and confirm the expected Silver tables are cr
 1. Workspace → **+ New item** → **Notebook**
 2. Name: `Gold_Aggregate`
 3. Click **Add lakehouse** → select `AgentDemo_Gold` → **Add**
-4. Add another Cell copy contents for Validate notebook file
+4. Click **Add lakehouse** → select `AgentDemo_Silver` → **Add**
+5. Ensure that `AgentDemo_Gold` is primary OneLake
+6. Add another Cell copy contents for Validate notebook file
 
 Paste each cell and **Run all**:
 
