@@ -1,222 +1,364 @@
-# Purview Deployment — Step by Step
+# Purview Deployment — Microsoft Purview Setup Guide
 
-Use these steps to deploy Microsoft Purview and prove that governance scanning and cataloging are working for your SQL and Fabric data paths.
+This guide walks you through deploying **Microsoft Purview** in a way that is easier for a first-time operator to follow. It explains not just what to click, but also why each step matters and what to check before moving on.
 
-## Step 1 — Confirm prerequisites
+---
 
-Before starting, confirm these:
+## What You Are Setting Up
 
-- You have a Microsoft Purview account deployed or are ready to create one.
-- You know whether your target scenario is SQL-only, Fabric-only, or both.
-- Your Purview account and Fabric tenant are in the same tenant if you want the simpler same-tenant setup.
-- You have the required permissions in Purview and Fabric.
-- You know whether you are using public network access or a more restricted network pattern.
+In this process, you are configuring Microsoft Purview so it can **scan, catalog, and govern** your SQL and Microsoft Fabric data assets.
 
-## Step 2 — Create the Purview account
+At a high level, the flow is:
 
-If the account does not already exist:
+1. Create the Purview account.
+2. Organize collections.
+3. Register data sources.
+4. Configure credentials.
+5. Run scans.
+6. Validate catalog, metadata, and lineage.
+7. Add ownership and governance context.
 
-1. Go to the Azure portal.
-2. Open **Microsoft Purview Accounts**.
-3. Select **Create**.
-4. Enter the subscription, resource group, name, and region.
-5. Complete the configuration and create the account.
+---
 
-Important note:
+## Before You Start
 
-- Creating the account is only the provisioning step.
-- Governance value comes after collections, registration, credentials, and scans are configured.
+Before opening Purview, gather the following information and confirm you have the right access.
 
-## Step 3 — Open Purview and create collections
+### Required access
 
-1. Open Microsoft Purview.
-2. Go to the governance portal or studio experience.
-3. Create or organize collections that match your governance model.
+- [ ] You have a **Microsoft Purview account** already created, or you have permission to create one.
+- [ ] You know whether your target scope is:
+  - **Fabric-only**
+  - **SQL-only**
+  - **Both Fabric and SQL**
+- [ ] Your **Purview account** and **Fabric tenant** are in the same Entra tenant if you want the simplest setup.
+- [ ] You have the right permissions in:
+  - Microsoft Purview
+  - Microsoft Fabric
+  - Azure (if you need to create identities, Key Vault secrets, or Purview resources)
+- [ ] You know your network pattern:
+  - Public network access
+  - Restricted/private network access
 
-Recommended simple starting point:
+> **Why this matters:** Most Purview deployment failures are not caused by the Purview account itself. They usually happen because permissions, credentials, tenant alignment, or network access were not planned before the first scan.
 
-- one collection for Fabric,
-- one collection for SQL,
-- or a shared platform collection if your scope is still small.
+---
 
-## Step 4 — Decide what sources to register first
+## Step 1 — Create the Purview Account
 
-Keep the first rollout simple.
+If a Purview account does not already exist, create it first.
 
-Recommended order:
+1. Open the **Azure portal**.
+2. In the search bar, search for **Microsoft Purview Accounts**.
+3. Click **Create**.
+4. Fill in the required fields:
+   - **Subscription**
+   - **Resource group**
+   - **Purview account name**
+   - **Region**
+5. Review the settings.
+6. Click **Create**.
+7. Wait for deployment to complete.
 
-1. Register Fabric if Fabric is already part of the solution.
-2. Register Azure SQL if SQL governance is in scope.
-3. Add more sources later.
+> **Important:** Creating the Purview account only provisions the service. It does **not** automatically discover, scan, or catalog anything yet.
 
-## Step 5 — Register the Fabric tenant
+---
 
-If Fabric is in scope:
+## Step 2 — Open Purview and Create Collections
 
-1. In Purview, go to **Data Map**.
-2. Select **Register**.
-3. Choose **Fabric** as the source type.
-4. Enter a friendly source name.
-5. Select the correct collection.
-6. Confirm the tenant ID is correct.
-7. Save the registration.
+Collections are how you organize governance scope inside Purview. Think of them as management containers for groups of assets.
 
-For same-tenant setup, Purview can discover the Fabric tenant in the same Entra tenant.
+1. Open your new or existing **Microsoft Purview account**.
+2. Launch the **Purview governance portal**.
+3. Go to the area where **collections** are managed.
+4. Create a simple structure to start with.
 
-## Step 6 — Prepare Fabric for scanning
+### Recommended starter structure
 
-Before scanning Fabric, confirm these settings:
+Use one of these simple options:
 
-1. Fabric metadata scanning is enabled.
-2. Required Fabric admin API settings are enabled.
-3. Purview has the required identity or service principal access.
-4. If using Key Vault-backed credentials, Purview can read the secret.
+| Option | When to Use |
+|---|---|
+| One **Fabric** collection and one **SQL** collection | Best when you want clean separation by platform |
+| One shared **Platform** collection | Best when the environment is small and you want less overhead |
 
-If these are not configured, scans often fail even when the source registration looks correct.
+> **Best practice:** Keep the first collection model simple. You can always add more granular collections later after scanning is working.
 
-## Step 7 — Create Fabric credentials if needed
+---
 
-Depending on your setup:
+## Step 3 — Decide Which Sources to Register First
 
-- use the Purview managed identity, or
-- create a service principal credential.
+Do not register everything at once. Start with the smallest useful scope.
 
-If using a service principal:
+### Recommended rollout order
 
-1. Create the app registration.
-2. Create the secret.
-3. Store the secret in Key Vault.
-4. Create the Key Vault connection in Purview.
-5. Create the Purview credential using tenant ID, client ID, and Key Vault secret.
+1. Register **Fabric** first if Fabric is already central to the solution.
+2. Register **Azure SQL** next if SQL governance is also required.
+3. Add other sources later only after your first scans succeed.
 
-## Step 8 — Create the Fabric scan
+> **Why this matters:** If you register too many sources at once, troubleshooting becomes harder because you will not know whether the issue is permissions, credentials, source type, or scan configuration.
 
-1. In Purview, go to **Data Map** -> **Sources**.
-2. Open the registered Fabric source.
-3. Select **+ New scan**.
-4. Enter a scan name.
-5. Choose the credential.
-6. Choose whether to include personal workspaces.
-7. Save and run the scan.
+---
 
-Wait for the scan to complete before checking catalog or lineage.
+## Step 4 — Register the Fabric Tenant
 
-## Step 9 — Validate Fabric catalog and lineage
+If Fabric is in scope, register it in Purview before you attempt a scan.
 
-After the scan completes:
+1. In Purview, open **Data Map**.
+2. Click **Register**.
+3. From the list of source types, choose **Fabric**.
+4. Enter a friendly source name, such as `Contoso-Fabric`.
+5. Select the correct **collection** you created earlier.
+6. Confirm the **tenant ID** shown is the correct one.
+7. Click **Save**.
+
+> For same-tenant deployments, Purview can discover the Fabric environment in the same Entra tenant more easily than in cross-tenant scenarios.
+
+---
+
+## Step 5 — Prepare Fabric for Scanning
+
+Before you create a Fabric scan, verify that Fabric is actually ready for Purview to connect.
+
+### Confirm these items
+
+- [ ] **Fabric metadata scanning** is enabled.
+- [ ] Required **Fabric admin API settings** are enabled.
+- [ ] Purview has the required identity access, either through:
+  - Purview managed identity, or
+  - a service principal
+- [ ] If you are using **Key Vault-backed credentials**, Purview can read the secret.
+
+### What to do if you are unsure
+
+1. Open your Fabric admin settings.
+2. Review any settings related to metadata scanning and admin APIs.
+3. Confirm the identity you plan to use has access to the Fabric environment.
+4. If using Key Vault, confirm:
+   - the secret exists,
+   - the secret name is correct,
+   - Purview can read it.
+
+> **Important:** A source can look correctly registered in Purview and still fail to scan if Fabric-side settings or identity permissions are incomplete.
+
+---
+
+## Step 6 — Create Fabric Credentials (If Needed)
+
+Depending on how your environment is set up, Purview may need credentials to scan Fabric.
+
+### Two common options
+
+| Credential type | When to Use |
+|---|---|
+| **Purview managed identity** | Best when the built-in Purview identity already has the required access |
+| **Service principal** | Best when you want a dedicated app identity for scanning |
+
+### If using a service principal
+
+Follow these steps in order:
+
+1. Create an **app registration** in Entra ID.
+2. Create a **client secret** for that app registration.
+3. Store the secret in **Azure Key Vault**.
+4. In Purview, create the **Key Vault connection**.
+5. In Purview, create the **credential** using:
+   - tenant ID
+   - client ID
+   - the Key Vault secret reference
+
+> **Best practice:** Use clear names for the app registration, Key Vault secret, and Purview credential so it is obvious which source and environment they belong to.
+
+---
+
+## Step 7 — Create the Fabric Scan
+
+Now that the Fabric source is registered and credentials are ready, create the first scan.
+
+1. In Purview, go to **Data Map** → **Sources**.
+2. Open the registered **Fabric** source.
+3. Click **+ New scan**.
+4. Enter a scan name, such as `Fabric-Initial-Scan`.
+5. Choose the credential you prepared earlier.
+6. Decide whether to include **personal workspaces**.
+   - Include them only if they are in governance scope.
+   - Exclude them if you want to start with shared workspaces only.
+7. Save the scan.
+8. Run the scan.
+9. Wait for it to finish before checking results.
+
+> Do not assume the scan worked just because it started. Always wait for completion and then validate the results in the catalog.
+
+---
+
+## Step 8 — Validate the Fabric Catalog and Lineage
+
+After the Fabric scan completes, confirm that Purview actually discovered useful metadata.
 
 1. Open **Unified Catalog**.
 2. Browse to **Microsoft Fabric** sources.
-3. Open the workspace.
-4. Open a known Fabric item.
-5. Confirm metadata is present.
-6. Open the **Lineage** tab and confirm upstream/downstream relationships appear where supported.
+3. Open a known workspace.
+4. Open a known Fabric item, such as a lakehouse, semantic model, or Power BI-related item.
+5. Check that metadata is present, such as:
+   - item name
+   - workspace name
+   - source type
+   - timestamps or descriptions if available
+6. Open the **Lineage** tab.
+7. Confirm that upstream and downstream relationships appear where supported.
 
-Important note:
+### Important limitation to understand
 
-- Purview brings in metadata and lineage for Fabric items including Power BI.
-- For non-Power BI Fabric items, support may still be item-level only in some cases, and some sub-item lineage limitations remain.
+- Purview can bring in metadata and lineage for Fabric items, including Power BI assets.
+- Some non-Power BI Fabric item support may still be limited to item-level detail in certain cases.
+- Some sub-item lineage gaps may still exist depending on the item type.
 
-## Step 10 — Register Azure SQL if SQL governance is needed
+> **What success looks like:** You can search for a Fabric asset, open it, and see meaningful metadata and at least the lineage that the source type currently supports.
 
-If SQL is in scope:
+---
 
-1. Go to **Data Map**.
-2. Select **Register**.
-3. Choose the Azure SQL source type.
-4. Enter the source details.
+## Step 9 — Register Azure SQL (If SQL Is in Scope)
+
+If Azure SQL governance is part of the solution, register it after Fabric is working.
+
+1. In Purview, go to **Data Map**.
+2. Click **Register**.
+3. Choose the **Azure SQL** source type.
+4. Enter the SQL source details.
 5. Assign the source to the correct collection.
-6. Save the registration.
+6. Click **Save**.
 
-## Step 11 — Create and run the SQL scan
+> If both Fabric and SQL are in scope, doing Fabric first usually makes troubleshooting easier because you can validate one platform at a time.
 
-1. Open the registered SQL source.
-2. Select **+ New scan**.
-3. Choose the right credential.
-4. Enter the scan name.
-5. Save and run the scan.
+---
 
-After the scan completes, confirm the SQL assets appear in catalog results.
+## Step 10 — Create and Run the SQL Scan
 
-## Step 12 — Validate governance output
+After SQL is registered, create the scan.
 
-Use these checks:
+1. Open the registered **Azure SQL** source.
+2. Click **+ New scan**.
+3. Choose the appropriate credential.
+4. Enter a scan name.
+5. Save the scan.
+6. Run the scan.
+7. Wait for completion.
 
-### Check A — Catalog visibility
+After it finishes:
 
-1. Search for a known Fabric or SQL asset by name.
-2. Confirm it appears in the catalog.
-3. Confirm the metadata looks correct.
+1. Search for a known SQL asset.
+2. Confirm the asset appears in catalog results.
+3. Open it and verify the metadata looks correct.
 
-### Check B — Collection placement
+---
 
-1. Confirm the asset is stored under the expected collection.
-2. Confirm governance ownership is clear.
+## Step 11 — Validate Governance Output
+
+Once both source registration and scans are working, test the actual governance outcomes.
+
+### Check A — Catalog Visibility
+
+1. Search for a known Fabric asset by name.
+2. Search for a known SQL asset by name.
+3. Confirm both appear where expected.
+4. Open them and confirm metadata looks correct.
+
+### Check B — Collection Placement
+
+1. Confirm each asset is stored under the expected collection.
+2. Confirm that ownership and governance responsibility are clear based on that collection placement.
 
 ### Check C — Lineage
 
-1. Open a known Fabric item.
+1. Open a known Fabric item used by reports or downstream consumption.
 2. Open the lineage view.
-3. Confirm the expected upstream or downstream relationships are visible where supported.
+3. Confirm expected upstream or downstream relationships are visible where supported.
 
-## Step 13 — Add governance basics
+> **Why this matters:** A successful scan is only part of the outcome. The real goal is discoverability, metadata quality, and useful lineage for governance teams and solution owners.
 
-Once scanning works, add the first governance controls:
+---
 
-1. Confirm data owners.
-2. Confirm stewards or curators.
-3. Add glossary or business context where useful.
-4. Review sensitivity and protection alignment if in scope.
+## Step 12 — Add Basic Governance Context
 
-Keep the first governance rollout focused and practical.
+Once the technical scanning path works, add the minimum governance details that make the catalog useful.
 
-## Step 14 — Prove Purview is supporting the solution
+1. Identify the **data owner** for each important source or domain.
+2. Identify the **steward** or **curator** if your governance model uses those roles.
+3. Add glossary terms or business context where it helps people understand the asset.
+4. Review whether **sensitivity labels**, protection alignment, or compliance metadata should be part of the first rollout.
 
-Use one or more of these practical tests:
+> **Best practice:** Keep the first governance pass practical. Start with ownership and basic business meaning before trying to build a perfect enterprise taxonomy.
 
-### Test A — Known asset lookup
+---
 
-1. Search for a known Gold table or semantic model asset.
-2. Confirm it is discoverable in Purview.
+## Step 13 — Prove Purview Is Supporting the Solution
+
+Use at least one of these tests so you can show that Purview is providing real value to the solution, not just existing as a deployed service.
+
+### Test A — Known Asset Lookup
+
+1. Search for a known **Gold table** or **semantic model** asset.
+2. Confirm it is discoverable.
 3. Confirm metadata and ownership details are present.
 
-### Test B — Lineage check
+### Test B — Lineage Check
 
-1. Pick a known Fabric item used by reports.
-2. Open lineage.
-3. Confirm the governance team can trace the item path.
+1. Pick a Fabric item used by reporting.
+2. Open the lineage view.
+3. Confirm the governance team can trace the item path from source to downstream usage where supported.
 
-### Test C — Multi-source governance check
+### Test C — Multi-Source Governance Check
 
-1. Search for both a SQL asset and a Fabric asset.
-2. Confirm both appear under the governance model you expected.
+1. Search for one SQL asset.
+2. Search for one Fabric asset.
+3. Confirm both are visible in Purview.
+4. Confirm both appear under the governance structure you expected.
 
-## Step 15 — Final go-live checklist
+---
 
-Before calling Purview complete, confirm:
+## Step 14 — Final Go-Live Checklist
 
-- Purview account exists.
-- Collections are organized.
-- Fabric source is registered if Fabric is in scope.
-- Fabric scan runs successfully.
-- SQL source is registered if SQL is in scope.
-- SQL scan runs successfully.
-- Known assets are searchable.
-- Metadata looks correct.
-- Lineage is visible where supported.
-- Roles and governance ownership are documented.
+Before calling the Purview deployment complete, confirm every item below.
 
-## Recommended rollout order
+- [ ] Purview account exists.
+- [ ] Collections are created and organized.
+- [ ] Fabric source is registered if Fabric is in scope.
+- [ ] Fabric scan completes successfully.
+- [ ] SQL source is registered if SQL is in scope.
+- [ ] SQL scan completes successfully.
+- [ ] Known assets are searchable.
+- [ ] Metadata is correct and usable.
+- [ ] Lineage is visible where supported.
+- [ ] Roles and governance ownership are documented.
 
-Use this order:
+> Do not move this into normal operations until the catalog is searchable and governance ownership is clearly assigned.
+
+---
+
+## Recommended Rollout Order
+
+Use this order when deploying to a new environment:
 
 1. Create the Purview account.
 2. Create collections.
 3. Register Fabric.
 4. Configure credentials.
-5. Run Fabric scan.
-6. Validate catalog and lineage.
+5. Run the Fabric scan.
+6. Validate the catalog and lineage.
 7. Register SQL if needed.
-8. Run SQL scan.
+8. Run the SQL scan.
 9. Add ownership and governance context.
-10. Promote the governance process into normal operations.
+10. Move the governance process into normal operations.
+
+---
+
+## Troubleshooting Quick Reference
+
+| Symptom | Likely Cause | What to Check |
+|---|---|---|
+| Fabric source registers but scan fails | Fabric metadata scanning or admin API settings not enabled | Re-check Fabric admin settings and source permissions |
+| Scan starts but finds little or no useful metadata | Wrong credential, missing permissions, or wrong scope | Re-check the credential, access rights, and scan settings |
+| Key Vault-backed credential fails | Purview cannot read the secret | Confirm secret name, Key Vault access policy/RBAC, and tenant alignment |
+| Assets do not appear in the catalog | Scan failed or has not completed yet | Check scan history and wait for full completion |
+| Lineage is missing for some Fabric items | Source type limitations or unsupported sub-item lineage | Confirm whether that item type currently supports the lineage depth you expect |
+| Governance ownership is unclear | Collections or role assignments were never formalized | Add owners, stewards, and collection structure before go-live |

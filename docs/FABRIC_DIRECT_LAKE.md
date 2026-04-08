@@ -90,10 +90,10 @@ When the semantic model editor opens, you need to make a few adjustments before 
 4. **Create basic measures** — In the left panel, right-click a table and choose **New measure**. Create these to start:
 
    ```
-   Total Revenue = SUM(goldsalestimeseries[revenue])
-   Total Orders = COUNTROWS(goldsalesbycategory)
+   Total Revenue = SUM(gold_sales_time_series[daily_revenue])
+   Total Orders = COUNTROWS(gold_sales_by_category)
    Average Order Value = DIVIDE([Total Revenue], [Total Orders])
-   Active Customers = DISTINCTCOUNT(gold_customer360[customer_id])
+   Active Customers = DISTINCTCOUNT(gold_customer_360[customer_id])
    ```
 
    > Adjust column names to match your actual table schema.
