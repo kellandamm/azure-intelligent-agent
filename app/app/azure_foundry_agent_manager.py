@@ -15,6 +15,8 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
 from azure.ai.projects.aio import AIProjectClient
+from azure.core.credentials import AccessToken
+from azure.core.credentials_async import AsyncTokenCredential
 from azure.identity.aio import AzureCliCredential, DefaultAzureCredential
 
 from config import settings
@@ -28,6 +30,32 @@ _CONTENT_FILTER_CODES = frozenset(
         "content_management_policy",
     ]
 )
+
+
+class _StaticTokenCredential(AsyncTokenCredential):
+    """Wraps a pre-acquired Entra access token as an AsyncTokenCredential.
+
+    Used for the OBO flow where the token is obtained outside the normal
+    DefaultAzureCredential chain.
+    """
+
+    def __init__(self, token: str) -> None:
+        import time
+        # Set a generous expiry — the token was just acquired so it is valid
+        # for at least ~3 minutes (MSAL returns tokens with ~1h lifetime).
+        self._token = AccessToken(token=token, expires_on=int(time.time()) + 3300)
+
+    async def get_token(self, *scopes: str, **kwargs: Any) -> AccessToken:  # type: ignore[override]
+        return self._token
+
+    async def close(self) -> None:
+        pass
+
+    async def __aenter__(self) -> "_StaticTokenCredential":
+        return self
+
+    async def __aexit__(self, *args: Any) -> None:
+        pass
 
 
 def _is_content_safety_error(exc: Exception) -> bool:
@@ -344,8 +372,30 @@ class FoundryHostedAgentBackendManager:
         )
         return thread_id
 
-    async def _invoke_foundry_agent(self, *, agent_id: str, agent_name: str, message: str, thread_id: Optional[str]) -> Tuple[str, str, str]:
-        async with self.project_client.get_openai_client() as openai_client:
+    async def _invoke_foundry_agent(
+        self,
+        *,
+        agent_id: str,
+        agent_name: str,
+        message: str,
+        thread_id: Optional[str],
+        obo_token: Optional[str] = None,
+    ) -> Tuple[str, str, str]:
+        # When OBO is enabled and we have a user token, create a short-lived
+        # per-request AIProjectClient using that token so Foundry forwards the
+        # user's identity to downstream Fabric Data Agents.
+        if obo_token and settings.enable_obo_auth:
+            credential = _StaticTokenCredential(obo_token)
+            per_request_client = AIProjectClient(
+                endpoint=settings.project_endpoint,
+                credential=credential,
+            )
+            client_cm = per_request_client
+            logger.debug("🔐 Using OBO credential for Foundry call agent=%s", agent_name)
+        else:
+            client_cm = self.project_client
+
+        async with client_cm.get_openai_client() as openai_client:
             conversation_id = await self._create_or_append_conversation(openai_client, thread_id, message)
 
             payload_variants = [
@@ -355,15 +405,7 @@ class FoundryHostedAgentBackendManager:
                 },
                 {
                     "conversation": conversation_id,
-                    "extra_body": {"agent_reference": {"id": agent_id, "type": "agent_reference"}},
-                },
-                {
-                    "conversation_id": conversation_id,
-                    "extra_body": {"agent_reference": {"name": agent_name, "type": "agent_reference"}},
-                },
-                {
-                    "conversation_id": conversation_id,
-                    "extra_body": {"agent_reference": {"id": agent_id, "type": "agent_reference"}},
+                    "extra_body": {"agent_reference": {"id": agent_id, "name": agent_name, "type": "agent_reference"}},
                 },
             ]
 
@@ -396,6 +438,7 @@ class FoundryHostedAgentBackendManager:
         agent_type: Optional[str] = None,
         thread_id: Optional[str] = None,
         user_context: Optional[Dict[str, Any]] = None,
+        obo_user_assertion: Optional[str] = None,
     ) -> ChatResult:
         normalized_type, explicit_agent_id, explicit_agent_name = self._resolve_explicit_agent(agent_type)
 
@@ -435,11 +478,18 @@ class FoundryHostedAgentBackendManager:
                     route_reason,
                 )
 
+                # Acquire OBO token once per request (if enabled)
+                obo_token: Optional[str] = None
+                if settings.enable_obo_auth and obo_user_assertion:
+                    from services.obo_token_service import OBOTokenService
+                    obo_token = await OBOTokenService.get_foundry_token(obo_user_assertion)
+
                 response_text, new_thread_id, response_id = await self._invoke_foundry_agent(
                     agent_id=final_agent_id,
                     agent_name=final_agent_name,
                     message=routed_query,
                     thread_id=thread_id,
+                    obo_token=obo_token,
                 )
 
                 if not response_text:

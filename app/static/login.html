@@ -303,6 +303,31 @@
             </button>
         </form>
 
+        <!-- Microsoft / Entra login divider -->
+        <div style="display: flex; align-items: center; margin: 16px 30px 0; gap: 12px;">
+            <hr style="flex: 1; border: none; border-top: 1px solid #e0e0e0;">
+            <span style="color: #999; font-size: 0.85em; white-space: nowrap;">or</span>
+            <hr style="flex: 1; border: none; border-top: 1px solid #e0e0e0;">
+        </div>
+
+        <div style="padding: 12px 30px 0;">
+            <a href="/api/auth/entra/login"
+               style="display: flex; align-items: center; justify-content: center; gap: 10px;
+                      width: 100%; padding: 12px; border: 1px solid #d0d0d0; border-radius: 8px;
+                      background: #fff; color: #333; text-decoration: none; font-size: 0.95em;
+                      font-weight: 500; transition: background 0.2s, box-shadow 0.2s;"
+               onmouseover="this.style.background='#f5f5f5'; this.style.boxShadow='0 2px 8px rgba(0,0,0,0.1)'"
+               onmouseout="this.style.background='#fff'; this.style.boxShadow='none'">
+                <svg width="20" height="20" viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg">
+                    <rect x="1" y="1" width="9" height="9" fill="#f25022"/>
+                    <rect x="11" y="1" width="9" height="9" fill="#7fba00"/>
+                    <rect x="1" y="11" width="9" height="9" fill="#00a4ef"/>
+                    <rect x="11" y="11" width="9" height="9" fill="#ffb900"/>
+                </svg>
+                Sign in with Microsoft
+            </a>
+        </div>
+
         <div class="login-footer" style="text-align: center; padding: 20px;">
             <p style="color: #999; font-size: 0.9em;">
                 Contact your administrator for access

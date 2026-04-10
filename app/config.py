@@ -118,6 +118,21 @@ class Settings(BaseSettings):
     jwt_expiry_hours: int = 24  # Token expiry in hours
     enable_authentication: bool = False  # Master switch for authentication (default: False)
     
+    # OBO (On-Behalf-Of) Authentication for Foundry + Fabric
+    # Enable when Foundry agents use Fabric Data Agents with user-delegated auth.
+    # Requires an Entra App Registration with delegated Foundry + Fabric permissions.
+    enable_obo_auth: bool = False                          # ENV: ENABLE_OBO_AUTH
+    entra_client_id: Optional[str] = None                 # ENV: ENTRA_CLIENT_ID
+    entra_client_secret: Optional[str] = None             # ENV: ENTRA_CLIENT_SECRET
+    entra_tenant_id: Optional[str] = None                 # ENV: ENTRA_TENANT_ID
+    entra_foundry_scope: str = "https://ai.azure.com/.default"  # ENV: ENTRA_FOUNDRY_SCOPE
+    # Redirect URI for the authorization code callback (must match App Registration)
+    entra_redirect_uri: Optional[str] = None              # ENV: ENTRA_REDIRECT_URI
+    # The app's own exposed API scope — used so the Entra access token has the
+    # app as its audience and can be used as an OBO user_assertion.
+    # Format: api://<client-id>/user_impersonation
+    entra_app_scope: Optional[str] = None                 # ENV: ENTRA_APP_SCOPE
+
     # Microsoft Purview Configuration (for Data Governance)
     purview_account_name: Optional[str] = None  # e.g., 'mypurview'
     enable_purview: bool = False  # Enable Purview integration for data governance

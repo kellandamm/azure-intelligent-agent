@@ -177,6 +177,20 @@ az webapp config appsettings set --name <app-name> -g <rg-name> --settings KEY=V
 | `LOG_LEVEL` | `DEBUG`, `INFO`, `WARNING`, `ERROR` |
 | `WEBSITES_CONTAINER_START_TIME_LIMIT` | `1800` — increase container start timeout |
 
+### Entra ID / OBO Authentication (required for Foundry → Fabric Data Agents)
+
+These settings enable the **On-Behalf-Of (OBO)** flow — see [docs/OBO_AUTH_SETUP.md](OBO_AUTH_SETUP.md) for the complete setup guide.
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `ENABLE_OBO_AUTH` | No (default `false`) | Set `true` to enable Entra login and OBO token exchange |
+| `ENTRA_CLIENT_ID` | Yes if OBO enabled | App Registration client ID (Application ID) |
+| `ENTRA_CLIENT_SECRET` | Yes if OBO enabled | App Registration client secret |
+| `ENTRA_TENANT_ID` | Yes if OBO enabled | Azure AD / Entra tenant ID |
+| `ENTRA_REDIRECT_URI` | Recommended | Full callback URL, e.g. `https://<app>.azurewebsites.net/api/auth/entra/callback` |
+| `ENTRA_APP_SCOPE` | Recommended | App's own exposed scope, e.g. `api://<client-id>/user_impersonation` |
+| `ENTRA_FOUNDRY_SCOPE` | No (default `https://ai.azure.com/.default`) | Foundry API scope for OBO exchange |
+
 ---
 
 ## Network Architecture
@@ -215,6 +229,8 @@ All four components are deployed together when `enableVnetIntegration = true`:
 - [ ] Key Vault enabled (`enableKeyVault = true`) for production
 - [ ] Rotate JWT secret every 90 days
 - [ ] Rotate Power BI service principal secret every 6 months
+- [ ] If OBO is enabled: rotate `ENTRA_CLIENT_SECRET` every 6–12 months
+- [ ] If OBO is enabled: use [OBO_AUTH_SETUP.md](OBO_AUTH_SETUP.md) to verify delegated permissions are scoped minimally
 
 ---
 

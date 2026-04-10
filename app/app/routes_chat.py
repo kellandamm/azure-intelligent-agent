@@ -83,11 +83,19 @@ async def chat_with_agent(request: ChatRequest, req: Request) -> ChatResponse:
                 req, settings.enable_authentication
             )
 
+        # Extract the Entra-issued token for OBO flow when enabled.
+        # This MUST be the entra_token cookie (set after Entra login), NOT the
+        # app's own SQL-backed JWT — MSAL OBO only accepts Entra-issued tokens.
+        obo_user_assertion: Optional[str] = None
+        if settings.enable_obo_auth:
+            obo_user_assertion = req.cookies.get("entra_token")
+
         result = await process_chat_message(
             message=request.message,
             agent_type=request.agent_type,
             thread_id=request.thread_id,
             user_context=user_data,
+            obo_user_assertion=obo_user_assertion,
             request=req,
         )
 

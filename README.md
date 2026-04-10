@@ -62,10 +62,11 @@ For the full step-by-step guide see **[docs/QUICK_START.md](docs/QUICK_START.md)
 | [docs/QUICK_START.md](docs/QUICK_START.md) | Full deployment walkthrough from parameters to validation |
 | [docs/FABRIC_DEPLOYMENT.md](docs/FABRIC_DEPLOYMENT.md) | Optional Fabric setup: mirroring, Silver/Gold notebooks, Direct Lake guidance |
 | [docs/FABRIC_RTI_OPTIONAL_DEPLOYMENT.md](docs/FABRIC_RTI_OPTIONAL_DEPLOYMENT.md) | Optional Fabric RTI setup |
-| [docs/FABRIC_DATA_AGENT_FOUNDRY_APP_SETUP.md](docs/FABRIC_DATA_AGENT_FOUNDRY_APP_SETUP.md) | Optional Fabric Data Agent + Foundry setup |
-| [docs/PURVIEW_OPTIONAL_DEPLOYMENT.md](docs/PURVIEW_OPTIONAL_DEPLOYMENT.md) | Optional Purview governance setup |
-| [CONFIGURATION.md](CONFIGURATION.md) | Bicep parameters and environment variables |
-| [CREATE_ADMIN_USER.md](CREATE_ADMIN_USER.md) | Create the first admin user |
+| [docs/FABRIC_DATA_AGENT_DEPLOYMENT.md](docs/FABRIC_DATA_AGENT_DEPLOYMENT.md) | Optional Fabric Data Agent + Foundry setup |
+| [docs/OBO_AUTH_SETUP.md](docs/OBO_AUTH_SETUP.md) | **Required for Fabric Data Agents** — Entra "Sign in with Microsoft" + OBO token flow setup |
+| [docs/PURVIEW_DEPLOYMENT.md](docs/PURVIEW_DEPLOYMENT.md) | Optional Purview governance setup |
+| [docs/CONFIGURATION.md](docs/CONFIGURATION.md) | Bicep parameters and environment variables |
+| [docs/CREATE_ADMIN_USER.md](docs/CREATE_ADMIN_USER.md) | Create the first admin user |
 
 ---
 
@@ -74,19 +75,24 @@ For the full step-by-step guide see **[docs/QUICK_START.md](docs/QUICK_START.md)
 ```
 Browser / API clients
         │
-        ▼
-Azure App Service (FastAPI)
-        │
-        ├── Azure SQL Database
-        ├── Azure AI Foundry or Azure OpenAI
-        ├── Application Insights
-        ├── Key Vault
-        │
-        └── Optional integrations
-             ├── Microsoft Fabric
-             ├── Fabric Real-Time Intelligence
-             ├── Fabric Data Agent
-             └── Microsoft Purview
+        ├── SQL login  ─────────────────────────────────────────────┐
+        └── Sign in with Microsoft (Entra) ── OBO token exchange ──►│
+                                                                     ▼
+                                                      Azure App Service (FastAPI)
+                                                                     │
+                                          ┌──────────────────────────┼───────────────────────────┐
+                                          │                          │                           │
+                                    Azure SQL              Azure AI Foundry                Application
+                                    Database               (Foundry agents +               Insights /
+                                                           OBO credential)                Key Vault
+                                                                     │
+                                                        Optional integrations
+                                                             ├── Microsoft Fabric
+                                                             │     └── Fabric Data Agents
+                                                             │         (require OBO — user identity
+                                                             │          passed through Foundry)
+                                                             ├── Fabric Real-Time Intelligence
+                                                             └── Microsoft Purview
 ```
 
-The base application runs against Azure SQL. Fabric and the other integrations are optional add-ons.
+The base application runs against Azure SQL with SQL username/password login. Fabric Data Agents require "Sign in with Microsoft" (Entra) so the app can call Foundry on behalf of the signed-in user via the OBO flow. See [docs/OBO_AUTH_SETUP.md](docs/OBO_AUTH_SETUP.md).

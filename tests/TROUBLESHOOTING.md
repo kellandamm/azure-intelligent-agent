@@ -366,7 +366,49 @@ Start-Sleep -Seconds 60
 .\tests\smoke-test.ps1 -Url "https://your-app.azurewebsites.net" -VerboseOutput
 ```
 
-## 🔧 Advanced Diagnostics
+### 9. Chat fails with 500 and OBO / Entra errors in logs
+
+**Symptom:**
+```
+❌ FAIL - Chat Endpoint: 500 Internal Server Error
+```
+With one of these messages in `az webapp log tail`:
+- `OBO token acquisition failed (invalid_grant): AADSTS65001: has not consented`
+- `401 - Unauthorized. Access token is missing, invalid, audience is incorrect (https://ai.azure.com)`
+
+**Cause:** `ENABLE_OBO_AUTH=true` but the Entra App Registration is missing the required OAuth2 permission grants, or the scope is wrong.
+
+**Solutions:**
+
+**For `AADSTS65001` (consent missing):**
+```powershell
+$appId     = "<your-entra-client-id>"
+$spObjectId = az ad sp show --id $appId --query "id" -o tsv
+
+# Azure Machine Learning Services (https://ai.azure.com audience)
+$mlSpId = az ad sp show --id "18a66f5f-dbdf-4c17-9dd7-1634712a9cbe" --query "id" -o tsv
+
+$grant = "{`"clientId`":`"$spObjectId`",`"consentType`":`"AllPrincipals`",`"resourceId`":`"$mlSpId`",`"scope`":`"user_impersonation`"}"
+$grant | Out-File "$env:TEMP\grant.json" -Encoding utf8 -NoNewline
+az rest --method POST --uri "https://graph.microsoft.com/v1.0/oauth2PermissionGrants" `
+  --headers "Content-Type=application/json" --body "@$env:TEMP\grant.json"
+```
+
+> Note: `az ad app permission admin-consent` alone is not sufficient — the direct Graph API POST above creates the underlying `oauth2PermissionGrant` object the OBO flow checks at runtime.
+
+After granting consent, **sign out and sign back in with Microsoft** — the cached `entra_token` must be refreshed.
+
+**For `audience is incorrect (https://ai.azure.com)`:**
+```powershell
+# Ensure scope is ai.azure.com, NOT cognitiveservices.azure.com
+az webapp config appsettings set `
+  --name <app-name> --resource-group <rg-name> `
+  --settings ENTRA_FOUNDRY_SCOPE="https://ai.azure.com/.default"
+```
+
+See [docs/OBO_AUTH_SETUP.md](../docs/OBO_AUTH_SETUP.md) for the complete setup and troubleshooting guide.
+
+---
 
 ### Enable Debug Logging
 

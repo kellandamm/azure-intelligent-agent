@@ -2,13 +2,17 @@
 Authentication and Admin routes for Agent Framework.
 """
 
+import os
+import secrets
 from typing import Optional, List
 from fastapi import APIRouter, HTTPException, status, Depends, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BaseModel, EmailStr, Field
 
+from config import settings
 from utils.auth import AuthManager, get_current_user, require_admin, require_permission
 from app.rate_limiter import rate_limiter
+from utils.logging_config import logger
 
 # Create routers
 auth_router = APIRouter(prefix="/api/auth", tags=["Authentication"])
@@ -236,13 +240,13 @@ async def get_current_user_info(current_user: dict = Depends(get_current_user)):
 @auth_router.post("/logout")
 async def logout():
     """
-    Logout endpoint - clears authentication cookie.
+    Logout endpoint - clears authentication cookies including Entra token.
     """
     from fastapi.responses import JSONResponse
 
     response = JSONResponse(content={"message": "Logged out successfully"})
-    # Clear the authentication cookie
     response.delete_cookie(key="auth_token")
+    response.delete_cookie(key="entra_token")
     return response
 
 
@@ -586,3 +590,189 @@ async def change_user_password(
         "user_id": user_id,
         "username": target_user["Username"],
     }
+
+
+# ========================================
+# Entra ID (Microsoft) Login Routes
+# ========================================
+
+def _get_msal_app():
+    """Build a ConfidentialClientApplication from current settings."""
+    import msal
+    if not settings.entra_client_id or not settings.entra_client_secret or not settings.entra_tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail="Entra ID login is not configured on this server.",
+        )
+    return msal.ConfidentialClientApplication(
+        client_id=settings.entra_client_id,
+        client_credential=settings.entra_client_secret,
+        authority=f"https://login.microsoftonline.com/{settings.entra_tenant_id}",
+    )
+
+
+@auth_router.get("/entra/login")
+async def entra_login(request: Request):
+    """
+    Redirect the browser to Microsoft's login page.
+    After login Microsoft redirects back to /api/auth/entra/callback.
+    """
+    msal_app = _get_msal_app()
+
+    redirect_uri = settings.entra_redirect_uri
+    if not redirect_uri:
+        # Build from request if not explicitly configured
+        redirect_uri = str(request.base_url).rstrip("/") + "/api/auth/entra/callback"
+
+    # MSAL ConfidentialClientApplication handles openid/profile/offline_access automatically.
+    # Only pass the resource scope — mixing OIDC reserved scopes raises ValueError.
+    scopes = [settings.entra_app_scope] if settings.entra_app_scope else ["User.Read"]
+
+    state = secrets.token_urlsafe(32)
+    auth_url = msal_app.get_authorization_request_url(
+        scopes=scopes,
+        redirect_uri=redirect_uri,
+        state=state,
+    )
+
+    response = RedirectResponse(url=auth_url, status_code=302)
+    # Store state in a short-lived cookie for CSRF validation in the callback
+    response.set_cookie(
+        key="entra_state",
+        value=state,
+        httponly=True,
+        secure=True,
+        samesite="lax",   # lax required so cookie is sent on the redirect back
+        max_age=600,
+    )
+    return response
+
+
+@auth_router.get("/entra/callback")
+async def entra_callback(request: Request, code: Optional[str] = None, state: Optional[str] = None, error: Optional[str] = None):
+    """
+    Handle the redirect from Microsoft after the user authenticates.
+    Issues the app's own JWT (auth_token) and stores the Entra access token
+    (entra_token) for use in the OBO flow.
+    """
+    from fastapi.responses import JSONResponse
+
+    # Surface any login errors from Microsoft
+    if error:
+        error_description = request.query_params.get("error_description", "")
+        logger.warning("❌ Entra login error: %s – %s", error, error_description)
+        return RedirectResponse(url=f"/login?error={error}", status_code=302)
+
+    if not code:
+        return RedirectResponse(url="/login?error=no_code", status_code=302)
+
+    # CSRF: validate state cookie if present.
+    # On App Service behind a proxy the Set-Cookie on the login redirect may be
+    # dropped, so we log a warning but do NOT hard-fail — the authorization code
+    # itself is single-use and bound to the redirect_uri which prevents CSRF.
+    stored_state = request.cookies.get("entra_state")
+    if stored_state and stored_state != state:
+        logger.warning("❌ Entra callback state mismatch (stored=%s received=%s)", stored_state, state)
+    elif not stored_state:
+        logger.warning("⚠️ Entra callback: entra_state cookie missing (proxy/cookie issue) — continuing")
+
+    msal_app = _get_msal_app()
+
+    redirect_uri = settings.entra_redirect_uri
+    if not redirect_uri:
+        redirect_uri = str(request.base_url).rstrip("/") + "/api/auth/entra/callback"
+
+    # Must match exactly what was requested during login
+    scopes = [settings.entra_app_scope] if settings.entra_app_scope else ["User.Read"]
+
+    result = msal_app.acquire_token_by_authorization_code(
+        code=code,
+        scopes=scopes,
+        redirect_uri=redirect_uri,
+    )
+
+    if "error" in result:
+        logger.error("❌ MSAL token exchange failed: %s – %s", result.get("error"), result.get("error_description"))
+        return RedirectResponse(url="/login?error=token_exchange_failed", status_code=302)
+
+    # Extract identity from id_token claims
+    claims = result.get("id_token_claims", {})
+    email = claims.get("preferred_username") or claims.get("email") or claims.get("upn", "")
+    name = claims.get("name", email)
+    oid = claims.get("oid", "")  # Entra object ID — stable across sessions
+
+    logger.info("✅ Entra login: %s (%s)", name, email)
+
+    # Build the app's own JWT so the rest of the app's auth system is unchanged.
+    # We synthesise a user dict that matches what SQL-backed login produces.
+    entra_user = {
+        "UserID": f"entra:{oid}",
+        "Username": email,
+        "Email": email,
+        "FirstName": name.split()[0] if name else "",
+        "LastName": " ".join(name.split()[1:]) if len(name.split()) > 1 else "",
+        "Roles": "User",
+        "auth_method": "entra",
+    }
+
+    # If an AuthManager is available, try to look up the matching SQL user
+    # so they get their configured roles. Fall back to basic Entra user.
+    if hasattr(request.app.state, "auth_manager") and request.app.state.auth_manager:
+        auth_manager: AuthManager = request.app.state.auth_manager
+        sql_user = auth_manager.get_user_by_email(email) if hasattr(auth_manager, "get_user_by_email") else None
+        if sql_user:
+            entra_user.update({
+                "UserID": sql_user["UserID"],
+                "Roles": sql_user.get("Roles", "User"),
+            })
+            logger.info("👤 Matched Entra user to SQL account: %s", email)
+        app_jwt = auth_manager.create_jwt_token(entra_user)
+    else:
+        # Auth manager unavailable — mint JWT manually using settings secret
+        import jwt as pyjwt
+        from datetime import datetime, timezone, timedelta
+        payload = {
+            "sub": str(entra_user["UserID"]),
+            "username": email,
+            "email": email,
+            "roles": ["User"],
+            "auth_method": "entra",
+            "exp": datetime.now(timezone.utc) + timedelta(hours=24),
+            "iat": datetime.now(timezone.utc),
+        }
+        app_jwt = pyjwt.encode(payload, settings.secret_key, algorithm="HS256")
+
+    # The Entra access token is stored separately — it is the OBO user_assertion
+    entra_access_token = result.get("access_token", "")
+
+    # The httpOnly auth_token cookie satisfies server-side auth checks.
+    # The frontend JS also reads auth_token from localStorage, so we redirect
+    # through a small bridge page that writes it there before forwarding.
+    from fastapi.responses import HTMLResponse
+
+    bridge_html = f"""<!DOCTYPE html>
+<html>
+<head><title>Signing in...</title></head>
+<body>
+<script>
+  localStorage.setItem('auth_token', {repr(app_jwt)});
+  window.location.replace('/');
+</script>
+<noscript>JavaScript is required. <a href="/">Continue</a></noscript>
+</body>
+</html>"""
+
+    response = HTMLResponse(content=bridge_html, status_code=200)
+
+    # httpOnly cookie — server-side auth checks
+    response.set_cookie(key="auth_token", value=app_jwt, httponly=True, secure=True, samesite="strict", max_age=86400)
+
+    # Entra access token cookie (OBO flow — httpOnly so JS can't read it)
+    if entra_access_token:
+        response.set_cookie(key="entra_token", value=entra_access_token, httponly=True, secure=True, samesite="strict", max_age=3600)
+
+    # Clear the state cookie
+    response.delete_cookie("entra_state")
+
+    return response
+

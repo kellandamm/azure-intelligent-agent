@@ -393,7 +393,7 @@ In your terminal:
 ```bash
 pip install bcrypt
 # Change 'YourPassword123!' to your own password
-py -c "import bcrypt; print(bcrypt.hashpw(b'YourPassword123!', bcrypt.gensalt()).decode())"
+python -c "import bcrypt; print(bcrypt.hashpw(b'YourPassword123!', bcrypt.gensalt()).decode())"
 ```
 
 Copy the hash output and paste it in place of `<bcrypt-hash>` in the SQL query below
@@ -402,7 +402,7 @@ Quick path via Azure Portal → SQL Database → Query Editor:
 
 ```sql
 -- Generate the bcrypt hash first (run locally):
--- py -c "import bcrypt; print(bcrypt.hashpw(b'YourPassword123!', bcrypt.gensalt()).decode())"
+-- python -c "import bcrypt; print(bcrypt.hashpw(b'YourPassword123!', bcrypt.gensalt()).decode())"
 
 INSERT INTO dbo.Users (Username, Email, PasswordHash, FirstName, LastName)
 VALUES ('admin', 'admin@yourcompany.com', '<bcrypt-hash>', 'Admin', 'User');
@@ -496,7 +496,9 @@ If you need conversational analytics over curated Fabric data:
 3. Connect it through Foundry.
 4. Validate Fabric first, then Foundry, then the app.
 
-See **[FABRIC_DATA_AGENT_FOUNDRY_APP_SETUP.md](FABRIC_DATA_AGENT_FOUNDRY_APP_SETUP.md)**.
+See **[FABRIC_DATA_AGENT_DEPLOYMENT.md](FABRIC_DATA_AGENT_DEPLOYMENT.md)**.
+
+> ⚠️ **Fabric Data Agents require user-delegated auth (OBO).** When a Foundry hosted agent calls a Fabric Data Agent, Fabric checks the caller's identity — an app-only managed identity is rejected. Users must sign in with Microsoft (Entra) so the app can call Foundry on their behalf. See **[OBO_AUTH_SETUP.md](OBO_AUTH_SETUP.md)** to set this up after deploying your agents.
 
 
 ## Phase 8 — Optional Real-Time Intelligence
@@ -586,6 +588,14 @@ Ensure `enableVnetIntegration = true` in `main.bicepparam` (this is the default)
 **Chat returns 500 errors**
 
 Verify `AZURE_OPENAI_ENDPOINT` is set and the model deployment name (`AZURE_OPENAI_DEPLOYMENT`) matches what's deployed in Azure OpenAI.
+
+**Chat returns 500 with `AADSTS65001: has not consented` in logs**
+
+The OBO token exchange is failing. This means `ENABLE_OBO_AUTH=true` but the Entra App Registration is missing the required OAuth2 permission grants. Follow **[OBO_AUTH_SETUP.md](OBO_AUTH_SETUP.md)** Step 4 — specifically the direct Graph API consent commands, which are more reliable than the portal "Grant admin consent" button. After granting consent, sign out and sign back in with Microsoft to get a fresh token.
+
+**Chat returns 500 with `401 audience is incorrect (https://ai.azure.com)` in logs**
+
+The OBO token has the wrong audience. Ensure `ENTRA_FOUNDRY_SCOPE` is set to `https://ai.azure.com/.default` (the default). Do not set it to `cognitiveservices.azure.com` — the Foundry Conversations API requires the `ai.azure.com` audience specifically.
 
 **Power BI not loading** _(optional integration)_
 

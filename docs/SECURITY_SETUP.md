@@ -138,6 +138,26 @@ ALTER SECURITY POLICY Security.CustomerSecurityPolicy WITH (STATE = OFF);
 
 ---
 
+## Entra ID / OBO Authentication (additive)
+
+The SQL auth system above is the primary mechanism. An additional **"Sign in with Microsoft"** path is available alongside it and does not replace or modify the SQL auth flow.
+
+When enabled (`ENABLE_OBO_AUTH=true`), users can sign in with their Entra account. This:
+- Issues the same app JWT as SQL login (all existing middleware and RLS work identically)
+- Additionally stores an `entra_token` httpOnly cookie used exclusively for OBO token exchange
+- Enables the app to call Azure AI Foundry agents on behalf of the signed-in user, which is required for Foundry → Fabric Data Agent calls
+
+**SQL users are completely unaffected** — they continue to log in as before.
+
+The `entra_token` cookie is:
+- **HTTP-only** — JavaScript cannot read it
+- **Secure** — HTTPS only
+- **Separate** from the app JWT — stored in its own cookie, never in localStorage
+
+For full setup instructions see [OBO_AUTH_SETUP.md](OBO_AUTH_SETUP.md).
+
+---
+
 ## Verify the setup
 
 ```sql
