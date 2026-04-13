@@ -148,16 +148,16 @@ This application uses **Microsoft AI Foundry native agents** by default for ente
 The deployment automatically configures your app to use Microsoft AI Foundry. Verify the settings:
 
 ```powershell
-az webapp config appsettings list \
-  --name <app-name> --resource-group rg-myagents-prod \
+az webapp config appsettings list `
+  --name <app-name> --resource-group rg-myagents-prod `
   --query "[?name=='PROJECT_ENDPOINT'].value" -o tsv
 ```
 
 You should see your Foundry project endpoint. If not set, add it:
 
 ```powershell
-az webapp config appsettings set \
-  --name <app-name> --resource-group rg-myagents-prod \
+az webapp config appsettings set `
+  --name <app-name> --resource-group rg-myagents-prod `
   --settings PROJECT_ENDPOINT="https://<your-resource>.services.ai.azure.com/api/projects/<your-project>"
 ```
 
@@ -265,18 +265,18 @@ Because this application uses the new stateless **Responses API**, your agents m
 Run the following commands, replacing the `<ARM-ID>` placeholders with the IDs you copied:
 
 ```powershell
-az webapp config appsettings set \
-  --name <app-name> --resource-group rg-myagents-prod \
-  --settings \
-    USE_FOUNDRY_AGENTS="true" \
-    ORCHESTRATOR_AGENT_ID="<Orchestrator-ARM-ID>" \
-    SALES_AGENT_ID="<Sales-ARM-ID>" \
-    REALTIME_AGENT_ID="<Operations-ARM-ID>" \
-    ANALYTICS_AGENT_ID="<Analytics-ARM-ID>" \
-    FINANCIAL_AGENT_ID="<Financial-ARM-ID>" \
-    SUPPORT_AGENT_ID="<Support-ARM-ID>" \
-    OPERATIONS_AGENT_ID="<Coordinator-ARM-ID>" \
-    CUSTOMER_SUCCESS_AGENT_ID="<Success-ARM-ID>" \
+az webapp config appsettings set `
+  --name <app-name> --resource-group rg-myagents-prod `
+  --settings `
+    USE_FOUNDRY_AGENTS="true" `
+    ORCHESTRATOR_AGENT_ID="<Orchestrator-ARM-ID>" `
+    SALES_AGENT_ID="<Sales-ARM-ID>" `
+    REALTIME_AGENT_ID="<Operations-ARM-ID>" `
+    ANALYTICS_AGENT_ID="<Analytics-ARM-ID>" `
+    FINANCIAL_AGENT_ID="<Financial-ARM-ID>" `
+    SUPPORT_AGENT_ID="<Support-ARM-ID>" `
+    OPERATIONS_AGENT_ID="<Coordinator-ARM-ID>" `
+    CUSTOMER_SUCCESS_AGENT_ID="<Success-ARM-ID>" `
     OPERATIONS_EXCELLENCE_AGENT_ID="<Excellence-ARM-ID>"
 
     ************
